@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 // DOCTYPE tokens have a name, a public identifier, a system identifier, and a force-quirks flag. When a DOCTYPE token is created, its name, public identifier, and system identifier must be marked as missing (which is a distinct state from the empty string), and the force-quirks flag must be set to off (its other state is on).
 #[derive(Debug, Default, Clone)]
 pub struct DOCTYPE {
@@ -17,7 +19,7 @@ pub enum TagType {
 pub struct Tag {
     name: String,
     // self_closing: bool,
-    // attributes: HashMap<String, String>,
+    attributes: HashMap<String, String>,
 }
 
 #[derive(Debug)]
@@ -38,6 +40,8 @@ pub struct Tokenizer {
     current_doc_type: DOCTYPE,
     current_tag: Tag,
     current_tag_type: TagType,
+    current_attribute_name: String,
+    current_attribute_value: String,
 }
 
 impl Tokenizer {
@@ -49,11 +53,30 @@ impl Tokenizer {
             current_doc_type: DOCTYPE::default(),
             current_tag: Tag::default(),
             current_tag_type: TagType::StartTag,
+            current_attribute_name: "".to_string(),
+            current_attribute_value: "".to_string(),
         }
     }
 
     fn emit(&mut self, token: Token) {
         println!("emit token: {:?}", token)
+    }
+
+    fn emit_current_tag_token(&mut self) {
+        if self.current_attribute_name != "".to_string() {
+            self.current_tag.attributes.insert(
+                self.current_attribute_name.clone(),
+                self.current_attribute_value.clone(),
+            );
+            self.current_attribute_name = "".to_string();
+            self.current_attribute_value = "".to_string();
+        }
+
+        if self.current_tag_type == TagType::StartTag {
+            self.emit(Token::StartTag(self.current_tag.clone()))
+        } else {
+            self.emit(Token::EndTag(self.current_tag.clone()))
+        }
     }
 
     fn consume_next_input_character(&mut self) -> Option<char> {
@@ -107,6 +130,7 @@ impl Tokenizer {
                     self.current_tag_type = TagType::StartTag;
                     self.current_tag = Tag {
                         name: "".to_string(),
+                        attributes: HashMap::new(),
                     };
                     self.reconsume();
                     self.tag_name_state();
@@ -128,6 +152,7 @@ impl Tokenizer {
                     self.current_tag_type = TagType::EndTag;
                     self.current_tag = Tag {
                         name: "".to_string(),
+                        attributes: HashMap::new(),
                     };
                     self.reconsume();
                     self.tag_name_state();
@@ -145,14 +170,10 @@ impl Tokenizer {
     fn tag_name_state(&mut self) {
         if let Some(char) = self.consume_next_input_character() {
             match char {
-                _ if is_one_of_tab_lf_ff_space(char) => todo!(),
+                _ if is_one_of_tab_lf_ff_space(char) => self.before_attribute_name_state(),
                 '/' => todo!(),
                 '>' => {
-                    if self.current_tag_type == TagType::StartTag {
-                        self.emit(Token::StartTag(self.current_tag.clone()))
-                    } else {
-                        self.emit(Token::EndTag(self.current_tag.clone()))
-                    }
+                    self.emit_current_tag_token();
                     self.data_state()
                 }
                 _ if char.is_ascii_uppercase() => {
@@ -164,6 +185,100 @@ impl Tokenizer {
                     self.current_tag.name.push(char);
                     self.tag_name_state();
                 }
+            }
+        } else {
+            todo!()
+        }
+    }
+
+    // 13.2.5.32 Before attribute name state
+    // https://html.spec.whatwg.org/multipage/parsing.html#before-attribute-name-state
+    fn before_attribute_name_state(&mut self) {
+        if let Some(char) = self.consume_next_input_character() {
+            match char {
+                _ if is_one_of_tab_lf_ff_space(char) => self.before_attribute_name_state(),
+                '/' => todo!(),
+                '>' => todo!(),
+                '=' => todo!(),
+                _ => {
+                    self.current_attribute_name = "".to_string();
+                    self.current_attribute_value = "".to_string();
+                    self.reconsume();
+                    self.attribute_name_state();
+                }
+            }
+        } else {
+            todo!()
+        }
+    }
+
+    // 13.2.5.33 Attribute name state
+    // https://html.spec.whatwg.org/multipage/parsing.html#attribute-name-state
+    fn attribute_name_state(&mut self) {
+        if let Some(char) = self.consume_next_input_character() {
+            match char {
+                _ if is_one_of_tab_lf_ff_space(char) => todo!(),
+                '/' | '>' => todo!(),
+                '=' => self.before_attribute_value_state(),
+                _ if char.is_ascii_uppercase() => todo!(),
+                '\u{0000}' => todo!(),
+                '"' | '\'' | '<' => todo!(),
+                _ => {
+                    self.current_attribute_name.push(char);
+                    self.attribute_name_state();
+                }
+            }
+        } else {
+            todo!()
+        }
+    }
+
+    // 13.2.5.35 Before attribute value state
+    // https://html.spec.whatwg.org/multipage/parsing.html#before-attribute-value-state
+    fn before_attribute_value_state(&mut self) {
+        if let Some(char) = self.consume_next_input_character() {
+            match char {
+                _ if is_one_of_tab_lf_ff_space(char) => self.before_attribute_value_state(),
+                '"' => self.attribute_value_double_quoted_state(),
+                '\'' => todo!(),
+                '>' => todo!(),
+                _ => todo!(),
+            }
+        } else {
+            todo!()
+        }
+    }
+
+    // 13.2.5.36 Attribute value (double-quoted) state
+    // https://html.spec.whatwg.org/multipage/parsing.html#attribute-value-(double-quoted)-state
+    fn attribute_value_double_quoted_state(&mut self) {
+        if let Some(char) = self.consume_next_input_character() {
+            match char {
+                '"' => self.after_attribute_value_quoted_state(),
+                '&' => todo!(),
+                '\u{0000}' => todo!(),
+                _ => {
+                    self.current_attribute_value.push(char);
+                    self.attribute_value_double_quoted_state();
+                }
+            }
+        } else {
+            todo!()
+        }
+    }
+
+    // 13.2.5.39 After attribute value (quoted) state
+    // https://html.spec.whatwg.org/multipage/parsing.html#after-attribute-value-(quoted)-state
+    fn after_attribute_value_quoted_state(&mut self) {
+        if let Some(char) = self.consume_next_input_character() {
+            match char {
+                _ if is_one_of_tab_lf_ff_space(char) => todo!(),
+                '/' => todo!(),
+                '>' => {
+                    self.emit_current_tag_token();
+                    self.data_state();
+                }
+                _ => todo!(),
             }
         } else {
             todo!()
