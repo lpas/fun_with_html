@@ -9,8 +9,10 @@ fn main() -> io::Result<()> {
     let mut file = File::open(file_path)?;
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
-    let mut tokenizer = Tokenizer::new(&contents);
-    tokenizer.run();
+    let tokenizer = Tokenizer::new(&contents);
+    for token in tokenizer {
+        println!("token emit: {:?}", token)
+    }
 
     Ok(())
 }
