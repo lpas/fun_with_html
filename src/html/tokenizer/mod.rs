@@ -34,14 +34,21 @@ enum Token {
 
 // Comment and character tokens have data.
 
+#[derive(Default)]
+struct Attribute {
+    name: String,
+    value: String,
+}
+
 pub struct Tokenizer {
     chars: Vec<char>,
     index: usize,
     current_doc_type: DOCTYPE,
     current_tag: Tag,
     current_tag_type: TagType,
-    current_attribute_name: String,
-    current_attribute_value: String,
+    // current_attribute_name: String,
+    // current_attribute_value: String,
+    current_attribute: Attribute,
     current_comment_data: String,
 }
 
@@ -54,8 +61,9 @@ impl Tokenizer {
             current_doc_type: DOCTYPE::default(),
             current_tag: Tag::default(),
             current_tag_type: TagType::StartTag,
-            current_attribute_name: String::new(),
-            current_attribute_value: String::new(),
+            // current_attribute_name: String::new(),
+            // current_attribute_value: String::new(),
+            current_attribute: Attribute::default(),
             current_comment_data: String::new(),
         }
     }
@@ -64,16 +72,30 @@ impl Tokenizer {
         println!("emit token: {:?}", token)
     }
 
-    fn emit_current_tag_token(&mut self) {
-        if self.current_attribute_name != "".to_string() {
-            self.current_tag.attributes.insert(
-                self.current_attribute_name.clone(),
-                self.current_attribute_value.clone(),
-            );
-            self.current_attribute_name = String::new();
-            self.current_attribute_value = String::new();
+    fn add_current_attribute_to_current_tag(&mut self) {
+        if self.current_attribute.name != String::new() {
+            /*  When the user agent leaves the attribute name state (and before emitting the tag token,
+            if appropriate), the complete attribute's name must be compared to the other attributes on
+            the same token; if there is already an attribute on the token with the exact same name,
+            then this is a duplicate-attribute parse error and the new attribute must be removed
+            from the token. */
+            // todo emit duplicate-attribute parse error
+            if !self
+                .current_tag
+                .attributes
+                .contains_key(&self.current_attribute.name)
+            {
+                self.current_tag.attributes.insert(
+                    self.current_attribute.name.clone(),
+                    self.current_attribute.value.clone(),
+                );
+            }
+            self.current_attribute = Attribute::default();
         }
+    }
 
+    fn emit_current_tag_token(&mut self) {
+        self.add_current_attribute_to_current_tag();
         if self.current_tag_type == TagType::StartTag {
             self.emit(Token::StartTag(self.current_tag.clone()))
         } else {
@@ -203,8 +225,7 @@ impl Tokenizer {
                 '>' => todo!(),
                 '=' => todo!(),
                 _ => {
-                    self.current_attribute_name = String::new();
-                    self.current_attribute_value = String::new();
+                    self.add_current_attribute_to_current_tag();
                     self.reconsume();
                     self.attribute_name_state();
                 }
@@ -226,7 +247,7 @@ impl Tokenizer {
                 '\u{0000}' => todo!(),
                 '"' | '\'' | '<' => todo!(),
                 _ => {
-                    self.current_attribute_name.push(char);
+                    self.current_attribute.name.push(char);
                     self.attribute_name_state();
                 }
             }
@@ -260,7 +281,7 @@ impl Tokenizer {
                 '&' => todo!(),
                 '\u{0000}' => todo!(),
                 _ => {
-                    self.current_attribute_value.push(char);
+                    self.current_attribute.value.push(char);
                     self.attribute_value_double_quoted_state();
                 }
             }
@@ -274,7 +295,7 @@ impl Tokenizer {
     fn after_attribute_value_quoted_state(&mut self) {
         if let Some(char) = self.consume_next_input_character() {
             match char {
-                _ if is_one_of_tab_lf_ff_space(char) => todo!(),
+                _ if is_one_of_tab_lf_ff_space(char) => self.before_attribute_name_state(),
                 '/' => todo!(),
                 '>' => {
                     self.emit_current_tag_token();
