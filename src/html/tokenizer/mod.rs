@@ -27,7 +27,7 @@ enum Token {
     Doctype(DOCTYPE),
     StartTag(Tag),
     EndTag(Tag),
-    // Comment,
+    Comment(String),
     Character(char),
     EndOfFile,
 }
@@ -42,6 +42,7 @@ pub struct Tokenizer {
     current_tag_type: TagType,
     current_attribute_name: String,
     current_attribute_value: String,
+    current_comment_data: String,
 }
 
 impl Tokenizer {
@@ -53,8 +54,9 @@ impl Tokenizer {
             current_doc_type: DOCTYPE::default(),
             current_tag: Tag::default(),
             current_tag_type: TagType::StartTag,
-            current_attribute_name: "".to_string(),
-            current_attribute_value: "".to_string(),
+            current_attribute_name: String::new(),
+            current_attribute_value: String::new(),
+            current_comment_data: String::new(),
         }
     }
 
@@ -68,8 +70,8 @@ impl Tokenizer {
                 self.current_attribute_name.clone(),
                 self.current_attribute_value.clone(),
             );
-            self.current_attribute_name = "".to_string();
-            self.current_attribute_value = "".to_string();
+            self.current_attribute_name = String::new();
+            self.current_attribute_value = String::new();
         }
 
         if self.current_tag_type == TagType::StartTag {
@@ -201,8 +203,8 @@ impl Tokenizer {
                 '>' => todo!(),
                 '=' => todo!(),
                 _ => {
-                    self.current_attribute_name = "".to_string();
-                    self.current_attribute_value = "".to_string();
+                    self.current_attribute_name = String::new();
+                    self.current_attribute_value = String::new();
                     self.reconsume();
                     self.attribute_name_state();
                 }
@@ -288,9 +290,92 @@ impl Tokenizer {
     // 13.2.5.42 Markup declaration open state
     // https://html.spec.whatwg.org/multipage/parsing.html#markup-declaration-open-state
     fn markup_declaration_open_state(&mut self) {
-        if lowercase_char_slice(&self.chars[self.index..self.index + 7]) == "doctype" {
+        if String::from_iter(&self.chars[self.index..self.index + 2]) == "--" {
+            self.consume_next_characters(2);
+            self.current_comment_data = String::new();
+            self.comment_start_state();
+        } else if lowercase_char_slice(&self.chars[self.index..self.index + 7]) == "doctype" {
             self.consume_next_characters(7);
             self.doctype_state()
+        } else {
+            todo!()
+        }
+    }
+
+    // 13.2.5.43 Comment start state
+    // https://html.spec.whatwg.org/multipage/parsing.html#comment-start-state
+    fn comment_start_state(&mut self) {
+        if let Some(char) = self.consume_next_input_character() {
+            match char {
+                '-' => self.comment_start_dash_state(),
+                '>' => todo!(),
+                _ => {
+                    self.reconsume();
+                    self.comment_state();
+                }
+            }
+        } else {
+            todo!()
+        }
+    }
+    // 13.2.5.44 Comment start dash state
+    // https://html.spec.whatwg.org/multipage/parsing.html#comment-start-dash-state
+    fn comment_start_dash_state(&mut self) {
+        if let Some(char) = self.consume_next_input_character() {
+            match char {
+                _ => todo!(),
+            }
+        } else {
+            todo!()
+        }
+    }
+
+    // 13.2.5.45 Comment state
+    // https://html.spec.whatwg.org/multipage/parsing.html#comment-state
+    fn comment_state(&mut self) {
+        if let Some(char) = self.consume_next_input_character() {
+            match char {
+                '<' => todo!(),
+                '-' => self.commend_end_dash_state(),
+                '\u{0000}' => todo!(),
+                _ => {
+                    self.current_comment_data.push(char);
+                    self.comment_state();
+                }
+            }
+        } else {
+            todo!()
+        }
+    }
+
+    // 13.2.5.50 Comment end dash state
+    // https://html.spec.whatwg.org/multipage/parsing.html#comment-end-dash-state
+    fn commend_end_dash_state(&mut self) {
+        if let Some(char) = self.consume_next_input_character() {
+            match char {
+                '-' => self.commend_end_state(),
+                _ => {
+                    self.current_comment_data.push('-');
+                    self.reconsume();
+                    self.comment_state();
+                }
+            }
+        } else {
+            todo!()
+        }
+    }
+
+    // 13.2.5.51 Comment end state
+    // https://html.spec.whatwg.org/multipage/parsing.html#comment-end-state
+    fn commend_end_state(&mut self) {
+        if let Some(char) = self.consume_next_input_character() {
+            match char {
+                '>' => {
+                    self.emit(Token::Comment(self.current_comment_data.clone()));
+                    self.data_state()
+                }
+                _ => todo!(),
+            }
         } else {
             todo!()
         }
