@@ -17,7 +17,7 @@ pub enum TagType {
 
 #[derive(PartialEq, Eq, Debug, Default, Clone)]
 pub struct Tag {
-    name: String,
+    pub name: String,
     // self_closing: bool,
     attributes: HashMap<String, String>,
 }

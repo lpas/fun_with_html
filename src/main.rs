@@ -1,4 +1,7 @@
+#![allow(unused)]
 mod html;
+use crate::html::tree_builder::{self, TreeBuilder};
+
 use self::html::tokenizer::Tokenizer;
 
 use std::fs::File;
@@ -10,9 +13,9 @@ fn main() -> io::Result<()> {
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
     let tokenizer = Tokenizer::new(&contents);
-    for token in tokenizer {
-        println!("token emit: {:?}", token)
-    }
+    let mut tree_builder = TreeBuilder::new();
+    tree_builder.build(tokenizer);
+    tree_builder.debug_print();
 
     Ok(())
 }
