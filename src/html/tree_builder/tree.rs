@@ -78,15 +78,65 @@ where
     }
 }
 
+pub struct IntoIter<'a, T> {
+    tree: &'a Tree<T>,
+    stack: Vec<(usize, usize)>,
+    current_depth: usize,
+}
+
+impl<'a, T> Tree<T> {
+    pub fn into_iter(&'a self) -> IntoIter<'a, T> {
+        let mut stack = Vec::new();
+        let mut current_depth = 0;
+        if let Some(root) = self.root {
+            stack.push((root, current_depth))
+        }
+
+        IntoIter {
+            tree: &self,
+            stack,
+            current_depth,
+        }
+    }
+}
+
+impl<'a, T> IntoIter<'a, T> {
+    fn get_current_depth(&self) -> usize {
+        self.current_depth
+    }
+}
+
+impl<'a, T> Iterator for IntoIter<'a, T> {
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some((cur, depth)) = self.stack.pop() {
+            let node = self.tree.get_node(cur);
+            self.current_depth = depth;
+            for x in (&node.children).into_iter().rev() {
+                self.stack.push((*x, depth + 1));
+            }
+            return Some(&node.data);
+        } else {
+            self.current_depth = 0;
+            None
+        }
+    }
+}
+
+#[derive(PartialEq)]
 pub struct Document {}
+#[derive(PartialEq)]
 pub struct Element {
     tag_name: String,
 }
 
+#[derive(PartialEq)]
 pub struct Text {
     data: String,
 }
 
+#[derive(PartialEq)]
 pub enum Node {
     Document(Document),
     Element(Element),
@@ -147,5 +197,18 @@ mod test {
         tree.add_children(html, vec![head, body]);
         let test = tree.create_node(create_text_node("Text"));
         tree.add_children(body, vec![test]);
+
+        let mut iter = tree.into_iter();
+        assert_eq!(iter.next(), Some(&Node::Document(Document::new())));
+        assert_eq!(iter.get_current_depth(), 0);
+        assert_eq!(iter.next(), Some(&create_element_node("html")));
+        assert_eq!(iter.get_current_depth(), 1);
+        assert_eq!(iter.next(), Some(&create_element_node("head")));
+        assert_eq!(iter.get_current_depth(), 2);
+        assert_eq!(iter.next(), Some(&create_element_node("body")));
+        assert_eq!(iter.get_current_depth(), 2);
+        assert_eq!(iter.next(), Some(&create_text_node("Text")));
+        assert_eq!(iter.get_current_depth(), 3);
+        assert_eq!(iter.next(), None);
     }
 }
