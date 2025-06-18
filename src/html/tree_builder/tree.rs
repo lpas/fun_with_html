@@ -101,7 +101,7 @@ impl<'a, T> Tree<T> {
 }
 
 impl<'a, T> IntoIter<'a, T> {
-    fn get_current_depth(&self) -> usize {
+    pub fn get_current_depth(&self) -> usize {
         self.current_depth
     }
 }

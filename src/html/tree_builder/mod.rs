@@ -1,3 +1,4 @@
+pub mod tester;
 pub mod tree;
 
 use std::{cell::RefCell, rc::Rc};
