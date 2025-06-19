@@ -22,6 +22,15 @@ pub struct Tag {
     attributes: HashMap<String, String>,
 }
 
+impl Tag {
+    pub fn new() -> Self {
+        Tag {
+            name: String::new(),
+            attributes: HashMap::new(),
+        }
+    }
+}
+
 #[derive(PartialEq, Eq, Debug)]
 pub enum Token {
     Doctype(DOCTYPE),

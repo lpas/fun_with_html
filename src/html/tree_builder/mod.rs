@@ -5,7 +5,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::html::{
     tokenizer::{Tag, Token, Tokenizer},
-    tree_builder::tree::{Document, Element, Node, Tree, debug_print_tree},
+    tree_builder::tree::{Document, Element, Node, Text, Tree, debug_print_tree},
 };
 
 // pub struct Node {
@@ -79,27 +79,59 @@ impl TreeBuilder {
         }
     }
 
+    pub fn get_tree(&self) -> &Tree<Node> {
+        &self.tree
+    }
+
     pub fn debug_print(&self) {
         debug_print_tree(&self.tree);
     }
 
     pub fn build(&mut self, tokenizer: Tokenizer) {
         self.current_insertion_mode = InsertionMode::Initial;
+        let mut tokenizer_iter = tokenizer.into_iter();
+        let mut reprocess_token: Option<Token> = None;
 
-        for token in tokenizer {
+        let mut token: Token = Token::EndOfFile;
+        loop {
+            if let Some(c_token) = reprocess_token {
+                token = c_token;
+                reprocess_token = None;
+            } else if let Some(c_token) = tokenizer_iter.next() {
+                token = c_token
+            } else {
+                break;
+            }
             println!("token emit: {:?}", token);
 
             match self.current_insertion_mode {
                 // https://html.spec.whatwg.org/multipage/parsing.html#the-initial-insertion-mode
                 InsertionMode::Initial => match token {
+                    Token::Character(c)
+                        if c == '\u{0009}'
+                            || c == '\u{000A}'
+                            || c == '\u{000C}'
+                            || c == '\u{000D}'
+                            || c == ' ' =>
+                    {
+                        todo!()
+                    }
+                    Token::Comment(c) => todo!(),
                     Token::Doctype(doctype) => {
                         // todo not implemented at all
                         self.current_insertion_mode = InsertionMode::BeforeHtml;
                     }
-                    _ => todo!(),
+                    _ => {
+                        // todo
+                        // If the document is not an iframe srcdoc document, then this is a parse error; if the parser cannot change the mode flag is false, set the Document to quirks mode.
+                        self.current_insertion_mode = InsertionMode::BeforeHtml;
+                        reprocess_token = Some(token);
+                    }
                 },
                 // https://html.spec.whatwg.org/multipage/parsing.html#the-before-html-insertion-mode
                 InsertionMode::BeforeHtml => match token {
+                    Token::Doctype(doctype) => todo!(),
+                    Token::Comment(comment) => todo!(),
                     Token::Character(c)
                         if c == '\u{0009}'
                             || c == '\u{000A}'
@@ -120,7 +152,29 @@ impl TreeBuilder {
                         // Switch the insertion mode to before head
                         self.current_insertion_mode = InsertionMode::BeforeHead;
                     }
-                    _ => todo!(),
+                    Token::EndTag(tag)
+                        if tag.name != "head"
+                            && tag.name != "body"
+                            && tag.name != "html"
+                            && tag.name != "br" =>
+                    {
+                        // todo parse error
+                        // ignore the token
+                    }
+                    _ => {
+                        let mut tag = Tag::new();
+                        tag.name = "html".into();
+                        // Create an html element whose node document is the Document object.
+                        let element = self.create_element_for_token(tag, "namespace", ());
+                        let el_node = self.tree.create_node(element);
+                        //  Append it to the Document object.
+                        self.tree.add_child(self.document, el_node);
+                        //  Put this element in the stack of open elements.
+                        self.stack_of_open_elements.push(el_node);
+                        // Switch the insertion mode to "before head", then reprocess the token.
+                        self.current_insertion_mode = InsertionMode::BeforeHead;
+                        reprocess_token = Some(token);
+                    }
                 },
                 // https://html.spec.whatwg.org/multipage/parsing.html#the-before-head-insertion-mode
                 InsertionMode::BeforeHead => match token {
@@ -134,12 +188,34 @@ impl TreeBuilder {
                         ()
                     }
                     Token::Comment(_) => (), // todo don't ignore comments
+                    Token::Doctype(doctype) => todo!(),
+                    Token::StartTag(tag) if tag.name == "html" => todo!(),
                     Token::StartTag(tag) if tag.name == "head" => {
                         let element = self.insert_an_html_element(tag);
                         self.head_element_pointer = Some(element);
                         self.current_insertion_mode = InsertionMode::InHead;
                     }
-                    _ => todo!(),
+                    Token::EndTag(tag)
+                        if tag.name != "head"
+                            && tag.name != "body"
+                            && tag.name != "html"
+                            && tag.name != "br" =>
+                    {
+                        // todo parse error
+                        // ignore the token
+                    }
+                    _ => {
+                        // Insert an HTML element for a "head" start tag token with no attributes.
+                        let mut tag = Tag::new();
+                        tag.name = "head".into();
+                        let element = self.insert_an_html_element(tag);
+                        // Set the head element pointer to the newly created head element.
+                        self.head_element_pointer = Some(element);
+                        // Switch the insertion mode to "in head".
+                        self.current_insertion_mode = InsertionMode::InHead;
+                        // Reprocess the current token.
+                        reprocess_token = Some(token)
+                    }
                 },
                 // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inhead
                 InsertionMode::InHead => match token {
@@ -153,15 +229,43 @@ impl TreeBuilder {
                     {
                         ()
                     }
+                    Token::Comment(comment) => todo!(),
+                    Token::StartTag(tag) if tag.name == "html" => todo!(),
+                    Token::StartTag(tag)
+                        if tag.name == "base"
+                            || tag.name == "basefont"
+                            || tag.name == "bgsound"
+                            || tag.name == "link" =>
+                    {
+                        todo!()
+                    }
                     Token::StartTag(tag) if tag.name == "meta" => {
                         self.insert_an_html_element(tag);
                         self.stack_of_open_elements.pop();
                     }
+                    Token::StartTag(tag) if tag.name == "title" => todo!(),
+                    Token::StartTag(tag) if tag.name == "noscript" /* todo && scripting_flag.is_enabled() */ || tag.name == "noframes" || tag.name == "style" => {
+                        todo!()
+                    }
+                    Token::StartTag(tag) if tag.name == "noscript" /* && scripting_flag.is_disabled() */ => todo!(),
+                    Token::StartTag(tag) if tag.name == "script" => todo!(),
                     Token::EndTag(tag) if tag.name == "head" => {
                         self.stack_of_open_elements.pop();
                         self.current_insertion_mode = InsertionMode::AfterHead;
                     }
-                    _ => todo!(),
+                    // todo:  An end tag whose tag name is one of: "body", "html", "br" Act as described in the "anything else" entry below.
+                    Token::StartTag(tag) if tag.name == "template" => todo!(),
+                    Token::EndTag(tag) if tag.name == "template" => todo!(),
+                    Token::StartTag(tag) if tag.name == "head" => todo!(),
+                    Token::EndTag(tag) => todo!(),
+                    _ => {
+                        //Pop the current node (which will be the head element) off the stack of open elements.
+                        self.stack_of_open_elements.pop();
+                        //Switch the insertion mode to "after head".
+                        self.current_insertion_mode = InsertionMode::AfterHead;
+                        //Reprocess the token.
+                        reprocess_token = Some(token);
+                    },
                 },
                 // https://html.spec.whatwg.org/multipage/parsing.html#the-after-head-insertion-mode
                 InsertionMode::AfterHead => match token {
@@ -175,6 +279,9 @@ impl TreeBuilder {
                     {
                         ()
                     }
+                    Token::Comment(comment) => todo!(),
+                    Token::Doctype(doctype) => todo!(),
+                    Token::StartTag(tag) if tag.name == "html" => todo!(),
                     Token::StartTag(tag) if tag.name == "body" => {
                         // self.stack_of_open_elements.push(Rc::clone(&element));
 
@@ -185,11 +292,43 @@ impl TreeBuilder {
                         self.insert_an_html_element(tag);
                         self.current_insertion_mode = InsertionMode::InBody;
                     }
-                    _ => todo!(),
+                    Token::StartTag(tag) if tag.name == "frameset" => todo!(),
+                    Token::StartTag(tag)
+                        if !matches!(
+                            tag.name.as_str(),
+                            "base"
+                                | "basefont"
+                                | "bgsound"
+                                | "link"
+                                | "meta"
+                                | "noframes"
+                                | "script"
+                                | "style"
+                                | "template"
+                                | "title"
+                        ) =>
+                    {
+                        todo!()
+                    }
+                    Token::EndTag(tag) if tag.name == "template" => todo!(),
+                    // todo An end tag whose tag name is one of: "body", "html", "br" => Act as described in the "anything else" entry below.
+                    Token::StartTag(tag) if tag.name == "head" => todo!(),
+                    Token::EndTag(tag) => todo!(),
+                    _ => {
+                        let mut tag = Tag::new();
+                        tag.name = "body".into();
+                        // Insert an HTML element for a "body" start tag token with no attributes.
+                        self.insert_an_html_element(tag);
+                        // Switch the insertion mode to "in body".
+                        self.current_insertion_mode = InsertionMode::InBody;
+                        // Reprocess the current token.
+                        reprocess_token = Some(token);
+                    }
                 },
                 // 13.2.6.4.7 The "in body" insertion mode
                 // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inbody
                 InsertionMode::InBody => match token {
+                    Token::Character(c) if c == '\u{0000}' => todo!(),
                     Token::Character(c)
                         if c == '\u{0009}'
                             || c == '\u{000A}'
@@ -200,10 +339,51 @@ impl TreeBuilder {
                     {
                         ()
                     }
+                    Token::Character(c) => {
+                        // Reconstruct the active formatting elements, if any.
+                        // todo
+                        // Insert the token's character.
+                        self.insert_a_character(c);
+                        // Set the frameset-ok flag to "not ok".
+                        // todo
+                    }
+                    Token::Comment(commend) => todo!(),
+                    Token::Doctype(doctype) => todo!(),
+                    Token::StartTag(tag) if tag.name == "html" => todo!(),
+                    Token::StartTag(tag)
+                        if !matches!(
+                            tag.name.as_str(),
+                            "base"
+                                | "basefont"
+                                | "bgsound"
+                                | "link"
+                                | "meta"
+                                | "noframes"
+                                | "script"
+                                | "style"
+                                | "template"
+                                | "title"
+                        ) =>
+                    {
+                        todo!()
+                    }
+                    Token::EndTag(tag) if tag.name == "tempalte" => todo!(),
                     Token::EndTag(tag) if tag.name == "body" => {
                         // todo
                         self.current_insertion_mode = InsertionMode::AfterBody;
                     }
+                    Token::StartTag(tag) if tag.name == "frameset" => todo!(),
+                    Token::EndOfFile => {
+                        // If the stack of template insertion modes is not empty, then process the token using the rules for the "in template" insertion mode.
+                        // todo
+                        // Otherwise, follow these steps:
+                        // todo
+                        // If there is a node in the stack of open elements that is not either a dd element, a dt element, an li element, an optgroup element, an option element, a p element, an rb element, an rp element, an rt element, an rtc element, a tbody element, a td element, a tfoot element, a th element, a thead element, a tr element, the body element, or the html element, then this is a parse error.
+                        // todo
+                        // Stop parsing.
+                        return;
+                    }
+                    Token::EndTag(tag) if tag.name == "body" => todo!(),
                     _ => todo!(),
                 },
                 // 13.2.6.4.19 The "after body" insertion mode
@@ -261,8 +441,40 @@ impl TreeBuilder {
         return el;
     }
 
+    // https://html.spec.whatwg.org/multipage/parsing.html#insert-a-character
+    fn insert_a_character(&mut self, c: char) {
+        // todo this seems to hacky
+        if let Some(cur_index) = self.get_current_node2() {
+            let node = self.tree.get_node(cur_index);
+            if let Some(last_node) = node.children.top() {
+                let node = self.tree.get_node(*last_node);
+                // If there is a Text node immediately before the adjusted insertion location, then append data to that Text node's data.
+                if let Node::Text(txt) = &node.data {
+                    let mut txt = txt.data.clone();
+                    txt.push(c);
+                    let node = Node::Text(Text::new(txt));
+                    self.tree.replace_data_at_index(*last_node, node);
+                    return;
+                }
+            }
+
+            let node = Node::Text(Text::new(c.to_string()));
+            let text_node = self.tree.create_node(node);
+            self.tree.add_child(cur_index, text_node);
+        }
+    }
+
     fn get_current_node(&self) -> Option<&usize> {
         return self.stack_of_open_elements.top();
+    }
+
+    fn get_current_node2(&self) -> Option<usize> {
+        let len = self.stack_of_open_elements.len();
+        if len == 0 {
+            return None;
+        } else {
+            return Some(self.stack_of_open_elements[len - 1]);
+        }
     }
 
     // https://html.spec.whatwg.org/multipage/parsing.html#create-an-element-for-the-token

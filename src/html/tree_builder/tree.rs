@@ -7,8 +7,8 @@ pub struct Tree<T> {
 
 pub struct TreeNode<T> {
     index: usize,
-    children: Vec<usize>,
-    data: T,
+    pub children: Vec<usize>,
+    pub data: T,
 }
 
 impl<T> Tree<T> {
@@ -46,6 +46,14 @@ impl<T> Tree<T> {
 
     pub fn get_node(&self, index: usize) -> &TreeNode<T> {
         &self.data[index]
+    }
+
+    pub fn replace_data_at_index(&mut self, index: usize, data: T) {
+        self.data[index] = TreeNode {
+            index,
+            children: Vec::new(),
+            data,
+        };
     }
 }
 
@@ -124,16 +132,16 @@ impl<'a, T> Iterator for IntoIter<'a, T> {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Document {}
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Element {
     tag_name: String,
 }
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Text {
-    data: String,
+    pub data: String,
 }
 
 #[derive(PartialEq)]

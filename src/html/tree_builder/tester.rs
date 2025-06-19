@@ -109,9 +109,9 @@ where
 
 #[derive(Debug)]
 pub struct TestCase {
-    data: Vec<String>,
-    error: Vec<String>,
-    document: Vec<String>,
+    pub data: Vec<String>,
+    pub error: Vec<String>,
+    pub document: Vec<String>,
 }
 
 enum TestState {
