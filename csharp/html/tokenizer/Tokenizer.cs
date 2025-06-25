@@ -97,7 +97,7 @@ public class DOCTYPE(): Token {
 
 }
 
-public class Tag(): Token {
+public class Tag: Token {
     public string name { get; set; } = "";
     public bool selfClosing { get; set; } = false;
     public Dictionary<string, string> Attributes { get; set; } = [];
@@ -108,7 +108,12 @@ public class Tag(): Token {
 
 }
 
-public class StartTag: Tag;
+public class StartTag: Tag {
+    public StartTag() : base() { }
+    public StartTag(string name) : base() {
+        this.name = name;
+    }
+}
 public class EndTag: Tag;
 public class Comment(): Token {
     public string data { get; set; } = "";
