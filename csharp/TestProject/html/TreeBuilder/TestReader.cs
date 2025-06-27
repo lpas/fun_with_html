@@ -1,4 +1,5 @@
 
+using System.Text;
 using FunWithHtml.html.TreeBuilder;
 
 namespace TestProject.html.TreeBuilder;
@@ -7,23 +8,29 @@ namespace TestProject.html.TreeBuilder;
 public struct TestCase {
     public List<string> data = [];
     public List<string> errors = [];
+    public List<string> newErrors = [];
     public List<string> document = [];
 
     public TestCase() { }
 
 
     public override string ToString() {
-        return $"==TestCase==\n" +
-               $"#data:\n{string.Join("\n", data)}\n" +
-               $"#errors:\n{string.Join("\n", errors)}\n" +
-               $"#document:\n{string.Join("\n", document)}\n" +
-               $" ";
+        var sb = new StringBuilder();
+        sb.AppendLine("==TestCase==");
+        sb.AppendLine($"#data:\n{string.Join("\n", data)}");
+        sb.AppendLine($"#errors:\n{string.Join("\n", errors)}");
+        if (newErrors.Count > 0)
+            sb.AppendLine($"#new-errors:\n{string.Join("\n", newErrors)}");
+        sb.AppendLine($"#document:\n{string.Join("\n", document)}");
+        sb.AppendLine();
+        return sb.ToString();
     }
 }
 
 enum TestState {
     Data,
     Errors,
+    NewErrors,
     Document,
 }
 
@@ -39,11 +46,18 @@ public class TestReader(IEnumerable<string> iter) {
     }
 
 
-    public TestCase Get() {
+    public IEnumerable<TestCase> GetTestCases() {
         var testCase = new TestCase();
         var currentState = TestState.Data;
+        var notEmitted = false;
         foreach (var line in iter) {
-            if (line == "") break;
+            if (line == "") {
+                yield return testCase;
+                notEmitted = false;
+                testCase = new TestCase();
+                currentState = TestState.Data;
+                continue;
+            }
             switch (line) {
                 case "#data":
                     currentState = TestState.Data;
@@ -54,19 +68,24 @@ public class TestReader(IEnumerable<string> iter) {
                 case "#document":
                     currentState = TestState.Document;
                     break;
-                case "#new-errors" or "#document-fragment" or "#script-off" or "#script-on":
+                case "#new-errors":
+                    currentState = TestState.NewErrors;
+                    break;
+                case "#document-fragment" or "#script-off" or "#script-on":
                     throw new NotImplementedException();
                 default:
+                    notEmitted = true;
                     switch (currentState) {
                         case TestState.Data: testCase.data.Add(line); break;
                         case TestState.Errors: testCase.errors.Add(line); break;
+                        case TestState.NewErrors: testCase.newErrors.Add(line); break;
                         case TestState.Document: testCase.document.Add(line); break;
                     }
                     break;
             }
         }
-        return testCase;
-
+        // this can happen if the last line is not an empty line
+        if (notEmitted) yield return testCase;
     }
 
     public static void AssertEq(TestCase testCase, Document document) {

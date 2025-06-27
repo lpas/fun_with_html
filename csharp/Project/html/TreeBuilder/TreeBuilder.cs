@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using FunWithHtml.html.Tokenizer;
 
 namespace FunWithHtml.html.TreeBuilder;
@@ -60,7 +61,9 @@ public class Text(Document document, string data): Node(document) {
     }
 }
 
-public class TreeBuilder() {
+public class TreeBuilder(bool debugPrint = false) {
+
+    private bool debugPrint = debugPrint;
 
     public Document Document { get => document; }
 
@@ -87,7 +90,8 @@ public class TreeBuilder() {
             }
             if (token == null) break;
             if (token is EndOfFile) break;
-            Console.WriteLine(token);
+
+            if (debugPrint) Debug.WriteLine(token);
 
 
             switch (insertionMode) {
@@ -526,7 +530,7 @@ public class TreeBuilder() {
 
     //https://dom.spec.whatwg.org/#concept-create-element
     private Element CreateAnElement(Document document, string localName, string? @namespace, string? prefix = null, string? isValue = null, bool synchronousCustomElements = false) {
-        Console.WriteLine($"createELement {localName}");
+        if (debugPrint) Debug.WriteLine($"createELement {localName}");
         return new Element(document, localName);
     }
 

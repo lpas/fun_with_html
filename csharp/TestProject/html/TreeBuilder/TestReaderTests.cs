@@ -23,10 +23,10 @@ Test
     public void ReadFileVsReadStr() {
         var testReader = TestReader.CreateFromString(TestCaseString);
 
-        var testCase = testReader.Get();
+        var testCase = testReader.GetTestCases().First();
         var filePath = Path.Combine(ProjectDirectory, "html5lib-tests", "tree-construction", "tests1.dat");
         var fileReader = TestReader.CreateFromFile(filePath);
-        var testCaseFile = fileReader.Get();
+        var testCaseFile = fileReader.GetTestCases().First();
 
         Assert.AreEqual(1, testCase.data.Count);
         CollectionAssert.AreEqual(testCase.data, testCaseFile.data);
@@ -41,7 +41,7 @@ Test
     [TestMethod]
     public void TreeCompare() {
         var testReader = TestReader.CreateFromString(TestCaseString);
-        var testCase = testReader.Get();
+        var testCase = testReader.GetTestCases().First();
         var document = new Document();
         var html = new Element(document, "html");
         document.childNodes.Add(html);
@@ -58,7 +58,7 @@ Test
     [TestMethod]
     public void TreeCompareToManyNodes() {
         var testReader = TestReader.CreateFromString(TestCaseString);
-        var testCase = testReader.Get();
+        var testCase = testReader.GetTestCases().First();
         var document = new Document();
         var html = new Element(document, "html");
         document.childNodes.Add(html);
@@ -76,7 +76,7 @@ Test
     [TestMethod]
     public void TreeCompareNotEnoughNodes() {
         var testReader = TestReader.CreateFromString(TestCaseString);
-        var testCase = testReader.Get();
+        var testCase = testReader.GetTestCases().First();
         var document = new Document();
         var html = new Element(document, "html");
         document.childNodes.Add(html);
@@ -91,7 +91,7 @@ Test
     [TestMethod]
     public void TreeCompareWrongNode() {
         var testReader = TestReader.CreateFromString(TestCaseString);
-        var testCase = testReader.Get();
+        var testCase = testReader.GetTestCases().First();
         var document = new Document();
         var html = new Element(document, "html");
         document.childNodes.Add(html);

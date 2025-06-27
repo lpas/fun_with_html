@@ -14,14 +14,21 @@ public sealed class Html5LibTreeConstruction {
         var filePath = Path.Combine(ProjectDirectory, "html5lib-tests", "tree-construction", "tests1.dat");
         var testReader = TestReader.CreateFromFile(filePath);
 
-        var testCase = testReader.Get();
+        foreach (var (testCase, index) in testReader.GetTestCases().Select((testCase, i) => (testCase, i))) {
+            Console.WriteLine(testCase);
+            Console.WriteLine(index);
 
-        var tokenizer = new Tokenizer(string.Join('\n', testCase.data));
-        var treeBuilder = new TreeBuilder();
-        treeBuilder.build(tokenizer);
+            var tokenizer = new Tokenizer(string.Join('\n', testCase.data));
+            var treeBuilder = new TreeBuilder();
+            treeBuilder.build(tokenizer);
 
-        treeBuilder.PrintDebugDocumentTree();
-
-        TestReader.AssertEq(testCase, treeBuilder.Document);
+            try {
+                TestReader.AssertEq(testCase, treeBuilder.Document);
+            } catch {
+                Console.WriteLine(testCase);
+                treeBuilder.PrintDebugDocumentTree();
+                throw;
+            }
+        }
     }
 }
