@@ -1,6 +1,6 @@
-using html.Tokenizer;
+using FunWithHtml.html.Tokenizer;
 
-namespace html.TreeBuilder;
+namespace FunWithHTML.html.TreeBuilder;
 
 enum InsertionMode {
     Initial,
@@ -64,7 +64,7 @@ public class TreeBuilder() {
     private bool scriptingFlag = false;
 
 
-    public void build(Tokenizer.Tokenizer tokenizer) {
+    public void build(Tokenizer tokenizer) {
         Token? reprocessToken = null;
 
         while (true) {
