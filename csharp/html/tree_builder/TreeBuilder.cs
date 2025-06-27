@@ -38,11 +38,18 @@ abstract class Node(Document? ownerDocument) {
     public List<Node> childNodes = [];
 }
 class Document(Document? document): Node(document) {
+    public override string ToString() {
+        return "#document";
+    }
 }
 class Element(Document document, string localName): Node(document) {
     public string? @namespace;
     public string? namespacePrefix;
     public string localName = localName;
+
+    public override string ToString() {
+        return $"<{localName}>";
+    }
 }
 
 public class TreeBuilder() {
@@ -53,8 +60,6 @@ public class TreeBuilder() {
     private Node currentNode { get => stackOfOpenElements[^1]; }
 
     private Element? headElementPointer = null;
-    // head_element_pointer = null
-    // form_element_pointer = null
 
     private bool scriptingFlag = false;
 
@@ -88,7 +93,10 @@ public class TreeBuilder() {
                             break;
                         default:
                             // todo If the document is not an iframe srcdoc document, then this is a parse error; if the parser cannot change the mode flag is false, set the Document to quirks mode.
+                            // In any case, switch the insertion mode to "before html",                            
                             insertionMode = InsertionMode.BeforeHtml;
+                            // then reprocess the token.
+                            reprocessToken = token;
                             break;
                     }
                     break;
@@ -100,22 +108,32 @@ public class TreeBuilder() {
                         case Comment: throw new NotImplementedException();
                         case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
                             break; // ignore the token
-                        case StartTag { name: "html" }:
-                            // Create an element for the token in the HTML namespace, with the Document as the intended parent.
-                            var element = CreateAnElementForTheToken((Tag)token, Namespaces.HTML, document);
-                            // Append it to the Document object.
-                            document.childNodes.Add(element);
-                            // Put this element in the stack of open elements.
-                            stackOfOpenElements.Add(element);
-                            // Switch the insertion mode to "before head".
-                            insertionMode = InsertionMode.BeforeHead;
-                            break;
+                        case StartTag { name: "html" }: {
+                                // Create an element for the token in the HTML namespace, with the Document as the intended parent.
+                                var element = CreateAnElementForTheToken((Tag)token, Namespaces.HTML, document);
+                                // Append it to the Document object.
+                                document.childNodes.Add(element);
+                                // Put this element in the stack of open elements.
+                                stackOfOpenElements.Add(element);
+                                // Switch the insertion mode to "before head".
+                                insertionMode = InsertionMode.BeforeHead;
+                                break;
+                            }
                         case EndTag { name: "head" or "body" or "html" or "br" }:
                             throw new NotImplementedException();
                         case EndTag:
                             throw new NotImplementedException();
-                        default:
-                            throw new NotImplementedException();
+                        default: {
+                                // Create an html element whose node document is the Document object. Append it to the Document object. Put this element in the stack of open elements.
+                                var element = CreateAnElement(document, "html", Namespaces.HTML);
+                                document.childNodes.Add(element);
+                                stackOfOpenElements.Add(element);
+                                // Switch the insertion mode to "before head", then reprocess the token.                            
+                                insertionMode = InsertionMode.BeforeHead;
+                                reprocessToken = token;
+                                break;
+                            }
+
                     }
                     break;
                 // 13.2.6.4.3 The "before head" insertion mode
@@ -127,19 +145,28 @@ public class TreeBuilder() {
                         case Comment: throw new NotImplementedException();
                         case DOCTYPE: throw new NotImplementedException();
                         case StartTag { name: "html" }: throw new NotImplementedException();
-                        case StartTag { name: "head" }:
-                            // Insert an HTML element for the token.
-                            var element = InsertAnHTMLElement(token);
-                            //Set the head element pointer to the newly created head element.
-                            headElementPointer = element;
-                            //Switch the insertion mode to "in head".
-                            insertionMode = InsertionMode.InHead;
+                        case StartTag { name: "head" }: {
+                                // Insert an HTML element for the token.
+                                var element = InsertAnHTMLElement(token);
+                                //Set the head element pointer to the newly created head element.
+                                headElementPointer = element;
+                                //Switch the insertion mode to "in head".
+                                insertionMode = InsertionMode.InHead;
+                            }
                             break;
                         case EndTag { name: "head" or "body" or "html" or "br" }: throw new NotImplementedException();
                         case EndTag: throw new NotImplementedException();
-                        default:
-                            throw new NotImplementedException();
-
+                        default: {
+                                // Insert an HTML element for a "head" start tag token with no attributes.
+                                var element = InsertAnHTMLElement(new StartTag("head"));
+                                // Set the head element pointer to the newly created head element.
+                                headElementPointer = element;
+                                // Switch the insertion mode to "in head".
+                                insertionMode = InsertionMode.InHead;
+                                // Reprocess the current token.
+                                reprocessToken = token;
+                                break;
+                            }
                     }
                     break;
                 // 13.2.6.4.4 The "in head" insertion mode
@@ -480,7 +507,18 @@ public class TreeBuilder() {
         return new Element(document, localName);
     }
 
-
+    public void PrintDebugDocumentTree() {
+        var stack = new Stack<(Node, int)>();
+        stack.Push((document, 0));
+        while (stack.Count > 0) {
+            var (node, depth) = stack.Pop();
+            var indentation = depth == 0 ? "" : ("|" + new string(' ', depth * 2 - 1));
+            Console.WriteLine($"{indentation}{node}");
+            foreach (var child in Enumerable.Reverse(node.childNodes)) {
+                stack.Push((child, depth + 1));
+            }
+        }
+    }
 }
 
 
