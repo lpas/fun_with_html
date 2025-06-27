@@ -1,6 +1,6 @@
 ﻿namespace TestProject.html.TreeBuilder;
 
-using FunWithHTML.html.TreeBuilder;
+using FunWithHtml.html.TreeBuilder;
 
 
 [TestClass]

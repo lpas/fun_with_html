@@ -1,5 +1,5 @@
 ﻿using FunWithHtml.html.Tokenizer;
-using FunWithHTML.html.TreeBuilder;
+using FunWithHtml.html.TreeBuilder;
 
 
 string path = @"./index.html";

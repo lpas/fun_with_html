@@ -1,6 +1,6 @@
 using FunWithHtml.html.Tokenizer;
 
-namespace FunWithHTML.html.TreeBuilder;
+namespace FunWithHtml.html.TreeBuilder;
 
 enum InsertionMode {
     Initial,
@@ -62,6 +62,8 @@ public class Text(Document document, string data): Node(document) {
 
 public class TreeBuilder() {
 
+    public Document Document { get => document; }
+
     private Document document = new();
     private InsertionMode insertionMode = InsertionMode.Initial;
     private List<Node> stackOfOpenElements = [];
@@ -72,7 +74,7 @@ public class TreeBuilder() {
     private bool scriptingFlag = false;
 
 
-    public void build(Tokenizer tokenizer) {
+    public void build(Tokenizer.Tokenizer tokenizer) {
         Token? reprocessToken = null;
 
         while (true) {
