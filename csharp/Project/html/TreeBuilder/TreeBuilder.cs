@@ -33,16 +33,16 @@ public static class Namespaces {
     public static readonly string HTML = "http://www.w3.org/1999/xhtml";
 }
 
-abstract class Node(Document? ownerDocument) {
+public abstract class Node(Document? ownerDocument) {
     public Document? ownerDocument { get; } = ownerDocument;
     public List<Node> childNodes = [];
 }
-class Document(Document? document): Node(document) {
+public class Document(): Node(null) {
     public override string ToString() {
         return "#document";
     }
 }
-class Element(Document document, string localName): Node(document) {
+public class Element(Document document, string localName): Node(document) {
     public string? @namespace;
     public string? namespacePrefix;
     public string localName = localName;
@@ -52,9 +52,17 @@ class Element(Document document, string localName): Node(document) {
     }
 }
 
+public class Text(Document document, string data): Node(document) {
+    public string data = data;
+
+    public override string ToString() {
+        return $"\"{data}\"";
+    }
+}
+
 public class TreeBuilder() {
 
-    private Document document = new(null);
+    private Document document = new();
     private InsertionMode insertionMode = InsertionMode.Initial;
     private List<Node> stackOfOpenElements = [];
     private Node currentNode { get => stackOfOpenElements[^1]; }
@@ -508,8 +516,11 @@ public class TreeBuilder() {
     }
 
     public void PrintDebugDocumentTree() {
+        PrintDebugDocumentTree(document);
+    }
+    public static void PrintDebugDocumentTree(Node baseNode) {
         var stack = new Stack<(Node, int)>();
-        stack.Push((document, 0));
+        stack.Push((baseNode, 0));
         while (stack.Count > 0) {
             var (node, depth) = stack.Pop();
             var indentation = depth == 0 ? "" : ("|" + new string(' ', depth * 2 - 1));
@@ -519,6 +530,7 @@ public class TreeBuilder() {
             }
         }
     }
+
 }
 
 
