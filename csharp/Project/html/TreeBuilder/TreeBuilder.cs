@@ -159,9 +159,9 @@ public class TreeBuilder(bool debugPrint = false) {
                         case Comment: throw new NotImplementedException();
                         case DOCTYPE: throw new NotImplementedException();
                         case StartTag { name: "html" }: throw new NotImplementedException();
-                        case StartTag { name: "head" }: {
+                        case StartTag { name: "head" } tagToken: {
                                 // Insert an HTML element for the token.
-                                var element = InsertAnHTMLElement(token);
+                                var element = InsertAnHTMLElement(tagToken);
                                 //Set the head element pointer to the newly created head element.
                                 headElementPointer = element;
                                 //Switch the insertion mode to "in head".
@@ -187,16 +187,16 @@ public class TreeBuilder(bool debugPrint = false) {
                 // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inhead
                 case InsertionMode.InHead:
                     switch (token) {
-                        case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
-                            InsertACharacter(token);
+                        case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' } cToken:
+                            InsertACharacter(cToken);
                             break;
                         case Comment: throw new NotImplementedException();
                         case DOCTYPE: throw new NotImplementedException();
                         case StartTag { name: "html" }: throw new NotImplementedException();
                         case StartTag { name: "base" or "basefont" or "bgsound" or "link" }: throw new NotImplementedException();
-                        case StartTag { name: "meta" }:
+                        case StartTag { name: "meta" } tagToken:
                             // Insert an HTML element for the token. Immediately pop the current node off the stack of open elements.
-                            InsertAnHTMLElement(token);
+                            InsertAnHTMLElement(tagToken);
                             stackOfOpenElements.Pop();
                             // Acknowledge the token's self-closing flag, if it is set.
 
@@ -235,15 +235,15 @@ public class TreeBuilder(bool debugPrint = false) {
                 // https://html.spec.whatwg.org/multipage/parsing.html#the-after-head-insertion-mode
                 case InsertionMode.AfterHead:
                     switch (token) {
-                        case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
-                            InsertACharacter(token);
+                        case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' } cToken:
+                            InsertACharacter(cToken);
                             break;
                         case Comment: throw new NotImplementedException();
                         case DOCTYPE: throw new NotImplementedException();
                         case StartTag { name: "html" }: throw new NotImplementedException();
-                        case StartTag { name: "body" }:
+                        case StartTag { name: "body" } tagToken:
                             // Insert an HTML element for the token.
-                            InsertAnHTMLElement(token);
+                            InsertAnHTMLElement(tagToken);
                             // Set the frameset-ok flag to "not ok".
                             // todo
                             // Switch the insertion mode to "in body".
@@ -270,17 +270,17 @@ public class TreeBuilder(bool debugPrint = false) {
                 case InsertionMode.InBody:
                     switch (token) {
                         case Character { data: '\0' }: throw new NotImplementedException();
-                        case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
+                        case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' } cToken:
                             // Reconstruct the active formatting elements, if any.
                             // todo
                             // Insert the token's character.
-                            InsertACharacter(token);
+                            InsertACharacter(cToken);
                             break;
-                        case Character:
+                        case Character cToken:
                             // Reconstruct the active formatting elements, if any.
                             //todo
                             // Insert the token's character.
-                            InsertACharacter(token);
+                            InsertACharacter(cToken);
                             // Set the frameset-ok flag to "not ok".
                             // todo
                             break;
@@ -315,13 +315,13 @@ public class TreeBuilder(bool debugPrint = false) {
                             "details" or "dialog" or "dir" or "div" or "dl" or "fieldset" or "figcaption" or "figure" or
                             "footer" or "header" or "hgroup" or "main" or "menu" or "nav" or "ol" or "p" or "search" or
                             "section" or "summary" or "ul"
-                        }:
+                        } tagToken:
                             // If the stack of open elements has a p element in button scope, then close a p element.
                             if (StackOfOpenElementsInButtonScope("p")) {
                                 CloseAPElement();
                             }
                             // Insert an HTML element for the token.
-                            InsertAnHTMLElement(token);
+                            InsertAnHTMLElement(tagToken);
                             break;
                         case StartTag { name: "h1" or "h2" or "h3" or "h4" or "h5" or "h6" }: throw new NotImplementedException();
                         case StartTag { name: "pre" or "listing" }: throw new NotImplementedException();
@@ -483,7 +483,7 @@ public class TreeBuilder(bool debugPrint = false) {
     }
 
     // https://html.spec.whatwg.org/multipage/parsing.html#insert-a-character
-    private void InsertACharacter(Token token) {
+    private void InsertACharacter(Character token) {
         // Let the adjusted insertion location be the appropriate place for inserting a node.
         // todo
         // If the adjusted insertion location is in a Document node, then return.
@@ -491,11 +491,11 @@ public class TreeBuilder(bool debugPrint = false) {
             return;
         }
         // If there is a Text node immediately before the adjusted insertion location, then append data to that Text node's data.
-        if (currentNode.childNodes.Count > 0 && currentNode.childNodes[^1] is Text) {
-            (currentNode.childNodes[^1] as Text).data += (token as Character).data;
+        if (currentNode.childNodes.Count > 0 && currentNode.childNodes[^1] is Text lastChild) {
+            lastChild.data += token.data;
         } else {
             // Otherwise, create a new Text node whose data is data and whose node document is the same as that of the element in which the adjusted insertion location finds itself, and insert the newly created node at the adjusted insertion location.                
-            currentNode.childNodes.Add(new Text(document, (token as Character).data.ToString()));
+            currentNode.childNodes.Add(new Text(document, token.data.ToString()));
         }
     }
 
@@ -528,9 +528,9 @@ public class TreeBuilder(bool debugPrint = false) {
         // If the parser was not created as part of the HTML fragment parsing algorithm, then pop the element queue from element's relevant agent's custom element reactions stack, and invoke custom element reactions in that queue.
     }
     // https://html.spec.whatwg.org/multipage/parsing.html#insert-an-html-element
-    private Element InsertAnHTMLElement(Token token) {
+    private Element InsertAnHTMLElement(Tag token) {
         // To insert an HTML element given a token token: insert a foreign element given token, the HTML namespace, and false.
-        return InsertAForeignElement((Tag)token, Namespaces.HTML, false);
+        return InsertAForeignElement(token, Namespaces.HTML, false);
     }
 
     // https://html.spec.whatwg.org/multipage/parsing.html#create-an-element-for-the-token
