@@ -184,7 +184,7 @@ public class TreeBuilder() {
                 case InsertionMode.InHead:
                     switch (token) {
                         case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
-                            InsertTheCharacter(token);
+                            InsertACharacter(token);
                             break;
                         case Comment: throw new NotImplementedException();
                         case DOCTYPE: throw new NotImplementedException();
@@ -232,7 +232,7 @@ public class TreeBuilder() {
                 case InsertionMode.AfterHead:
                     switch (token) {
                         case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
-                            InsertTheCharacter(token);
+                            InsertACharacter(token);
                             break;
                         case Comment: throw new NotImplementedException();
                         case DOCTYPE: throw new NotImplementedException();
@@ -270,13 +270,13 @@ public class TreeBuilder() {
                             // Reconstruct the active formatting elements, if any.
                             // todo
                             // Insert the token's character.
-                            InsertTheCharacter(token);
+                            InsertACharacter(token);
                             break;
                         case Character:
                             // Reconstruct the active formatting elements, if any.
                             //todo
                             // Insert the token's character.
-                            InsertTheCharacter(token);
+                            InsertACharacter(token);
                             // Set the frameset-ok flag to "not ok".
                             // todo
                             break;
@@ -413,8 +413,21 @@ public class TreeBuilder() {
 
     }
 
-    private void InsertTheCharacter(Token token) {
+    // https://html.spec.whatwg.org/multipage/parsing.html#insert-a-character
+    private void InsertACharacter(Token token) {
+        // Let the adjusted insertion location be the appropriate place for inserting a node.
         // todo
+        // If the adjusted insertion location is in a Document node, then return.
+        if (currentNode is Document) {
+            return;
+        }
+        // If there is a Text node immediately before the adjusted insertion location, then append data to that Text node's data.
+        if (currentNode.childNodes.Count > 0 && currentNode.childNodes[^1] is Text) {
+            (currentNode.childNodes[^1] as Text).data += (token as Character).data;
+        } else {
+            // Otherwise, create a new Text node whose data is data and whose node document is the same as that of the element in which the adjusted insertion location finds itself, and insert the newly created node at the adjusted insertion location.                
+            currentNode.childNodes.Add(new Text(document, (token as Character).data.ToString()));
+        }
     }
 
     // https://html.spec.whatwg.org/multipage/parsing.html#insert-a-foreign-element
