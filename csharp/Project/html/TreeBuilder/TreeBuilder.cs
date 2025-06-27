@@ -69,8 +69,8 @@ public class TreeBuilder(bool debugPrint = false) {
 
     private Document document = new();
     private InsertionMode insertionMode = InsertionMode.Initial;
-    private List<Node> stackOfOpenElements = [];
-    private Node currentNode { get => stackOfOpenElements[^1]; }
+    private Stack<Element> stackOfOpenElements = [];
+    private Node currentNode { get => stackOfOpenElements.Peek(); }
 
     private Element? headElementPointer = null;
 
@@ -128,7 +128,7 @@ public class TreeBuilder(bool debugPrint = false) {
                                 // Append it to the Document object.
                                 document.childNodes.Add(element);
                                 // Put this element in the stack of open elements.
-                                stackOfOpenElements.Add(element);
+                                stackOfOpenElements.Push(element);
                                 // Switch the insertion mode to "before head".
                                 insertionMode = InsertionMode.BeforeHead;
                                 break;
@@ -141,7 +141,7 @@ public class TreeBuilder(bool debugPrint = false) {
                                 // Create an html element whose node document is the Document object. Append it to the Document object. Put this element in the stack of open elements.
                                 var element = CreateAnElement(document, "html", Namespaces.HTML);
                                 document.childNodes.Add(element);
-                                stackOfOpenElements.Add(element);
+                                stackOfOpenElements.Push(element);
                                 // Switch the insertion mode to "before head", then reprocess the token.                            
                                 insertionMode = InsertionMode.BeforeHead;
                                 reprocessToken = token;
@@ -316,7 +316,13 @@ public class TreeBuilder(bool debugPrint = false) {
                             "footer" or "header" or "hgroup" or "main" or "menu" or "nav" or "ol" or "p" or "search" or
                             "section" or "summary" or "ul"
                         }:
-                            throw new NotImplementedException();
+                            // If the stack of open elements has a p element in button scope, then close a p element.
+                            if (StackOfOpenElementsInButtonScope("p")) {
+                                CloseAPElement();
+                            }
+                            // Insert an HTML element for the token.
+                            InsertAnHTMLElement(token);
+                            break;
                         case StartTag { name: "h1" or "h2" or "h3" or "h4" or "h5" or "h6" }: throw new NotImplementedException();
                         case StartTag { name: "pre" or "listing" }: throw new NotImplementedException();
                         case StartTag { name: "form" }: throw new NotImplementedException();
@@ -417,6 +423,65 @@ public class TreeBuilder(bool debugPrint = false) {
 
     }
 
+    // https://html.spec.whatwg.org/multipage/parsing.html#generate-implied-end-tags
+    private void GenerateImpliedEndTags(string? except) {
+        // When the steps below require the UA to generate implied end tags, then, while the current node is a dd element, a dt element, an li element, an optgroup element,
+        // an option element, a p element, an rb element, an rp element, an rt element, or an rtc element, the UA must pop the current node off the stack of open elements.
+        List<string> list = ["dd", "dt", "li", "optgroup", "option", "p", "rb", "rt", "rtc"];
+        if (except != null) {
+            list.Remove(except);
+        }
+        while (true) {
+            if (list.Contains(stackOfOpenElements.Peek().localName)) {
+                stackOfOpenElements.Pop();
+            } else {
+                return;
+            }
+        }
+    }
+
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#close-a-p-element
+    private void CloseAPElement() {
+        // Generate implied end tags, except for p elements.
+        GenerateImpliedEndTags("p");
+        // If the current node is not a p element, then this is a parse error.
+        // todo
+        // Pop elements from the stack of open elements until a p element has been popped from the stack.
+        while (true) {
+            var element = stackOfOpenElements.Pop();
+            if (element.localName == "p") return;
+        }
+    }
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-scope
+    private static List<string> ElementInScopeSpecialList = ["applet", "caption", "html", "table", "td", "th", "marquee", "object", "template"];
+    // todo these elements should also be part of the list: They have a different namespace: "MathML mi" , "MathML mo" , "MathML mn" , "MathML ms" , "MathML mtext" , "MathML annotation-xml" , "SVG foreignObject" , "SVG desc" , "SVG title"
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-button-scope
+    private bool StackOfOpenElementsInButtonScope(string elementName) {
+        List<string> button = ["button"];
+        button.AddRange(ElementInScopeSpecialList);
+        return HasAnElementInTheSpecificScope(elementName, button);
+    }
+    // https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-the-specific-scope
+    private bool HasAnElementInTheSpecificScope(string elementName, List<string> list) {
+        // 1. initialize node to be the current node (the bottommost node of the stack).
+        foreach (var el in stackOfOpenElements) {
+            // 2. If node is target node, terminate in a match state.
+            if (el.localName == elementName) {
+                return true;
+            }
+            // 3. Otherwise, if node is one of the element types in list, terminate in a failure state.
+            if (list.Contains(el.localName)) {
+                return false;
+            }
+            // 4. Otherwise, set node to the previous entry in the stack of open elements and return to step 2.
+            //    (This will never fail, since the loop will always terminate in the previous step if the top of the stack — an html element — is reached.)
+        }
+        throw new InvalidOperationException();
+    }
+
     // https://html.spec.whatwg.org/multipage/parsing.html#insert-a-character
     private void InsertACharacter(Token token) {
         // Let the adjusted insertion location be the appropriate place for inserting a node.
@@ -445,7 +510,7 @@ public class TreeBuilder(bool debugPrint = false) {
             InsertAnElementAtTheAdjustedInsertionLocation(element);
         }
         // Push element onto the stack of open elements so that it is the new current node.
-        stackOfOpenElements.Add(element);
+        stackOfOpenElements.Push(element);
         //Return element.
         return element;
     }

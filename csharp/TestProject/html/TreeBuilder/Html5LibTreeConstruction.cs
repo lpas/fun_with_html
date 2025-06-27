@@ -25,10 +25,12 @@ public sealed class Html5LibTreeConstruction {
             try {
                 TestReader.AssertEq(testCase, treeBuilder.Document);
             } catch {
+                Console.WriteLine("ERROR");
                 Console.WriteLine(testCase);
                 treeBuilder.PrintDebugDocumentTree();
                 throw;
             }
+            Console.WriteLine("OK!");
         }
     }
 }
