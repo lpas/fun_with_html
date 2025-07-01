@@ -88,8 +88,6 @@ public class TreeBuilder(bool debugPrint = false) {
             } else {
                 token = tokenizer.NextToken();
             }
-            if (token == null) break;
-            if (token is EndOfFile) break;
 
             if (debugPrint) Debug.WriteLine(token);
 
@@ -134,7 +132,8 @@ public class TreeBuilder(bool debugPrint = false) {
                                 break;
                             }
                         case EndTag { name: "head" or "body" or "html" or "br" }:
-                            throw new NotImplementedException();
+                            // Act as described in the "anything else" entry below.
+                            goto default;
                         case EndTag:
                             throw new NotImplementedException();
                         default: {
@@ -168,7 +167,9 @@ public class TreeBuilder(bool debugPrint = false) {
                                 insertionMode = InsertionMode.InHead;
                             }
                             break;
-                        case EndTag { name: "head" or "body" or "html" or "br" }: throw new NotImplementedException();
+                        case EndTag { name: "head" or "body" or "html" or "br" }:
+                            // Act as described in the "anything else" entry below.
+                            goto default;
                         case EndTag: throw new NotImplementedException();
                         default: {
                                 // Insert an HTML element for a "head" start tag token with no attributes.
@@ -217,7 +218,9 @@ public class TreeBuilder(bool debugPrint = false) {
                             // Switch the insertion mode to "after head".
                             insertionMode = InsertionMode.AfterHead;
                             break;
-                        case EndTag { name: "body" or "html" or "br" }: throw new NotImplementedException();
+                        case EndTag { name: "body" or "html" or "br" }:
+                            // Act as described in the "anything else" entry below.
+                            goto default;
                         case StartTag { name: "template" }: throw new NotImplementedException();
                         case EndTag { name: "template" }: throw new NotImplementedException();
                         case StartTag { name: "head" } or EndTag: throw new NotImplementedException();
@@ -253,7 +256,9 @@ public class TreeBuilder(bool debugPrint = false) {
                         case StartTag { name: "base" or "basefont" or "bgsound" or "link" or "meta" or "noframes" or "script" or "style" or "template" or "title" }:
                             throw new NotImplementedException();
                         case EndTag { name: "template" }: throw new NotImplementedException();
-                        case EndTag { name: "body" or "html" or "br" }: throw new NotImplementedException();
+                        case EndTag { name: "body" or "html" or "br" }:
+                            // Act as described in the "anything else" entry below.
+                            goto default;
                         case StartTag { name: "head" } or EndTag: throw new NotImplementedException();
                         default:
                             // Insert an HTML element for a "body" start tag token with no attributes.
@@ -268,112 +273,157 @@ public class TreeBuilder(bool debugPrint = false) {
                 // 13.2.6.4.7 The "in body" insertion mode
                 // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inbody
                 case InsertionMode.InBody:
-                    switch (token) {
-                        case Character { data: '\0' }: throw new NotImplementedException();
-                        case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' } cToken:
-                            // Reconstruct the active formatting elements, if any.
-                            // todo
-                            // Insert the token's character.
-                            InsertACharacter(cToken);
-                            break;
-                        case Character cToken:
-                            // Reconstruct the active formatting elements, if any.
-                            //todo
-                            // Insert the token's character.
-                            InsertACharacter(cToken);
-                            // Set the frameset-ok flag to "not ok".
-                            // todo
-                            break;
-                        case Comment: throw new NotImplementedException();
-                        case DOCTYPE: throw new NotImplementedException();
-                        case StartTag { name: "html" }: throw new NotImplementedException();
-                        case StartTag { name: "base" or "basefont" or "bgsound" or "link" or "meta" or "noframes" or "script" or "style" or "template" or "title" }:
-                            throw new NotImplementedException();
-                        case EndTag { name: "template" }: throw new NotImplementedException();
-                        case StartTag { name: "body" }: throw new NotImplementedException();
-                        case StartTag { name: "frameset" }: throw new NotImplementedException();
-                        case EndOfFile:
-                            // If the stack of template insertion modes is not empty, then process the token using the rules for the "in template" insertion mode.
-                            // todo
-                            // Otherwise, follow these steps:
-                            // todo
-                            // If there is a node in the stack of open elements that is not either a dd element, a dt element, an li element, an optgroup element, an option element, a p element, an rb element, an rp element, an rt element, an rtc element, a tbody element, a td element, a tfoot element, a th element, a thead element, a tr element, the body element, or the html element, then this is a parse error.
-                            // todo
-                            // Stop parsing.
-                            return;
-                        case EndTag { name: "body" }:
-                            // If the stack of open elements does not have a body element in scope, this is a parse error; ignore the token.
-                            // todo
-                            // Otherwise, if there is a node in the stack of open elements that is not either a dd element, a dt element, an li element, an optgroup element, an option element, a p element, an rb element, an rp element, an rt element, an rtc element, a tbody element, a td element, a tfoot element, a th element, a thead element, a tr element, the body element, or the html element, then this is a parse error.
-                            // todo
-                            // Switch the insertion mode to "after body".
-                            insertionMode = InsertionMode.AfterBody;
-                            break;
-                        case EndTag { name: "html" }: throw new NotImplementedException();
-                        case StartTag {
-                            name: "address" or "article" or "aside" or "blockquote" or "center" or
-                            "details" or "dialog" or "dir" or "div" or "dl" or "fieldset" or "figcaption" or "figure" or
-                            "footer" or "header" or "hgroup" or "main" or "menu" or "nav" or "ol" or "p" or "search" or
-                            "section" or "summary" or "ul"
-                        } tagToken:
-                            // If the stack of open elements has a p element in button scope, then close a p element.
-                            if (StackOfOpenElementsInButtonScope("p")) {
-                                CloseAPElement();
-                            }
-                            // Insert an HTML element for the token.
-                            InsertAnHTMLElement(tagToken);
-                            break;
-                        case StartTag { name: "h1" or "h2" or "h3" or "h4" or "h5" or "h6" }: throw new NotImplementedException();
-                        case StartTag { name: "pre" or "listing" }: throw new NotImplementedException();
-                        case StartTag { name: "form" }: throw new NotImplementedException();
-                        case StartTag { name: "li" }: throw new NotImplementedException();
-                        case StartTag { name: "dd" or "dt" }: throw new NotImplementedException();
-                        case StartTag { name: "plaintext" }: throw new NotImplementedException();
-                        case StartTag { name: "button" }: throw new NotImplementedException();
-                        case EndTag {
-                            name: "address" or "article" or "aside" or "blockquote" or "button" or "center" or
-                            "details" or "dialog" or "dir" or "div" or "dl" or "fieldset" or "figcaption" or "figure" or
-                            "footer" or "header" or "hgroup" or "listing" or "main" or "menu" or "nav" or "ol" or "pre" or
-                            "search" or "section" or "summary" or "ul"
-                        }:
-                            throw new NotImplementedException();
-                        case EndTag { name: "form" }: throw new NotImplementedException();
-                        case EndTag { name: "p" }: throw new NotImplementedException();
-                        case EndTag { name: "li" }: throw new NotImplementedException();
-                        case EndTag { name: "dd" or "dt" }: throw new NotImplementedException();
-                        case EndTag { name: "h1" or "h2" or "h3" or "h4" or "h5" or "h6" }: throw new NotImplementedException();
-                        case EndTag { name: "sarcasm" }: throw new NotImplementedException();
-                        case StartTag { name: "a" }: throw new NotImplementedException();
-                        case StartTag { name: "b" or "big" or "code" or "em" or "font" or "i" or "s" or "small" or "strike" or "strong" or "tt" or "u" }:
-                            throw new NotImplementedException();
-                        case StartTag { name: "nobr" }: throw new NotImplementedException();
-                        case EndTag { name: "a" or "b" or "big" or "code" or "em" or "font" or "i" or "s" or "small" or "strike" or "strong" or "tt" or "u" }:
-                            throw new NotImplementedException();
-                        case StartTag { name: "applet" or "marquee" or "object" }: throw new NotImplementedException();
-                        case EndTag { name: "applet" or "marquee" or "object" }: throw new NotImplementedException();
-                        case StartTag { name: "table" }: throw new NotImplementedException();
-                        case EndTag { name: "br" }: throw new NotImplementedException();
-                        case StartTag { name: "area" or "br" or "embed" or "img" or "keygen" or "wbr" }: throw new NotImplementedException();
-                        case StartTag { name: "input" }: throw new NotImplementedException();
-                        case StartTag { name: "param" or "source" or "track" }: throw new NotImplementedException();
-                        case StartTag { name: "hr" }: throw new NotImplementedException();
-                        case StartTag { name: "image" }: throw new NotImplementedException();
-                        case StartTag { name: "textarea" }: throw new NotImplementedException();
-                        case StartTag { name: "xmp" }: throw new NotImplementedException();
-                        case StartTag { name: "iframe" }: throw new NotImplementedException();
-                        case StartTag { name: "noembed" }: throw new NotImplementedException();
-                        case StartTag { name: "noscript" } when scriptingFlag: throw new NotImplementedException();
-                        case StartTag { name: "select" }: throw new NotImplementedException();
-                        case StartTag { name: "optgroup" or "option" }: throw new NotImplementedException();
-                        case StartTag { name: "rb" or "rtc" }: throw new NotImplementedException();
-                        case StartTag { name: "rp" or "rt" }: throw new NotImplementedException();
-                        case StartTag { name: "math" }: throw new NotImplementedException();
-                        case StartTag { name: "svg" }: throw new NotImplementedException();
-                        case StartTag { name: "caption" or "col" or "colgroup" or "frame" or "head" or "tbody" or "td" or "tfoot" or "th" or "thead" or "tr" }: throw new NotImplementedException();
-                        case StartTag: throw new NotImplementedException();
-                        case EndTag: throw new NotImplementedException();
+                    bool flowControl = InsertionModeInBody(ref reprocessToken, token);
+                    if (!flowControl) {
+                        return;
                     }
 
+                    break;
+                // 13.2.6.4.9 The "in table" insertion mode
+                // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intable
+                case InsertionMode.InTable: {
+                        reprocessToken = InsertionModeInTable(reprocessToken, token);
+
+                        break;
+                    }
+
+                // 13.2.6.4.13 The "in table body" insertion mode
+                // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intbody
+                case InsertionMode.InTableBody: {
+                        // https://html.spec.whatwg.org/multipage/parsing.html#clear-the-stack-back-to-a-table-body-context
+                        var ClearTheStackBackToTableContext = () => {
+                            while (!((ReadOnlySpan<string>)["tbody", "tfoot", "thead", "template", "html"]).Contains(stackOfOpenElements.Peek().localName)) {
+                                stackOfOpenElements.Pop();
+                            }
+                        };
+
+                        switch (token) {
+                            case StartTag { name: "tr" }:
+                                throw new NotImplementedException();
+                            case StartTag { name: "th" or "td" }:
+                                // Parse error.
+                                // todo
+                                // Clear the stack back to a table body context. (See below.)
+                                ClearTheStackBackToTableContext();
+                                // Insert an HTML element for a "tr" start tag token with no attributes, then switch the insertion mode to "in row".
+                                InsertAnHTMLElement(new StartTag("tr"));
+                                insertionMode = InsertionMode.InRow;
+                                // Reprocess the current token.
+                                reprocessToken = token;
+                                break;
+                            case StartTag { name: "tbody" or "tfoot" or "thead" }:
+                                throw new NotImplementedException();
+                            case StartTag { name: "caption" or "col" or "colgroup" or "tbody" or "tfood" or "thead" }:
+                            case EndTag { name: "table" }:
+                                // If the stack of open elements does not have a tbody, thead, or tfoot element in table scope, this is a parse error; ignore the token.
+                                if (!StackOfOpenElementsInTableScope("tbody", "thead", "tfoot")) {
+                                    // todo parse error
+                                } else {
+                                    // Otherwise:
+                                    // 1. Clear the stack back to a table body context. (See below.)
+                                    ClearTheStackBackToTableContext();
+                                    // 2. Pop the current node from the stack of open elements. Switch the insertion mode to "in table".
+                                    stackOfOpenElements.Pop();
+                                    insertionMode = InsertionMode.InTable;
+                                    // 3. Reprocess the token.
+                                    reprocessToken = token;
+                                }
+                                break;
+                            case EndTag { name: "body" or "caption" or "col" or "colgroup" or "html" or "td" or "th" or "tr" }:
+                                throw new NotImplementedException();
+                            default:
+                                throw new NotImplementedException();
+                        }
+
+                        break;
+                    }
+
+                // 13.2.6.4.14 The "in row" insertion mode
+                // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intr
+                case InsertionMode.InRow: {
+                        var ClearTheStackBackToTableContext = () => {
+                            while (!((ReadOnlySpan<string>)["tr", "template", "html"]).Contains(stackOfOpenElements.Peek().localName)) {
+                                stackOfOpenElements.Pop();
+                            }
+                        };
+                        switch (token) {
+                            case StartTag { name: "th" or "td" } tagToken:
+                                // Clear the stack back to a table row context. (See below.)
+                                ClearTheStackBackToTableContext();
+                                // Insert an HTML element for the token, then switch the insertion mode to "in cell".
+                                InsertAnHTMLElement(tagToken);
+                                insertionMode = InsertionMode.InCell;
+                                // Insert a marker at the end of the list of active formatting elements.
+                                // todo
+                                break;
+                            case EndTag { name: "tr" }:
+                                throw new NotImplementedException();
+                            case StartTag { name: "caption" or "col" or "colgroup" or "tbody" or "tfoot" or "thead" or "tr" }:
+                            case EndTag { name: "table" }:
+                                // If the stack of open elements does not have a tr element in table scope, this is a parse error; ignore the token.
+                                if (!StackOfOpenElementsInTableScope("tr")) {
+                                    // todo parse error
+                                } else {
+                                    // Otherwise:
+                                    // 1. Clear the stack back to a table row context. (See below.)
+                                    ClearTheStackBackToTableContext();
+                                    // 2. Pop the current node (which will be a tr element) from the stack of open elements. Switch the insertion mode to "in table body".
+                                    stackOfOpenElements.Pop();
+                                    insertionMode = InsertionMode.InTableBody;
+                                    // 3. Reprocess the token.
+                                    reprocessToken = token;
+                                }
+                                break;
+                            case EndTag { name: "tbody" or "tfoot" or "thead" }:
+                                throw new NotImplementedException();
+                            case EndTag { name: "body" or "caption" or "col" or "colgroup" or "html" or "td" or "th" }:
+                                throw new NotImplementedException();
+                            default:
+                                reprocessToken = InsertionModeInTable(reprocessToken, token);
+                                break;
+
+                        }
+                        break;
+                    }
+                // 13.2.6.4.15 The "in cell" insertion mode
+                // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intd
+                case InsertionMode.InCell:
+                    var CloseTheCell = () => {
+
+                        // Generate implied end tags.
+                        GenerateImpliedEndTags();
+                        // If the current node is not now a td element or a th element, then this is a parse error.
+                        // todo
+                        // Pop elements from the stack of open elements until a td element or a th element has been popped from the stack.
+                        while (true) {
+                            var element = stackOfOpenElements.Pop();
+                            if (element.localName is "td" or "th") break;
+                        }
+                        // Clear the list of active formatting elements up to the last marker.
+                        // todo
+                        // Switch the insertion mode to "in row".
+                        insertionMode = InsertionMode.InRow;
+                    };
+                    switch (token) {
+                        case EndTag { name: "td" or "th" }:
+                            throw new NotImplementedException();
+                        case StartTag { name: "caption" or "col" or "colgroup" or "tbody" or "td" or "tfoot" or "th" or "thead" or "tr" }:
+                            throw new NotImplementedException();
+                        case EndTag { name: "body" or "caption" or "col" or "colgroup" or "html" }:
+                            throw new NotImplementedException();
+                        case EndTag { name: "table" or "tbody" or "tfoot" or "thead" or "tr" }:
+                            // If the stack of open elements does not have an element in table scope that is an HTML element with the same tag name as that of the token, then this is a parse error; ignore the token.
+                            // todo
+                            // Otherwise, close the cell (see below) and reprocess the token.
+                            CloseTheCell();
+                            reprocessToken = token;
+                            break;
+                        default:
+                            if (!InsertionModeInBody(ref reprocessToken, token)) {
+                                return;
+                            }
+                            break;
+                    }
                     break;
                 // 13.2.6.4.19 The "after body" insertion mode
                 // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-afterbody
@@ -391,7 +441,9 @@ public class TreeBuilder(bool debugPrint = false) {
                             // Otherwise, switch the insertion mode to "after after body".
                             insertionMode = InsertionMode.AfterAfterBody;
                             break;
-                        case EndOfFile: throw new NotImplementedException();
+                        case EndOfFile:
+                            StopParsing();
+                            return;
                         default:
                             throw new NotImplementedException();
                     }
@@ -406,7 +458,8 @@ public class TreeBuilder(bool debugPrint = false) {
                         case StartTag { name: "html" }:
                             throw new NotImplementedException();
                         case EndOfFile:
-                            return; // stop parsing
+                            StopParsing();
+                            return;
                         default:
                             throw new NotImplementedException();
                     }
@@ -423,8 +476,322 @@ public class TreeBuilder(bool debugPrint = false) {
 
     }
 
+    // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intable
+    private Token? InsertionModeInTable(Token? reprocessToken, Token? token) {
+        // https://html.spec.whatwg.org/multipage/parsing.html#clear-the-stack-back-to-a-table-context
+        var ClearTheStackBackToTableContext = () => {
+            while (!((ReadOnlySpan<string>)["table", "template", "html"]).Contains(stackOfOpenElements.Peek().localName)) {
+                stackOfOpenElements.Pop();
+            }
+        };
+
+        switch (token) {
+            case Character when currentNode is Element { localName: "table" or "tbody" or "tempalte" or "tfoot" or "thead" or "tr" }:
+                throw new NotImplementedException();
+            case Comment:
+                throw new NotImplementedException();
+            case DOCTYPE:
+                throw new NotImplementedException();
+            case StartTag { name: "caption" }:
+                throw new NotImplementedException();
+            case StartTag { name: "colgroup" }:
+                throw new NotImplementedException();
+            case StartTag { name: "col" }:
+                throw new NotImplementedException();
+            case StartTag { name: "tbody" or "tfoot" or "thead" } tagToken:
+                ClearTheStackBackToTableContext();
+                InsertAnHTMLElement(tagToken);
+                insertionMode = InsertionMode.InTableBody;
+                break;
+            case StartTag { name: "td" or "th" or "tr" }:
+                // Clear the stack back to a table context. (See below.)
+                ClearTheStackBackToTableContext();
+                // Insert an HTML element for a "tbody" start tag token with no attributes, then switch the insertion mode to "in table body".
+                InsertAnHTMLElement(new StartTag("tbody"));
+                insertionMode = InsertionMode.InTableBody;
+                // Reprocess the current token.
+                reprocessToken = token;
+                break;
+            case StartTag { name: "table" }:
+                throw new NotImplementedException();
+            case EndTag { name: "table" }:
+                // If the stack of open elements does not have a table element in table scope, this is a parse error; ignore the token.
+                if (!StackOfOpenElementsInTableScope("table")) {
+                    // todo parse error
+                } else {
+                    // Otherwise:
+                    // 1. Pop elements from this stack until a table element has been popped from the stack.
+                    while (true) {
+                        var element = stackOfOpenElements.Pop();
+                        if (element.localName == "table") break;
+                    }
+                    // 2. Reset the insertion mode appropriately.
+                    ResetTheInsertionModeAppropriately();
+                    //todo
+                }
+                break;
+            case EndTag { name: "body" or "caption" or "col" or "colgroup" or "html" or "tbody" or "td" or "tfoot" or "th" or "thead" or "tr" }:
+                throw new NotImplementedException();
+            case StartTag { name: "style" or "script" or "template" }:
+            case EndTag { name: "template" }:
+                throw new NotImplementedException();
+            case StartTag { name: "input" }:
+                throw new NotImplementedException();
+            case StartTag { name: "form" }:
+                throw new NotImplementedException();
+            case null:
+                throw new NotImplementedException();
+            default:
+                Console.WriteLine(token);
+                throw new NotImplementedException();
+        }
+
+        return reprocessToken;
+    }
+
+    private bool InsertionModeInBody(ref Token reprocessToken, Token? token) {
+        switch (token) {
+            case Character { data: '\0' }: throw new NotImplementedException();
+            case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' } cToken:
+                // Reconstruct the active formatting elements, if any.
+                // todo
+                // Insert the token's character.
+                InsertACharacter(cToken);
+                break;
+            case Character cToken:
+                // Reconstruct the active formatting elements, if any.
+                //todo
+                // Insert the token's character.
+                InsertACharacter(cToken);
+                // Set the frameset-ok flag to "not ok".
+                // todo
+                break;
+            case Comment: throw new NotImplementedException();
+            case DOCTYPE: throw new NotImplementedException();
+            case StartTag { name: "html" }: throw new NotImplementedException();
+            case StartTag { name: "base" or "basefont" or "bgsound" or "link" or "meta" or "noframes" or "script" or "style" or "template" or "title" }:
+                throw new NotImplementedException();
+            case EndTag { name: "template" }: throw new NotImplementedException();
+            case StartTag { name: "body" }: throw new NotImplementedException();
+            case StartTag { name: "frameset" }: throw new NotImplementedException();
+            case EndOfFile:
+                // If the stack of template insertion modes is not empty, then process the token using the rules for the "in template" insertion mode.
+                // todo
+                // Otherwise, follow these steps:
+                // todo
+                // If there is a node in the stack of open elements that is not either a dd element, a dt element, an li element, an optgroup element, an option element, a p element, an rb element, an rp element, an rt element, an rtc element, a tbody element, a td element, a tfoot element, a th element, a thead element, a tr element, the body element, or the html element, then this is a parse error.
+                // todo
+                // Stop parsing.
+                StopParsing();
+                return false;
+            case EndTag { name: "body" }:
+                // If the stack of open elements does not have a body element in scope, this is a parse error; ignore the token.
+                // todo
+                // Otherwise, if there is a node in the stack of open elements that is not either a dd element, a dt element, an li element, an optgroup element, an option element, a p element, an rb element, an rp element, an rt element, an rtc element, a tbody element, a td element, a tfoot element, a th element, a thead element, a tr element, the body element, or the html element, then this is a parse error.
+                // todo
+                // Switch the insertion mode to "after body".
+                insertionMode = InsertionMode.AfterBody;
+                break;
+            case EndTag { name: "html" }:
+                // If the stack of open elements does not have a body element in scope, this is a parse error; ignore the token.
+                if (!HasAnElementInTheSpecificScope(["body"], [])) {
+                    break;
+                    // todo parse error
+                }
+                // Otherwise, if there is a node in the stack of open elements that is not either a dd element, a dt element, an li element, an optgroup element, an option element, a p element, an rb element, an rp element, an rt element, an rtc element, a tbody element, a td element, a tfoot element, a th element, a thead element, a tr element, the body element, or the html element, then this is a parse error.
+                //todo
+                // Switch the insertion mode to "after body".
+                insertionMode = InsertionMode.AfterBody;
+                // Reprocess the token.
+                reprocessToken = token;
+                break;
+            case StartTag {
+                name: "address" or "article" or "aside" or "blockquote" or "center" or
+                                    "details" or "dialog" or "dir" or "div" or "dl" or "fieldset" or "figcaption" or "figure" or
+                                    "footer" or "header" or "hgroup" or "main" or "menu" or "nav" or "ol" or "p" or "search" or
+                                    "section" or "summary" or "ul"
+            } tagToken:
+                // If the stack of open elements has a p element in button scope, then close a p element.
+                if (StackOfOpenElementsInButtonScope("p")) {
+                    CloseAPElement();
+                }
+                // Insert an HTML element for the token.
+                InsertAnHTMLElement(tagToken);
+                break;
+            case StartTag { name: "h1" or "h2" or "h3" or "h4" or "h5" or "h6" }: throw new NotImplementedException();
+            case StartTag { name: "pre" or "listing" }: throw new NotImplementedException();
+            case StartTag { name: "form" }: throw new NotImplementedException();
+            case StartTag { name: "li" }: throw new NotImplementedException();
+            case StartTag { name: "dd" or "dt" }: throw new NotImplementedException();
+            case StartTag { name: "plaintext" }: throw new NotImplementedException();
+            case StartTag { name: "button" }: throw new NotImplementedException();
+            case EndTag {
+                name: "address" or "article" or "aside" or "blockquote" or "button" or "center" or
+                                    "details" or "dialog" or "dir" or "div" or "dl" or "fieldset" or "figcaption" or "figure" or
+                                    "footer" or "header" or "hgroup" or "listing" or "main" or "menu" or "nav" or "ol" or "pre" or
+                                    "search" or "section" or "summary" or "ul"
+            }:
+                throw new NotImplementedException();
+            case EndTag { name: "form" }: throw new NotImplementedException();
+            case EndTag { name: "p" }: throw new NotImplementedException();
+            case EndTag { name: "li" }: throw new NotImplementedException();
+            case EndTag { name: "dd" or "dt" }: throw new NotImplementedException();
+            case EndTag { name: "h1" or "h2" or "h3" or "h4" or "h5" or "h6" }: throw new NotImplementedException();
+            case EndTag { name: "sarcasm" }: throw new NotImplementedException();
+            case StartTag { name: "a" }: throw new NotImplementedException();
+            case StartTag { name: "b" or "big" or "code" or "em" or "font" or "i" or "s" or "small" or "strike" or "strong" or "tt" or "u" } tagToken:
+                // Reconstruct the active formatting elements, if any.
+                ReconstructTheActiveFormattingElements();
+                // Insert an HTML element for the token. Push onto the list of active formatting elements that element.
+                var element = InsertAnHTMLElement(tagToken);
+                PushOntoTheListOfActiveFormattingElements(element);
+                break;
+            case StartTag { name: "nobr" }: throw new NotImplementedException();
+            case EndTag { name: "a" or "b" or "big" or "code" or "em" or "font" or "i" or "s" or "small" or "strike" or "strong" or "tt" or "u" }:
+                throw new NotImplementedException();
+            case StartTag { name: "applet" or "marquee" or "object" }: throw new NotImplementedException();
+            case EndTag { name: "applet" or "marquee" or "object" }: throw new NotImplementedException();
+            case StartTag { name: "table" } tagToken:
+                // If the Document is not set to quirks mode, and the stack of open elements has a p element in button scope, then close a p element.
+                // todo
+                // Insert an HTML element for the token.
+                InsertAnHTMLElement(tagToken);
+                // Set the frameset-ok flag to "not ok".
+                // todo
+                // Switch the insertion mode to "in table".
+                insertionMode = InsertionMode.InTable;
+                break;
+            case EndTag { name: "br" }: throw new NotImplementedException();
+            case StartTag { name: "area" or "br" or "embed" or "img" or "keygen" or "wbr" } tagToken:
+                // Reconstruct the active formatting elements, if any.
+                // todo
+                // Insert an HTML element for the token. Immediately pop the current node off the stack of open elements.
+                InsertAnHTMLElement(tagToken);
+                stackOfOpenElements.Pop();
+                // Acknowledge the token's self-closing flag, if it is set.
+                // todo
+                // Set the frameset-ok flag to "not ok".
+                // todo
+                break;
+            case StartTag { name: "input" }: throw new NotImplementedException();
+            case StartTag { name: "param" or "source" or "track" }: throw new NotImplementedException();
+            case StartTag { name: "hr" }: throw new NotImplementedException();
+            case StartTag { name: "image" }: throw new NotImplementedException();
+            case StartTag { name: "textarea" }: throw new NotImplementedException();
+            case StartTag { name: "xmp" }: throw new NotImplementedException();
+            case StartTag { name: "iframe" }: throw new NotImplementedException();
+            case StartTag { name: "noembed" }: throw new NotImplementedException();
+            case StartTag { name: "noscript" } when scriptingFlag: throw new NotImplementedException();
+            case StartTag { name: "select" }: throw new NotImplementedException();
+            case StartTag { name: "optgroup" or "option" }: throw new NotImplementedException();
+            case StartTag { name: "rb" or "rtc" }: throw new NotImplementedException();
+            case StartTag { name: "rp" or "rt" }: throw new NotImplementedException();
+            case StartTag { name: "math" }: throw new NotImplementedException();
+            case StartTag { name: "svg" }: throw new NotImplementedException();
+            case StartTag { name: "caption" or "col" or "colgroup" or "frame" or "head" or "tbody" or "td" or "tfoot" or "th" or "thead" or "tr" }: throw new NotImplementedException();
+            case StartTag: throw new NotImplementedException();
+            case EndTag: throw new NotImplementedException();
+        }
+
+        return true;
+    }
+
+
+    // 13.2.4.1 The insertion mode
+    // https://html.spec.whatwg.org/multipage/parsing.html#reset-the-insertion-mode-appropriately
+    private void ResetTheInsertionModeAppropriately() {
+        // 1. Let last be false.
+        var last = false;
+        // 2. Let node be the last node in the stack of open elements.
+        // 3. Loop: If node is the first node in the stack of open elements, then set last to true, and, if the parser was created as part of the HTML fragment parsing algorithm (fragment case), set node to the context element passed to that algorithm.
+        foreach (var node in stackOfOpenElements) { // looping of a stack does a lifo loop
+            switch (node) {
+                // 4. If node is a select element, run these substeps:
+                case Element { localName: "select" }:
+                    // 1. If last is true, jump to the step below labeled done.
+
+                    // 2. Let ancestor be node.
+
+                    // 3. Loop: If ancestor is the first node in the stack of open elements, jump to the step below labeled done.
+
+                    // 4. Let ancestor be the node before ancestor in the stack of open elements.
+
+                    // 5. If ancestor is a template node, jump to the step below labeled done.
+
+                    // 6. If ancestor is a table node, switch the insertion mode to "in select in table" and return.
+
+                    // 7. Jump back to the step labeled loop.
+
+                    // 8. Done: Switch the insertion mode to "in select" and return.
+                    break;
+
+                // 5. If node is a td or th element and last is false, then switch the insertion mode to "in cell" and return.
+                case Element { localName: "td" or "th" }:
+                    insertionMode = InsertionMode.InCell;
+                    return;
+                // 6. If node is a tr element, then switch the insertion mode to "in row" and return.
+                case Element { localName: "tr" }:
+                    insertionMode = InsertionMode.InRow;
+                    return;
+                // 7. If node is a tbody, thead, or tfoot element, then switch the insertion mode to "in table body" and return.
+                case Element { localName: "tbody" or "thead" or "tfoot" }:
+                    insertionMode = InsertionMode.InTableBody;
+                    return;
+                // 8. If node is a caption element, then switch the insertion mode to "in caption" and return.
+                case Element { localName: "caption" }:
+                    insertionMode = InsertionMode.InCaption;
+                    return;
+                // 9. If node is a colgroup element, then switch the insertion mode to "in column group" and return.
+                case Element { localName: "colgroup" }:
+                    insertionMode = InsertionMode.InColumnGroup;
+                    return;
+                // 10. If node is a table element, then switch the insertion mode to "in table" and return.
+                case Element { localName: "table" }:
+                    insertionMode = InsertionMode.InTable;
+                    return;
+                // 11. If node is a template element, then switch the insertion mode to the current template insertion mode and return.
+                case Element { localName: "template" }:
+                    throw new NotImplementedException();
+                // 12. If node is a head element and last is false, then switch the insertion mode to "in head" and return.
+                case Element { localName: "head" } when last is false:
+                    insertionMode = InsertionMode.InColumnGroup;
+                    return;
+                // 13. If node is a body element, then switch the insertion mode to "in body" and return.
+                case Element { localName: "body" }:
+                    insertionMode = InsertionMode.InBody;
+                    return;
+                // 14. If node is a frameset element, then switch the insertion mode to "in frameset" and return. (fragment case)
+                case Element { localName: "frameset" }:
+                    throw new NotImplementedException();
+                // 15. If node is an html element, run these substeps:
+                case Element { localName: "html" }:
+                    // 1. If the head element pointer is null, switch the insertion mode to "before head" and return. (fragment case)
+                    // 2. Otherwise, the head element pointer is not null, switch the insertion mode to "after head" and return.
+                    throw new NotImplementedException();
+            }
+            // 16. If last is true, then switch the insertion mode to "in body" and return. (fragment case)
+            if (last) {
+                throw new NotImplementedException();
+            }
+            // 17. Let node now be the node before node in the stack of open elements.
+            // 18. Return to the step labeled loop.
+        }
+    }
+
+    // 13.2.4.3
+    // https://html.spec.whatwg.org/multipage/parsing.html#push-onto-the-list-of-active-formatting-elements
+    private void PushOntoTheListOfActiveFormattingElements(Element element) {
+        // todo
+    }
+
+    // 13.2.4.3
+    // https://html.spec.whatwg.org/multipage/parsing.html#reconstruct-the-active-formatting-elements
+    private void ReconstructTheActiveFormattingElements() {
+        // todo
+    }
+
     // https://html.spec.whatwg.org/multipage/parsing.html#generate-implied-end-tags
-    private void GenerateImpliedEndTags(string? except) {
+    private void GenerateImpliedEndTags(string? except = null) {
         // When the steps below require the UA to generate implied end tags, then, while the current node is a dd element, a dt element, an li element, an optgroup element,
         // an option element, a p element, an rb element, an rp element, an rt element, or an rtc element, the UA must pop the current node off the stack of open elements.
         List<string> list = ["dd", "dt", "li", "optgroup", "option", "p", "rb", "rt", "rtc"];
@@ -440,6 +807,11 @@ public class TreeBuilder(bool debugPrint = false) {
         }
     }
 
+    // 13.2.7 the End
+    // https://html.spec.whatwg.org/multipage/parsing.html#stop-parsing
+    private void StopParsing() {
+        //todo     
+    }
 
     // https://html.spec.whatwg.org/multipage/parsing.html#close-a-p-element
     private void CloseAPElement() {
@@ -459,17 +831,25 @@ public class TreeBuilder(bool debugPrint = false) {
     // todo these elements should also be part of the list: They have a different namespace: "MathML mi" , "MathML mo" , "MathML mn" , "MathML ms" , "MathML mtext" , "MathML annotation-xml" , "SVG foreignObject" , "SVG desc" , "SVG title"
 
     // https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-button-scope
-    private bool StackOfOpenElementsInButtonScope(string elementName) {
+    private bool StackOfOpenElementsInButtonScope(params ReadOnlySpan<string> elementsName) {
         List<string> button = ["button"];
         button.AddRange(ElementInScopeSpecialList);
-        return HasAnElementInTheSpecificScope(elementName, button);
+        return HasAnElementInTheSpecificScope(elementsName, button);
     }
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-table-scope
+    private bool StackOfOpenElementsInTableScope(params ReadOnlySpan<string> elementsName) {
+        List<string> list = ["html", "table", "template"];
+        list.AddRange(ElementInScopeSpecialList);
+        return HasAnElementInTheSpecificScope(elementsName, list);
+    }
+
     // https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-the-specific-scope
-    private bool HasAnElementInTheSpecificScope(string elementName, List<string> list) {
+    private bool HasAnElementInTheSpecificScope(ReadOnlySpan<string> elementsName, List<string> list) {
         // 1. initialize node to be the current node (the bottommost node of the stack).
         foreach (var el in stackOfOpenElements) {
             // 2. If node is target node, terminate in a match state.
-            if (el.localName == elementName) {
+            if (elementsName.Contains(el.localName)) {
                 return true;
             }
             // 3. Otherwise, if node is one of the element types in list, terminate in a failure state.
