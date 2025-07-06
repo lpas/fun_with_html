@@ -155,6 +155,10 @@ struct Attribute {
 public class Tokenizer(string content) {
     private readonly string content = content;
     private int index = 0;
+
+    public int Line { get => 1; } // todo 
+    public int Col { get => index; } // todo
+
     private State state = State.DataState;
 
     private Tag currentTag = new();

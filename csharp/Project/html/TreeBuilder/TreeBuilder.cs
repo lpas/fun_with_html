@@ -83,7 +83,17 @@ public class Text(Document document, string data): Node(document) {
     }
 }
 
-public class TreeBuilder(bool debugPrint = false) {
+public struct ParseError {
+    public int line;
+    public int col;
+    public string error;
+
+    public override string ToString() {
+        return $"({line},{col}): {error}";
+    }
+}
+
+public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false) {
 
     private bool debugPrint = debugPrint;
 
@@ -94,6 +104,7 @@ public class TreeBuilder(bool debugPrint = false) {
     private InsertionMode originalInsertionMode = InsertionMode.Initial;
     private List<Element> stackOfOpenElements = [];
     private Element currentNode { get => stackOfOpenElements.Peek(); }
+    public List<ParseError> Errors { get => parseErrors; }
 
     private Element? headElementPointer = null;
 
@@ -102,7 +113,12 @@ public class TreeBuilder(bool debugPrint = false) {
     private List<Element?> ListOfActiveFormattingElements = []; // null is a marker
 
     private bool fosterParenting = false;
-    public void build(Tokenizer.Tokenizer tokenizer) {
+
+    private List<ParseError> parseErrors = [];
+
+    private Tokenizer.Tokenizer tokenizer = tokenizer;
+
+    public void build() {
         Token? reprocessToken = null;
         Stack<string> lol = new();
         while (true) {
@@ -134,6 +150,7 @@ public class TreeBuilder(bool debugPrint = false) {
                             break;
                         default:
                             // todo If the document is not an iframe srcdoc document, then this is a parse error; if the parser cannot change the mode flag is false, set the Document to quirks mode.
+                            AddParseError("expected-doctype");
                             // In any case, switch the insertion mode to "before html",                            
                             insertionMode = InsertionMode.BeforeHtml;
                             // then reprocess the token.
@@ -278,7 +295,7 @@ public class TreeBuilder(bool debugPrint = false) {
                         case EndTag { name: "template" }: throw new NotImplementedException();
                         case StartTag { name: "head" }:
                         case EndTag:
-                            // todo parse error
+                            AddParseError("InsertionMode.InHead: EndTag");
                             break; // ignore the token
                         default:
                             //Pop the current node (which will be the head element) off the stack of open elements.
@@ -429,8 +446,7 @@ public class TreeBuilder(bool debugPrint = false) {
                             case StartTag { name: "tr" }:
                                 throw new NotImplementedException();
                             case StartTag { name: "th" or "td" }:
-                                // Parse error.
-                                // todo
+                                AddParseError("unexpected-cell-in-table-body");
                                 // Clear the stack back to a table body context. (See below.)
                                 ClearTheStackBackToTableContext();
                                 // Insert an HTML element for a "tr" start tag token with no attributes, then switch the insertion mode to "in row".
@@ -445,7 +461,7 @@ public class TreeBuilder(bool debugPrint = false) {
                             case EndTag { name: "table" }:
                                 // If the stack of open elements does not have a tbody, thead, or tfoot element in table scope, this is a parse error; ignore the token.
                                 if (!HasAELementInTableScope("tbody", "thead", "tfoot")) {
-                                    // todo parse error
+                                    AddParseError("TBODY, THEAD, TFoot");
                                 } else {
                                     // Otherwise:
                                     // 1. Clear the stack back to a table body context. (See below.)
@@ -490,7 +506,7 @@ public class TreeBuilder(bool debugPrint = false) {
                             case EndTag { name: "table" }:
                                 // If the stack of open elements does not have a tr element in table scope, this is a parse error; ignore the token.
                                 if (!HasAELementInTableScope("tr")) {
-                                    // todo parse error
+                                    AddParseError("TR");
                                 } else {
                                     // Otherwise:
                                     // 1. Clear the stack back to a table row context. (See below.)
@@ -521,7 +537,9 @@ public class TreeBuilder(bool debugPrint = false) {
                         // Generate implied end tags.
                         GenerateImpliedEndTags();
                         // If the current node is not now a td element or a th element, then this is a parse error.
-                        // todo
+                        if (currentNode is not Element { localName: "td" or "th" }) {
+                            AddParseError("unexpected-cell-end-tag");
+                        }
                         // Pop elements from the stack of open elements until a td element or a th element has been popped from the stack.
                         while (true) {
                             var element = stackOfOpenElements.Pop();
@@ -689,6 +707,10 @@ public class TreeBuilder(bool debugPrint = false) {
 
     }
 
+    private void AddParseError(string error) {
+        parseErrors.Add(new ParseError { line = tokenizer.Line, col = tokenizer.Col, error = error });
+    }
+
     private void InsertAComment(Tokenizer.Comment comment, (Node elem, int childPos)? position = null) {
         // Let data be the data given in the comment token being processed.
         var data = comment.data;
@@ -741,7 +763,7 @@ public class TreeBuilder(bool debugPrint = false) {
             case EndTag { name: "table" }:
                 // If the stack of open elements does not have a table element in table scope, this is a parse error; ignore the token.
                 if (!HasAELementInTableScope("table")) {
-                    // todo parse error
+                    AddParseError("InsertionModeInTable ENDTag: table");
                 } else {
                     // Otherwise:
                     // 1. Pop elements from this stack until a table element has been popped from the stack.
@@ -803,16 +825,19 @@ public class TreeBuilder(bool debugPrint = false) {
             case EndTag { name: "template" }: throw new NotImplementedException();
             case StartTag { name: "body" }: throw new NotImplementedException();
             case StartTag { name: "frameset" }: throw new NotImplementedException();
-            case EndOfFile:
-                // If the stack of template insertion modes is not empty, then process the token using the rules for the "in template" insertion mode.
-                // todo
-                // Otherwise, follow these steps:
-                // todo
-                // If there is a node in the stack of open elements that is not either a dd element, a dt element, an li element, an optgroup element, an option element, a p element, an rb element, an rp element, an rt element, an rtc element, a tbody element, a td element, a tfoot element, a th element, a thead element, a tr element, the body element, or the html element, then this is a parse error.
-                // todo
-                // Stop parsing.
-                StopParsing();
-                return false;
+            case EndOfFile: {
+                    // If the stack of template insertion modes is not empty, then process the token using the rules for the "in template" insertion mode.
+                    // todo
+                    // Otherwise, follow these steps:
+                    // todo
+                    // If there is a node in the stack of open elements that is not either a dd element, a dt element, an li element, an optgroup element, an option element, a p element, an rb element, an rp element, an rt element, an rtc element, a tbody element, a td element, a tfoot element, a th element, a thead element, a tr element, the body element, or the html element, then this is a parse error.
+                    if (stackOfOpenElements.Any((elem) => elem is not Element { localName: "dd" or "dt" or "li" or "optgroup" or "option" or "p" or "rb" or "rp" or "rt" or "rtc" or "tbody" or "td" or "tfoot" or "th" or "thead" or "tr" or "body" or "html" })) {
+                        AddParseError("expected-closing-tag-but-got-eof");
+                    }
+                    // Stop parsing.
+                    StopParsing();
+                    return false;
+                }
             case EndTag { name: "body" }:
                 // If the stack of open elements does not have a body element in scope, this is a parse error; ignore the token.
                 // todo
@@ -824,8 +849,8 @@ public class TreeBuilder(bool debugPrint = false) {
             case EndTag { name: "html" }:
                 // If the stack of open elements does not have a body element in scope, this is a parse error; ignore the token.
                 if (!HasAElementInScope("body")) {
+                    AddParseError("InsertionModeInBody: EndTag html");
                     break;
-                    // todo parse error
                 }
                 // Otherwise, if there is a node in the stack of open elements that is not either a dd element, a dt element, an li element, an optgroup element, an option element, a p element, an rb element, an rp element, an rt element, an rtc element, a tbody element, a td element, a tfoot element, a th element, a thead element, a tr element, the body element, or the html element, then this is a parse error.
                 //todo
@@ -854,7 +879,7 @@ public class TreeBuilder(bool debugPrint = false) {
                 }
                 // If the current node is an HTML element whose tag name is one of "h1", "h2", "h3", "h4", "h5", or "h6", then this is a parse error; pop the current node off the stack of open elements.
                 if (currentNode is Element { localName: "h1" or "h2" or "h3" or "h4" or "h5" or "h6" }) {
-                    // todo parse error
+                    AddParseError("unexpected-start-tag");
                     stackOfOpenElements.Pop();
                 }
                 // Insert an HTML element for the token.
@@ -869,7 +894,7 @@ public class TreeBuilder(bool debugPrint = false) {
                 // 1. If the stack of open elements has a button element in scope, then run these substeps:
                 if (HasAElementInScope("button")) {
                     // 1. Parse error.
-                    // todo
+                    AddParseError("InsertionModeInBody: StartTag button");
                     // 2. Generate implied end tags.
                     GenerateImpliedEndTags();
                     // 3. Pop elements from the stack of open elements until a button element has been popped from the stack.
@@ -897,7 +922,7 @@ public class TreeBuilder(bool debugPrint = false) {
             case EndTag { name: "p" }:
                 // If the stack of open elements does not have a p element in button scope, then this is a parse error; insert an HTML element for a "p" start tag token with no attributes.
                 if (!HasAElementInButtonScope("p")) {
-                    // todo parse error
+                    AddParseError("InsertionModeInBody: EndTag p");
                     InsertAnHTMLElement(new StartTag("p"));
                 }
                 // Close a p element.
@@ -907,31 +932,32 @@ public class TreeBuilder(bool debugPrint = false) {
             case EndTag { name: "dd" or "dt" }: throw new NotImplementedException();
             case EndTag { name: "h1" or "h2" or "h3" or "h4" or "h5" or "h6" }: throw new NotImplementedException();
             case EndTag { name: "sarcasm" }: throw new NotImplementedException();
-            case StartTag { name: "a" } tagToken:
-                // If the list of active formatting elements contains an a element between the end of the list and the last marker on the list (or the start of the list if there is no marker on the list), then this is a parse error; run the adoption agency algorithm for the token, then remove that element from the list of active formatting elements and the stack of open elements if the adoption agency algorithm didn't already remove it (it might not have if the element is not in table scope).
-                var ttr1 = (string localName) => { // todo rename/move
-                    foreach (var elem in Enumerable.Reverse(ListOfActiveFormattingElements)) {
-                        if (elem is not null) {
-                            if (elem.localName == localName) {
-                                return elem;
-                            }
-                        } else break;
+            case StartTag { name: "a" } tagToken: {
+                    // If the list of active formatting elements contains an a element between the end of the list and the last marker on the list (or the start of the list if there is no marker on the list), then this is a parse error; run the adoption agency algorithm for the token, then remove that element from the list of active formatting elements and the stack of open elements if the adoption agency algorithm didn't already remove it (it might not have if the element is not in table scope).
+                    var ttr1 = (string localName) => { // todo rename/move
+                        foreach (var elem in Enumerable.Reverse(ListOfActiveFormattingElements)) {
+                            if (elem is not null) {
+                                if (elem.localName == localName) {
+                                    return elem;
+                                }
+                            } else break;
+                        }
+                        return null;
+                    };
+                    var elem = ttr1("a");
+                    if (elem is not null) {
+                        // todo parse error
+                        AdoptionAgencyAlgorithm(tagToken);
+                        ListOfActiveFormattingElements.Remove(elem);
+                        // todo remove element from stack
                     }
-                    return null;
-                };
-                var elem = ttr1("a");
-                if (elem is not null) {
-                    // todo parse error
-                    AdoptionAgencyAlgorithm(tagToken);
-                    ListOfActiveFormattingElements.Remove(elem);
-                    // todo remove element from stack
+                    // EXAMPLE: In the non-conforming stream <a href="a">a<table><a href="b">b</table>x, the first a element would be closed upon seeing the second one, and the "x" character would be inside a link to "b", not to "a". This is despite the fact that the outer a element is not in table scope (meaning that a regular </a> end tag at the start of the table wouldn't close the outer a element). The result is that the two a elements are indirectly nested inside each other — non-conforming markup will often result in non-conforming DOMs when parsed.
+                    // Reconstruct the active formatting elements, if any.
+                    ReconstructTheActiveFormattingElements();
+                    // Insert an HTML element for the token. Push onto the list of active formatting elements that element.
+                    InsertAnHTMLElement(tagToken);
+                    break;
                 }
-                // EXAMPLE: In the non-conforming stream <a href="a">a<table><a href="b">b</table>x, the first a element would be closed upon seeing the second one, and the "x" character would be inside a link to "b", not to "a". This is despite the fact that the outer a element is not in table scope (meaning that a regular </a> end tag at the start of the table wouldn't close the outer a element). The result is that the two a elements are indirectly nested inside each other — non-conforming markup will often result in non-conforming DOMs when parsed.
-                // Reconstruct the active formatting elements, if any.
-                ReconstructTheActiveFormattingElements();
-                // Insert an HTML element for the token. Push onto the list of active formatting elements that element.
-                InsertAnHTMLElement(tagToken);
-                break;
             case StartTag { name: "b" or "big" or "code" or "em" or "font" or "i" or "s" or "small" or "strike" or "strong" or "tt" or "u" } tagToken:
                 // Reconstruct the active formatting elements, if any.
                 ReconstructTheActiveFormattingElements();
@@ -1118,12 +1144,12 @@ public class TreeBuilder(bool debugPrint = false) {
             }
             // 5. If formattingElement is in the stack of open elements, but the element is not in scope, then this is a parse error; return.
             if (!HasAElementInScope(formattingElement.localName)) {
-                // todo parse error 
+                AddParseError("AdoptionAgencyAlgorithm: HasAElementInScope");
                 return;
             }
             // 6. If formattingElement is not the current node, this is a parse error. (But do not return.)
             if (formattingElement != currentNode) {
-                // todo parse error
+                AddParseError("AdoptionAgencyAlgorithm: formattingElement != currentNode");
             }
             // 7. Let furthestBlock be the topmost node in the stack of open elements that is lower in the stack than formattingElement, and is an element in the special category. There might not be one.
             Element? furthestBlock = null;
@@ -1183,7 +1209,7 @@ public class TreeBuilder(bool debugPrint = false) {
                 lastNode = node;
 
             }
-
+            throw new NotImplementedException();
             // 14. Insert whatever lastNode ended up being in the previous step at the appropriate place for inserting a node, but using commonAncestor as the override target.
             // todo
             // 15. Create an element for the token for which formattingElement was created, in the HTML namespace, with furthestBlock as the intended parent.

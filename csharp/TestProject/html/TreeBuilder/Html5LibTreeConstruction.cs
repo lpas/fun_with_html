@@ -19,16 +19,31 @@ public sealed class Html5LibTreeConstruction {
             Console.WriteLine(index);
 
             var tokenizer = new Tokenizer(string.Join('\n', testCase.data));
-            var treeBuilder = new TreeBuilder();
-            treeBuilder.build(tokenizer);
+            var treeBuilder = new TreeBuilder(tokenizer);
+            treeBuilder.build();
 
             try {
-                TestReader.AssertEq(testCase, treeBuilder.Document);
+                TestReader.AssertEqDocument(testCase, treeBuilder.Document);
             } catch {
                 Console.WriteLine("ERROR");
                 Console.WriteLine(testCase);
                 treeBuilder.PrintDebugDocumentTree();
                 throw;
+            }
+
+            try {
+                TestReader.AssertEqErrors(testCase, treeBuilder.Errors);
+            } catch {
+                Console.WriteLine("ERROR");
+                Console.WriteLine(testCase);
+                foreach (var error in treeBuilder.Errors) {
+                    Console.WriteLine(error);
+                }
+                throw;
+            }
+
+            foreach (var error in treeBuilder.Errors) {
+                Console.WriteLine(error);
             }
             Console.WriteLine("OK!");
         }

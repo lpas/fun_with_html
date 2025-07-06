@@ -52,7 +52,7 @@ Test
         body.childNodes.Add(text);
 
         TreeBuilder.PrintDebugDocumentTree(document);
-        TestReader.AssertEq(testCase, document);
+        TestReader.AssertEqDocument(testCase, document);
     }
 
     [TestMethod]
@@ -69,7 +69,7 @@ Test
         var text2 = new Text(document, "Test");
         body.childNodes.AddRange([text, text2]);
 
-        var ex = Assert.ThrowsException<AssertFailedException>(() => TestReader.AssertEq(testCase, document));
+        var ex = Assert.ThrowsException<AssertFailedException>(() => TestReader.AssertEqDocument(testCase, document));
         StringAssert.Contains(ex.Message, "tree != testCase (testCase empty)");
     }
 
@@ -84,7 +84,7 @@ Test
         var body = new Element(document, "body");
         html.childNodes.AddRange([head, body]);
 
-        var ex = Assert.ThrowsException<AssertFailedException>(() => TestReader.AssertEq(testCase, document));
+        var ex = Assert.ThrowsException<AssertFailedException>(() => TestReader.AssertEqDocument(testCase, document));
         StringAssert.Contains(ex.Message, "tree != testCase (document empty)");
     }
 
@@ -101,7 +101,7 @@ Test
         var div = new Element(document, "div");
         body.childNodes.Add(div);
 
-        var ex = Assert.ThrowsException<AssertFailedException>(() => TestReader.AssertEq(testCase, document));
+        var ex = Assert.ThrowsException<AssertFailedException>(() => TestReader.AssertEqDocument(testCase, document));
         StringAssert.Contains(ex.Message, "tree != testCase (diff)");
     }
 

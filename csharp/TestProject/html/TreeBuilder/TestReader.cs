@@ -88,7 +88,7 @@ public class TestReader(IEnumerable<string> iter) {
         if (notEmitted) yield return testCase;
     }
 
-    public static void AssertEq(TestCase testCase, Document document) {
+    public static void AssertEqDocument(TestCase testCase, Document document) {
         var stack = new Stack<(Node, int)>();
         foreach (var child in Enumerable.Reverse(document.childNodes)) {
             stack.Push((child, 1));
@@ -126,7 +126,11 @@ public class TestReader(IEnumerable<string> iter) {
         }
     }
 
-
+    internal static void AssertEqErrors(TestCase testCase, List<ParseError> errors) {
+        if (testCase.errors.Count != errors.Count) {
+            Assert.Fail($"Not the same error count. testCase: {testCase.errors.Count} errors: {errors.Count}");
+        }
+    }
 }
 
 
