@@ -43,6 +43,28 @@ public class Document(): Node(null) {
         return "#document";
     }
 }
+
+public class DocumentType(Document document, string name, string publicId = "", string systemId = ""): Node(document) {
+    public string name { get; } = name;
+    public string publicId { get; } = publicId;
+    public string systemId { get; } = systemId;
+
+    public override string ToString() {
+        return $"<!DOCTYPE {name}>";
+    }
+}
+
+
+public class CharacterData(Document document, string data): Node(document) {
+    public string data { get; } = data;
+
+}
+public class Comment(Document document, string data): CharacterData(document, data) {
+    public override string ToString() {
+        return $"<!-- {data} -->";
+    }
+}
+
 public class Element(Document document, string localName): Node(document) {
     public string? @namespace;
     public string? namespacePrefix;
@@ -69,17 +91,20 @@ public class TreeBuilder(bool debugPrint = false) {
 
     private Document document = new();
     private InsertionMode insertionMode = InsertionMode.Initial;
-    private Stack<Element> stackOfOpenElements = [];
-    private Node currentNode { get => stackOfOpenElements.Peek(); }
+    private InsertionMode originalInsertionMode = InsertionMode.Initial;
+    private List<Element> stackOfOpenElements = [];
+    private Element currentNode { get => stackOfOpenElements.Peek(); }
 
     private Element? headElementPointer = null;
 
     private bool scriptingFlag = false;
 
+    private List<Element?> ListOfActiveFormattingElements = []; // null is a marker
 
+    private bool fosterParenting = false;
     public void build(Tokenizer.Tokenizer tokenizer) {
         Token? reprocessToken = null;
-
+        Stack<string> lol = new();
         while (true) {
             Token? token;
             if (reprocessToken != null) {
@@ -99,8 +124,12 @@ public class TreeBuilder(bool debugPrint = false) {
                     switch (token) {
                         case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
                             break; // ignore the token
-                        case DOCTYPE:
-                            // todo implement the right way
+                        case DOCTYPE doctype:
+                            if (doctype.name is not "html" || doctype.publicId is not null || doctype.systemId is not null or "about:legacy-compat") {
+                                // todo parse error
+                            }
+                            document.childNodes.Add(new DocumentType(document, doctype.name ?? "", doctype.publicId ?? "", doctype.systemId ?? ""));
+                            // todo quirks mode
                             insertionMode = InsertionMode.BeforeHtml;
                             break;
                         default:
@@ -117,16 +146,18 @@ public class TreeBuilder(bool debugPrint = false) {
                 case InsertionMode.BeforeHtml:
                     switch (token) {
                         case DOCTYPE: throw new NotImplementedException();
-                        case Comment: throw new NotImplementedException();
+                        case Tokenizer.Comment comment:
+                            InsertAComment(comment, (document, document.childNodes.Count));
+                            break;
                         case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
                             break; // ignore the token
                         case StartTag { name: "html" }: {
                                 // Create an element for the token in the HTML namespace, with the Document as the intended parent.
-                                var element = CreateAnElementForTheToken((Tag)token, Namespaces.HTML, document);
+                                var element = CreateAnElementForAToken((Tag)token, Namespaces.HTML, document);
                                 // Append it to the Document object.
                                 document.childNodes.Add(element);
                                 // Put this element in the stack of open elements.
-                                stackOfOpenElements.Push(element);
+                                stackOfOpenElements.Put(element);
                                 // Switch the insertion mode to "before head".
                                 insertionMode = InsertionMode.BeforeHead;
                                 break;
@@ -140,7 +171,7 @@ public class TreeBuilder(bool debugPrint = false) {
                                 // Create an html element whose node document is the Document object. Append it to the Document object. Put this element in the stack of open elements.
                                 var element = CreateAnElement(document, "html", Namespaces.HTML);
                                 document.childNodes.Add(element);
-                                stackOfOpenElements.Push(element);
+                                stackOfOpenElements.Put(element);
                                 // Switch the insertion mode to "before head", then reprocess the token.                            
                                 insertionMode = InsertionMode.BeforeHead;
                                 reprocessToken = token;
@@ -155,7 +186,7 @@ public class TreeBuilder(bool debugPrint = false) {
                     switch (token) {
                         case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
                             break; // ignore the token
-                        case Comment: throw new NotImplementedException();
+                        case Tokenizer.Comment: throw new NotImplementedException();
                         case DOCTYPE: throw new NotImplementedException();
                         case StartTag { name: "html" }: throw new NotImplementedException();
                         case StartTag { name: "head" } tagToken: {
@@ -191,7 +222,7 @@ public class TreeBuilder(bool debugPrint = false) {
                         case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' } cToken:
                             InsertACharacter(cToken);
                             break;
-                        case Comment: throw new NotImplementedException();
+                        case Tokenizer.Comment: throw new NotImplementedException();
                         case DOCTYPE: throw new NotImplementedException();
                         case StartTag { name: "html" }: throw new NotImplementedException();
                         case StartTag { name: "base" or "basefont" or "bgsound" or "link" }: throw new NotImplementedException();
@@ -211,7 +242,29 @@ public class TreeBuilder(bool debugPrint = false) {
                         case StartTag { name: "title" }: throw new NotImplementedException();
                         case StartTag { name: "noscript" } when scriptingFlag: throw new NotImplementedException();
                         case StartTag { name: "noscript" } when !scriptingFlag: throw new NotImplementedException();
-                        case StartTag { name: "script" }: throw new NotImplementedException();
+                        case StartTag { name: "script" }:
+                            // 1. Let the adjusted insertion location be the appropriate place for inserting a node.
+                            var adjustedInsertionLocation = AppropriatePlaceForInsertingANode();
+                            // 2. Create an element for the token in the HTML namespace, with the intended parent being the element in which the adjusted insertion location finds itself.
+                            var element = CreateAnElement(document, "script", Namespaces.HTML);
+                            // 3. Set the element's parser document to the Document, and set the element's force async to false.
+                            // todo
+                            // NOTE: This ensures that, if the script is external, any document.write() calls in the script will execute in-line, instead of blowing the document away, as would happen in most other cases. It also prevents the script from executing until the end tag is seen.
+                            // If the parser was created as part of the HTML fragment parsing algorithm, then set the script element's already started to true. (fragment case)
+                            // todo
+                            // If the parser was invoked via the document.write() or document.writeln() methods, then optionally set the script element's already started to true. (For example, the user agent might use this clause to prevent execution of cross-origin scripts inserted via document.write() under slow network conditions, or when the page has already taken a long time to load.)
+                            // todo
+                            // Insert the newly created element at the adjusted insertion location.
+                            adjustedInsertionLocation.elem.childNodes.Insert(adjustedInsertionLocation.childPos, element);
+                            // Push the element onto the stack of open elements so that it is the new current node.
+                            stackOfOpenElements.Push(element);
+                            // Switch the tokenizer to the script data state.
+                            // todo
+                            // Set the original insertion mode to the current insertion mode.
+                            originalInsertionMode = insertionMode;
+                            // Switch the insertion mode to "text".
+                            insertionMode = InsertionMode.Text;
+                            break;
                         case EndTag { name: "head" }:
                             // Pop the current node (which will be the head element) off the stack of open elements.
                             stackOfOpenElements.Pop();
@@ -223,7 +276,10 @@ public class TreeBuilder(bool debugPrint = false) {
                             goto default;
                         case StartTag { name: "template" }: throw new NotImplementedException();
                         case EndTag { name: "template" }: throw new NotImplementedException();
-                        case StartTag { name: "head" } or EndTag: throw new NotImplementedException();
+                        case StartTag { name: "head" }:
+                        case EndTag:
+                            // todo parse error
+                            break; // ignore the token
                         default:
                             //Pop the current node (which will be the head element) off the stack of open elements.
                             stackOfOpenElements.Pop();
@@ -241,7 +297,7 @@ public class TreeBuilder(bool debugPrint = false) {
                         case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' } cToken:
                             InsertACharacter(cToken);
                             break;
-                        case Comment: throw new NotImplementedException();
+                        case Tokenizer.Comment: throw new NotImplementedException();
                         case DOCTYPE: throw new NotImplementedException();
                         case StartTag { name: "html" }: throw new NotImplementedException();
                         case StartTag { name: "body" } tagToken:
@@ -276,6 +332,78 @@ public class TreeBuilder(bool debugPrint = false) {
                     bool flowControl = InsertionModeInBody(ref reprocessToken, token);
                     if (!flowControl) {
                         return;
+                    }
+
+                    break;
+                // 13.2.6.4.8 The "text" insertion mode
+                // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-incdata    
+                case InsertionMode.Text:
+                    switch (token) {
+                        case Character cToken:
+                            InsertACharacter(cToken);
+                            break;
+                        case EndOfFile:
+                            throw new NotImplementedException();
+                        case EndTag { name: "script" }:
+                            // If the active speculative HTML parser is null and the JavaScript execution context stack is empty, then perform a microtask checkpoint.
+                            // todo
+                            // Let script be the current node (which will be a script element).
+                            var script = currentNode;
+                            // Pop the current node off the stack of open elements.
+                            stackOfOpenElements.Pop();
+                            // Switch the insertion mode to the original insertion mode.
+                            insertionMode = originalInsertionMode;
+                            // Let the old insertion point have the same value as the current insertion point. Let the insertion point be just before the next input character.
+                            // todo
+                            // Increment the parser's script nesting level by one.
+                            // todo
+                            // If the active speculative HTML parser is null, then prepare the script element script. This might cause some script to execute, which might cause new characters to be inserted into the tokenizer, and might cause the tokenizer to output more tokens, resulting in a reentrant invocation of the parser.
+                            // todo
+                            // Decrement the parser's script nesting level by one. If the parser's script nesting level is zero, then set the parser pause flag to false.
+                            // todo
+                            // Let the insertion point have the value of the old insertion point. (In other words, restore the insertion point to its previous value. This value might be the "undefined" value.)
+                            // todo
+                            // At this stage, if the pending parsing-blocking script is not null, then:
+                            // todo
+                            // If the script nesting level is not zero:
+                            // Set the parser pause flag to true, and abort the processing of any nested invocations of the tokenizer, yielding control back to the caller. (Tokenization will resume when the caller returns to the "outer" tree construction stage.)
+                            // todo
+                            // NOTE: The tree construction stage of this particular parser is being called reentrantly, say from a call to document.write().
+
+                            // Otherwise:
+                            // While the pending parsing-blocking script is not null:
+
+                            // 1. Let the script be the pending parsing-blocking script.
+                            // todo
+                            // 2. Set the pending parsing-blocking script to null.
+                            // todo
+                            // 3. Start the speculative HTML parser for this instance of the HTML parser.
+                            // todo
+                            // 4. Block the tokenizer for this instance of the HTML parser, such that the event loop will not run tasks that invoke the tokenizer.
+                            // todo
+                            // 5. If the parser's Document has a style sheet that is blocking scripts or the script's ready to be parser-executed is false: spin the event loop until the parser's Document has no style sheet that is blocking scripts and the script's ready to be parser-executed becomes true.
+                            // todo
+                            // 6. If this parser has been aborted in the meantime, return.
+                            // todo
+                            // NOTE: This could happen if, e.g., while the spin the event loop algorithm is running, the Document gets destroyed, or the document.open() method gets invoked on the Document.
+
+                            // 7. Stop the speculative HTML parser for this instance of the HTML parser.
+                            // todo
+                            // 8. Unblock the tokenizer for this instance of the HTML parser, such that tasks that invoke the tokenizer can again be run.
+                            // todo
+                            // 9. Let the insertion point be just before the next input character.
+                            // todo
+                            // 10. Increment the parser's script nesting level by one (it should be zero before this step, so this sets it to one).
+                            // todo
+                            // 11. Execute the script element the script.
+                            // todo
+                            // 12. Decrement the parser's script nesting level by one. If the parser's script nesting level is zero (which it always should be at this point), then set the parser pause flag to false.
+                            // todo
+                            // 13. Let the insertion point be undefined again.
+                            break;
+
+                        case EndTag:
+                            throw new NotImplementedException();
                     }
 
                     break;
@@ -316,7 +444,7 @@ public class TreeBuilder(bool debugPrint = false) {
                             case StartTag { name: "caption" or "col" or "colgroup" or "tbody" or "tfood" or "thead" }:
                             case EndTag { name: "table" }:
                                 // If the stack of open elements does not have a tbody, thead, or tfoot element in table scope, this is a parse error; ignore the token.
-                                if (!StackOfOpenElementsInTableScope("tbody", "thead", "tfoot")) {
+                                if (!HasAELementInTableScope("tbody", "thead", "tfoot")) {
                                     // todo parse error
                                 } else {
                                     // Otherwise:
@@ -361,7 +489,7 @@ public class TreeBuilder(bool debugPrint = false) {
                             case StartTag { name: "caption" or "col" or "colgroup" or "tbody" or "tfoot" or "thead" or "tr" }:
                             case EndTag { name: "table" }:
                                 // If the stack of open elements does not have a tr element in table scope, this is a parse error; ignore the token.
-                                if (!StackOfOpenElementsInTableScope("tr")) {
+                                if (!HasAELementInTableScope("tr")) {
                                     // todo parse error
                                 } else {
                                     // Otherwise:
@@ -425,6 +553,91 @@ public class TreeBuilder(bool debugPrint = false) {
                             break;
                     }
                     break;
+
+                //13.2.6.4.16 The "in select" insertion mode
+                // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inselect
+                case InsertionMode.InSelect:
+                    switch (token) {
+                        case Character { data: '\0' }:
+                            throw new NotImplementedException();
+                        case Character cToken:
+                            InsertACharacter(cToken);
+                            break;
+                        case Tokenizer.Comment:
+                            throw new NotImplementedException();
+                        case DOCTYPE:
+                            throw new NotImplementedException();
+                        case StartTag { name: "html" }:
+                            throw new NotImplementedException();
+                        case StartTag { name: "option" } tagToken:
+                            // If the current node is an option element, pop that node from the stack of open elements.
+                            if (currentNode is Element { localName: "option" }) {
+                                stackOfOpenElements.Pop();
+                            }
+                            // Insert an HTML element for the token.
+                            InsertAnHTMLElement(tagToken);
+                            break;
+                        case StartTag { name: "optgroup" }:
+                            throw new NotImplementedException();
+                        case StartTag { name: "hr" }:
+                            throw new NotImplementedException();
+                        case EndTag { name: "optgroup" }:
+                            throw new NotImplementedException();
+                        case EndTag { name: "option" }:
+                            throw new NotImplementedException();
+                        case EndTag { name: "select" }:
+                            // If the stack of open elements does not have a select element in select scope, this is a parse error; ignore the token. (fragment case)
+                            if (!HasAElementInSelectScope("select")) {
+                                // todo parse error
+                            } else {
+                                // Otherwise:
+                                // Pop elements from the stack of open elements until a select element has been popped from the stack.
+                                while (true) {
+                                    if (stackOfOpenElements.Pop() is Element { localName: "select" }) {
+                                        break;
+                                    }
+                                }
+                                // Reset the insertion mode appropriately.
+                                ResetTheInsertionModeAppropriately();
+                            }
+                            break;
+
+                        case StartTag { name: "select" }:
+                            // Parse error.
+                            // todo
+                            // If the stack of open elements does not have a select element in select scope, ignore the token. (fragment case)
+                            if (!HasAElementInSelectScope("select")) {
+
+                            } else {
+                                // Otherwise:
+                                // 1. Pop elements from the stack of open elements until a select element has been popped from the stack.
+                                while (true) {
+                                    if (stackOfOpenElements.Pop() is Element { localName: "select" }) {
+                                        break;
+                                    }
+                                }
+                                // 2. Reset the insertion mode appropriately.
+                                ResetTheInsertionModeAppropriately();
+                                // 3. NOTE: It just gets treated like an end tag.
+                            }
+                            break;
+                        case StartTag { name: "input" or "keygen" or "textarea" }:
+                            throw new NotImplementedException();
+                        case StartTag { name: "script" or "template" }:
+                        case EndTag { name: "template" }:
+                            throw new NotImplementedException();
+                        case EndOfFile:
+                            if (!InsertionModeInBody(ref reprocessToken, token)) {
+                                return;
+                            }
+                            break;
+                        default:
+                            // todo parse error
+                            // ignore the token;
+                            break;
+
+                    }
+                    break;
                 // 13.2.6.4.19 The "after body" insertion mode
                 // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-afterbody
                 case InsertionMode.AfterBody:
@@ -432,7 +645,7 @@ public class TreeBuilder(bool debugPrint = false) {
                         case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
                             // todo
                             break;
-                        case Comment: throw new NotImplementedException();
+                        case Tokenizer.Comment: throw new NotImplementedException();
                         case DOCTYPE: throw new NotImplementedException();
                         case StartTag { name: "html" }: throw new NotImplementedException();
                         case EndTag { name: "html" }:
@@ -452,7 +665,7 @@ public class TreeBuilder(bool debugPrint = false) {
                 // https://html.spec.whatwg.org/multipage/parsing.html#the-after-after-body-insertion-mode
                 case InsertionMode.AfterAfterBody:
                     switch (token) {
-                        case Comment: throw new NotImplementedException();
+                        case Tokenizer.Comment: throw new NotImplementedException();
                         case DOCTYPE:
                         case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
                         case StartTag { name: "html" }:
@@ -476,6 +689,17 @@ public class TreeBuilder(bool debugPrint = false) {
 
     }
 
+    private void InsertAComment(Tokenizer.Comment comment, (Node elem, int childPos)? position = null) {
+        // Let data be the data given in the comment token being processed.
+        var data = comment.data;
+        // If position was specified, then let the adjusted insertion location be position. Otherwise, let adjusted insertion location be the appropriate place for inserting a node.
+        var adjustedInsertionLocation = position ?? AppropriatePlaceForInsertingANode();
+        // Create a Comment node whose data attribute is set to data and whose node document is the same as that of the node in which the adjusted insertion location finds itself.
+        var element = new Comment(adjustedInsertionLocation.elem.ownerDocument, data);
+        // Insert the newly created node at the adjusted insertion location.
+        adjustedInsertionLocation.elem.childNodes.Insert(adjustedInsertionLocation.childPos, element);
+    }
+
     // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intable
     private Token? InsertionModeInTable(Token? reprocessToken, Token? token) {
         // https://html.spec.whatwg.org/multipage/parsing.html#clear-the-stack-back-to-a-table-context
@@ -488,7 +712,7 @@ public class TreeBuilder(bool debugPrint = false) {
         switch (token) {
             case Character when currentNode is Element { localName: "table" or "tbody" or "tempalte" or "tfoot" or "thead" or "tr" }:
                 throw new NotImplementedException();
-            case Comment:
+            case Tokenizer.Comment:
                 throw new NotImplementedException();
             case DOCTYPE:
                 throw new NotImplementedException();
@@ -516,7 +740,7 @@ public class TreeBuilder(bool debugPrint = false) {
                 throw new NotImplementedException();
             case EndTag { name: "table" }:
                 // If the stack of open elements does not have a table element in table scope, this is a parse error; ignore the token.
-                if (!StackOfOpenElementsInTableScope("table")) {
+                if (!HasAELementInTableScope("table")) {
                     // todo parse error
                 } else {
                     // Otherwise:
@@ -549,6 +773,9 @@ public class TreeBuilder(bool debugPrint = false) {
         return reprocessToken;
     }
 
+
+    // 13.2.6.4.7 The "in body" insertion mode
+    // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inbody
     private bool InsertionModeInBody(ref Token reprocessToken, Token? token) {
         switch (token) {
             case Character { data: '\0' }: throw new NotImplementedException();
@@ -566,7 +793,9 @@ public class TreeBuilder(bool debugPrint = false) {
                 // Set the frameset-ok flag to "not ok".
                 // todo
                 break;
-            case Comment: throw new NotImplementedException();
+            case Tokenizer.Comment comment:
+                InsertAComment(comment);
+                break;
             case DOCTYPE: throw new NotImplementedException();
             case StartTag { name: "html" }: throw new NotImplementedException();
             case StartTag { name: "base" or "basefont" or "bgsound" or "link" or "meta" or "noframes" or "script" or "style" or "template" or "title" }:
@@ -594,7 +823,7 @@ public class TreeBuilder(bool debugPrint = false) {
                 break;
             case EndTag { name: "html" }:
                 // If the stack of open elements does not have a body element in scope, this is a parse error; ignore the token.
-                if (!HasAnElementInTheSpecificScope(["body"], [])) {
+                if (!HasAElementInScope("body")) {
                     break;
                     // todo parse error
                 }
@@ -612,19 +841,51 @@ public class TreeBuilder(bool debugPrint = false) {
                                     "section" or "summary" or "ul"
             } tagToken:
                 // If the stack of open elements has a p element in button scope, then close a p element.
-                if (StackOfOpenElementsInButtonScope("p")) {
+                if (HasAElementInButtonScope("p")) {
                     CloseAPElement();
                 }
                 // Insert an HTML element for the token.
                 InsertAnHTMLElement(tagToken);
                 break;
-            case StartTag { name: "h1" or "h2" or "h3" or "h4" or "h5" or "h6" }: throw new NotImplementedException();
+            case StartTag { name: "h1" or "h2" or "h3" or "h4" or "h5" or "h6" } tagToken:
+                // If the stack of open elements has a p element in button scope, then close a p element.
+                if (HasAElementInButtonScope("p")) {
+                    CloseAPElement();
+                }
+                // If the current node is an HTML element whose tag name is one of "h1", "h2", "h3", "h4", "h5", or "h6", then this is a parse error; pop the current node off the stack of open elements.
+                if (currentNode is Element { localName: "h1" or "h2" or "h3" or "h4" or "h5" or "h6" }) {
+                    // todo parse error
+                    stackOfOpenElements.Pop();
+                }
+                // Insert an HTML element for the token.
+                InsertAnHTMLElement(tagToken);
+                break;
             case StartTag { name: "pre" or "listing" }: throw new NotImplementedException();
             case StartTag { name: "form" }: throw new NotImplementedException();
             case StartTag { name: "li" }: throw new NotImplementedException();
             case StartTag { name: "dd" or "dt" }: throw new NotImplementedException();
             case StartTag { name: "plaintext" }: throw new NotImplementedException();
-            case StartTag { name: "button" }: throw new NotImplementedException();
+            case StartTag { name: "button" } tagToken:
+                // 1. If the stack of open elements has a button element in scope, then run these substeps:
+                if (HasAElementInScope("button")) {
+                    // 1. Parse error.
+                    // todo
+                    // 2. Generate implied end tags.
+                    GenerateImpliedEndTags();
+                    // 3. Pop elements from the stack of open elements until a button element has been popped from the stack.
+                    while (true) {
+                        var element = stackOfOpenElements.Pop();
+                        if (element.localName == "button") break;
+                    }
+                }
+                // 2. Reconstruct the active formatting elements, if any.
+                ReconstructTheActiveFormattingElements();
+                // 3. Insert an HTML element for the token.
+                InsertAnHTMLElement(tagToken);
+                // 4. Set the frameset-ok flag to "not ok".
+                // todo
+
+                break;
             case EndTag {
                 name: "address" or "article" or "aside" or "blockquote" or "button" or "center" or
                                     "details" or "dialog" or "dir" or "div" or "dl" or "fieldset" or "figcaption" or "figure" or
@@ -633,23 +894,65 @@ public class TreeBuilder(bool debugPrint = false) {
             }:
                 throw new NotImplementedException();
             case EndTag { name: "form" }: throw new NotImplementedException();
-            case EndTag { name: "p" }: throw new NotImplementedException();
+            case EndTag { name: "p" }:
+                // If the stack of open elements does not have a p element in button scope, then this is a parse error; insert an HTML element for a "p" start tag token with no attributes.
+                if (!HasAElementInButtonScope("p")) {
+                    // todo parse error
+                    InsertAnHTMLElement(new StartTag("p"));
+                }
+                // Close a p element.
+                CloseAPElement();
+                break;
             case EndTag { name: "li" }: throw new NotImplementedException();
             case EndTag { name: "dd" or "dt" }: throw new NotImplementedException();
             case EndTag { name: "h1" or "h2" or "h3" or "h4" or "h5" or "h6" }: throw new NotImplementedException();
             case EndTag { name: "sarcasm" }: throw new NotImplementedException();
-            case StartTag { name: "a" }: throw new NotImplementedException();
+            case StartTag { name: "a" } tagToken:
+                // If the list of active formatting elements contains an a element between the end of the list and the last marker on the list (or the start of the list if there is no marker on the list), then this is a parse error; run the adoption agency algorithm for the token, then remove that element from the list of active formatting elements and the stack of open elements if the adoption agency algorithm didn't already remove it (it might not have if the element is not in table scope).
+                var ttr1 = (string localName) => { // todo rename/move
+                    foreach (var elem in Enumerable.Reverse(ListOfActiveFormattingElements)) {
+                        if (elem is not null) {
+                            if (elem.localName == localName) {
+                                return elem;
+                            }
+                        } else break;
+                    }
+                    return null;
+                };
+                var elem = ttr1("a");
+                if (elem is not null) {
+                    // todo parse error
+                    AdoptionAgencyAlgorithm(tagToken);
+                    ListOfActiveFormattingElements.Remove(elem);
+                    // todo remove element from stack
+                }
+                // EXAMPLE: In the non-conforming stream <a href="a">a<table><a href="b">b</table>x, the first a element would be closed upon seeing the second one, and the "x" character would be inside a link to "b", not to "a". This is despite the fact that the outer a element is not in table scope (meaning that a regular </a> end tag at the start of the table wouldn't close the outer a element). The result is that the two a elements are indirectly nested inside each other — non-conforming markup will often result in non-conforming DOMs when parsed.
+                // Reconstruct the active formatting elements, if any.
+                ReconstructTheActiveFormattingElements();
+                // Insert an HTML element for the token. Push onto the list of active formatting elements that element.
+                InsertAnHTMLElement(tagToken);
+                break;
             case StartTag { name: "b" or "big" or "code" or "em" or "font" or "i" or "s" or "small" or "strike" or "strong" or "tt" or "u" } tagToken:
                 // Reconstruct the active formatting elements, if any.
                 ReconstructTheActiveFormattingElements();
                 // Insert an HTML element for the token. Push onto the list of active formatting elements that element.
-                var element = InsertAnHTMLElement(tagToken);
-                PushOntoTheListOfActiveFormattingElements(element);
+                PushOntoTheListOfActiveFormattingElements(InsertAnHTMLElement(tagToken));
                 break;
             case StartTag { name: "nobr" }: throw new NotImplementedException();
-            case EndTag { name: "a" or "b" or "big" or "code" or "em" or "font" or "i" or "s" or "small" or "strike" or "strong" or "tt" or "u" }:
-                throw new NotImplementedException();
-            case StartTag { name: "applet" or "marquee" or "object" }: throw new NotImplementedException();
+            case EndTag { name: "a" or "b" or "big" or "code" or "em" or "font" or "i" or "s" or "small" or "strike" or "strong" or "tt" or "u" } tagToken:
+                // Run the adoption agency algorithm for the token.
+                AdoptionAgencyAlgorithm(tagToken);
+                break;
+            case StartTag { name: "applet" or "marquee" or "object" } tagToken:
+                // Reconstruct the active formatting elements, if any.
+                ReconstructTheActiveFormattingElements();
+                // Insert an HTML element for the token.
+                InsertAnHTMLElement(tagToken);
+                // Insert a marker at the end of the list of active formatting elements.
+                ListOfActiveFormattingElements.Add(null);
+                // Set the frameset-ok flag to "not ok".
+                // todo
+                break;
             case EndTag { name: "applet" or "marquee" or "object" }: throw new NotImplementedException();
             case StartTag { name: "table" } tagToken:
                 // If the Document is not set to quirks mode, and the stack of open elements has a p element in button scope, then close a p element.
@@ -675,27 +978,228 @@ public class TreeBuilder(bool debugPrint = false) {
                 break;
             case StartTag { name: "input" }: throw new NotImplementedException();
             case StartTag { name: "param" or "source" or "track" }: throw new NotImplementedException();
-            case StartTag { name: "hr" }: throw new NotImplementedException();
+            case StartTag { name: "hr" } tagToken:
+                // If the stack of open elements has a p element in button scope, then close a p element.
+                if (HasAElementInButtonScope("p")) {
+                    CloseAPElement();
+                }
+                // Insert an HTML element for the token. Immediately pop the current node off the stack of open elements.
+                InsertAnHTMLElement(tagToken);
+                stackOfOpenElements.Pop();
+                // Acknowledge the token's self-closing flag, if it is set.
+                // todo
+                // Set the frameset-ok flag to "not ok".
+                // todo
+                break;
             case StartTag { name: "image" }: throw new NotImplementedException();
             case StartTag { name: "textarea" }: throw new NotImplementedException();
             case StartTag { name: "xmp" }: throw new NotImplementedException();
             case StartTag { name: "iframe" }: throw new NotImplementedException();
             case StartTag { name: "noembed" }: throw new NotImplementedException();
             case StartTag { name: "noscript" } when scriptingFlag: throw new NotImplementedException();
-            case StartTag { name: "select" }: throw new NotImplementedException();
-            case StartTag { name: "optgroup" or "option" }: throw new NotImplementedException();
+            case StartTag { name: "select" } tagToken:
+                // Reconstruct the active formatting elements, if any.
+                ReconstructTheActiveFormattingElements();
+                // Insert an HTML element for the token.
+                InsertAnHTMLElement(tagToken);
+                // Set the frameset-ok flag to "not ok".
+                // todo
+                // If the insertion mode is one of "in table", "in caption", "in table body", "in row", or "in cell", then switch the insertion mode to "in select in table". Otherwise, switch the insertion mode to "in select".
+                if (insertionMode is InsertionMode.InTable or InsertionMode.InCaption or InsertionMode.InTableBody or InsertionMode.InRow or InsertionMode.InCell) {
+                    insertionMode = InsertionMode.InSelectInTable;
+                } else {
+                    insertionMode = InsertionMode.InSelect;
+                }
+                break;
+            case StartTag { name: "optgroup" or "option" } tagToken:
+                // If the current node is an option element, then pop the current node off the stack of open elements.
+                if (currentNode is Element { localName: "option" }) {
+                    stackOfOpenElements.Pop();
+                }
+                // Reconstruct the active formatting elements, if any.
+                ReconstructTheActiveFormattingElements();
+                // Insert an HTML element for the token.
+                InsertAnHTMLElement(tagToken);
+                break;
             case StartTag { name: "rb" or "rtc" }: throw new NotImplementedException();
             case StartTag { name: "rp" or "rt" }: throw new NotImplementedException();
             case StartTag { name: "math" }: throw new NotImplementedException();
             case StartTag { name: "svg" }: throw new NotImplementedException();
             case StartTag { name: "caption" or "col" or "colgroup" or "frame" or "head" or "tbody" or "td" or "tfoot" or "th" or "thead" or "tr" }: throw new NotImplementedException();
-            case StartTag: throw new NotImplementedException();
-            case EndTag: throw new NotImplementedException();
+            case StartTag tagToken:
+                // Reconstruct the active formatting elements, if any.
+                ReconstructTheActiveFormattingElements();
+                // Insert an HTML element for the token.
+                InsertAnHTMLElement(tagToken);
+                break;
+            case EndTag tagToken:
+                // 1. Initialize node to be the current node (the bottommost node of the stack).
+                var node = currentNode;
+                // 2. Loop: If node is an HTML element with the same tag name as the token, then:
+                while (true) {
+                    if (node.localName == tagToken.name) {
+                        // 1. Generate implied end tags, except for HTML elements with the same tag name as the token.
+                        GenerateImpliedEndTags(tagToken.name);
+                        // 2. If node is not the current node, then this is a parse error.
+                        if (currentNode != node) {
+                            // todo
+                        }
+                        // 3. Pop all the nodes from the current node up to node, including node, then stop these steps.
+                        while (true) {
+                            if (node == stackOfOpenElements.Pop()) {
+                                break;
+                            }
+                        }
+                    } else {
+                        // 3. Otherwise, if node is in the special category, then this is a parse error; ignore the token, and return.    
+                        if (specialListElements.Contains(node.localName)) {
+                            // todo parse error
+                            break;
+                        }
+                    }
+                    // 4. Set node to the previous entry in the stack of open elements.
+                    node = currentNode;
+                    // 5. Return to the step labeled loop.
+                }
+                break;
         }
 
         return true;
     }
 
+
+    // 13.2.4.2 The stack of open elements
+    private static readonly string[] specialListElements = ["address", "applet", "area", "article", "aside", "base", "basefont", "bgsound", "blockquote", "body", "br", "button", "caption", "center", "col", "colgroup",
+        "dd", "details", "dir", "div", "dl", "dt", "embed", "fieldset", "figcaption", "figure", "footer", "form", "frame", "frameset", "h1", "h2", "h3", "h4", "h5", "h6",
+         "head", "header", "hgroup", "hr", "html", "iframe", "img", "input", "keygen", "li", "link", "listing", "main", "marquee", "menu", "meta", "nav", "noembed", "noframes", "noscript", "object", "ol", "p",
+          "param", "plaintext", "pre", "script", "search", "section", "select", "source", "style", "summary", "table", "tbody", "td", "template", "textarea", "tfoot", "th", "thead", "title", "tr",
+        "track", "ul", "wbr", "xmp"]; // todo MathML mi, MathML mo, MathML mn, MathML ms, MathML mtext, and MathML annotation-xml; and SVG foreignObject, SVG desc, and SVG title.];
+
+    // 13.2.6.4.7 
+    // https://html.spec.whatwg.org/multipage/parsing.html#adoption-agency-algorithm
+    private void AdoptionAgencyAlgorithm(Tag tagToken) {
+        // 1. Let subject be token's tag name.
+        var subject = tagToken.name;
+        // 2. If the current node is an HTML element whose tag name is subject, and the current node is not in the list of active formatting elements, then pop the current node off the stack of open elements and return.
+        if (currentNode is Element e)
+            if (e.localName == subject && !ListOfActiveFormattingElements.Contains(currentNode)) {
+                stackOfOpenElements.Pop();
+                return;
+            }
+        // 3. Let outerLoopCounter be 0.
+        var outerLoopCounter = 0;
+        // 4. While true:
+        while (true) {
+            // 1. If outerLoopCounter is greater than or equal to 8, then return.
+            if (outerLoopCounter >= 8) return;
+            // 2. Increment outerLoopCounter by 1.
+            outerLoopCounter++;
+            // 3. Let formattingElement be the last element in the list of active formatting elements that:
+            Element? formattingElement = null;
+            // * is between the end of the list and the last marker in the list, if any, or the start of the list otherwise, and
+            // * has the tag name subject.
+            var formattingElementPos = 0;
+            for (var i = ListOfActiveFormattingElements.Count - 1; i >= 0; i--) {
+                var elem = ListOfActiveFormattingElements[i];
+                if (elem is null) break;
+                if (elem.localName == subject) {
+                    formattingElement = elem;
+                    formattingElementPos = i;
+                    break;
+                }
+            }
+            // If there is no such element, then return and instead act as described in the "any other end tag" entry above.
+            if (formattingElement == null) {
+                throw new NotImplementedException();
+            }
+            // 4. If formattingElement is not in the stack of open elements, then this is a parse error; remove the element from the list, and return.
+            if (!stackOfOpenElements.Contains(formattingElement)) {
+                throw new NotImplementedException();
+            }
+            // 5. If formattingElement is in the stack of open elements, but the element is not in scope, then this is a parse error; return.
+            if (!HasAElementInScope(formattingElement.localName)) {
+                // todo parse error 
+                return;
+            }
+            // 6. If formattingElement is not the current node, this is a parse error. (But do not return.)
+            if (formattingElement != currentNode) {
+                // todo parse error
+            }
+            // 7. Let furthestBlock be the topmost node in the stack of open elements that is lower in the stack than formattingElement, and is an element in the special category. There might not be one.
+            Element? furthestBlock = null;
+            var furthestBlockPos = 0;
+            for (var i = stackOfOpenElements.Count - 1; i >= 0; i--) {
+                var elem = stackOfOpenElements[i];
+                if (elem == formattingElement) break;
+                if (specialListElements.Contains(elem.localName)) {
+                    furthestBlock = elem;
+                    furthestBlockPos = i;
+                }
+            }
+            // 8. If there is no furthestBlock, then the UA must first pop all the nodes from the bottom of the stack of open elements, from the current node up to and including formattingElement, then remove formattingElement from the list of active formatting elements, and finally return.
+            if (furthestBlock == null) {
+                throw new NotImplementedException();
+            }
+            // 9. Let commonAncestor be the element immediately above formattingElement in the stack of open elements.            
+            Element commonAncestor = stackOfOpenElements[furthestBlockPos - 1];
+            // 10. Let a bookmark note the position of formattingElement in the list of active formatting elements relative to the elements on either side of it in the list.
+            var bookmark = formattingElementPos;
+            // 11. Let node and lastNode be furthestBlock.
+            var node = furthestBlock;
+            var nodePos = furthestBlockPos;
+            var lastNode = furthestBlock;
+            // 12. Let innerLoopCounter be 0.
+            var innerLoopCounter = 0;
+            // 13. While true:
+            while (true) {
+                // 1. Increment innerLoopCounter by 1.
+                innerLoopCounter++;
+                // 2. Let node be the element immediately above node in the stack of open elements, or if node is no longer in the stack of open elements (e.g. because it got removed by this algorithm), the element that was immediately above node in the stack of open elements before node was removed.
+                node = stackOfOpenElements[--nodePos];
+                // 3. If node is formattingElement, then break.
+                if (node == formattingElement) break;
+                // 4. If innerLoopCounter is greater than 3 and node is in the list of active formatting elements, then remove node from the list of active formatting elements.
+                if (innerLoopCounter > 3 && ListOfActiveFormattingElements.Contains(node)) {
+                    ListOfActiveFormattingElements.Remove(node);
+                }
+                // 5. If node is not in the list of active formatting elements, then remove node from the stack of open elements and continue.
+                if (!ListOfActiveFormattingElements.Contains(node)) {
+                    stackOfOpenElements.Remove(node);
+                    continue;
+                }
+                // 6. Create an element for the token for which the element node was created, in the HTML namespace, with commonAncestor as the intended parent; replace the entry for node in the list of active formatting elements with an entry for the new element, replace the entry for node in the stack of open elements with an entry for the new element, and let node be the new element.
+                var element = CreateAnElementForAToken(new StartTag(node.localName), Namespaces.HTML, commonAncestor); // todo this is hacky we need the real token;
+                var index = ListOfActiveFormattingElements.IndexOf(node);
+                ListOfActiveFormattingElements[index] = element;
+                stackOfOpenElements[nodePos] = element;
+                node = element;
+                // 7. If lastNode is furthestBlock, then move the aforementioned bookmark to be immediately after the new node in the list of active formatting elements.
+                if (lastNode == furthestBlock) {
+                    // todo
+                }
+                // 8. Append lastNode to node.
+                node.childNodes.Append(lastNode);
+                // 9. Set lastNode to node.
+                lastNode = node;
+
+            }
+
+            // 14. Insert whatever lastNode ended up being in the previous step at the appropriate place for inserting a node, but using commonAncestor as the override target.
+            // todo
+            // 15. Create an element for the token for which formattingElement was created, in the HTML namespace, with furthestBlock as the intended parent.
+
+            // 16. Take all of the child nodes of furthestBlock and append them to the element created in the last step.
+
+            // 17. Append that new element to furthestBlock.
+
+            // 18. Remove formattingElement from the list of active formatting elements, and insert the new element into the list of active formatting elements at the position of the aforementioned bookmark.
+
+            // 19. Remove formattingElement from the stack of open elements, and insert the new element into the stack of open elements immediately below the position of furthestBlock in that stack.
+
+
+
+        }
+    }
 
     // 13.2.4.1 The insertion mode
     // https://html.spec.whatwg.org/multipage/parsing.html#reset-the-insertion-mode-appropriately
@@ -703,8 +1207,14 @@ public class TreeBuilder(bool debugPrint = false) {
         // 1. Let last be false.
         var last = false;
         // 2. Let node be the last node in the stack of open elements.
+        var index = stackOfOpenElements.Count - 1;
+        var node = stackOfOpenElements[index];
         // 3. Loop: If node is the first node in the stack of open elements, then set last to true, and, if the parser was created as part of the HTML fragment parsing algorithm (fragment case), set node to the context element passed to that algorithm.
-        foreach (var node in stackOfOpenElements) { // looping of a stack does a lifo loop
+        while (true) {
+            if (index == 0) {
+                last = true;
+                // todo
+            }
             switch (node) {
                 // 4. If node is a select element, run these substeps:
                 case Element { localName: "select" }:
@@ -774,6 +1284,7 @@ public class TreeBuilder(bool debugPrint = false) {
                 throw new NotImplementedException();
             }
             // 17. Let node now be the node before node in the stack of open elements.
+            node = stackOfOpenElements[--index];
             // 18. Return to the step labeled loop.
         }
     }
@@ -781,13 +1292,45 @@ public class TreeBuilder(bool debugPrint = false) {
     // 13.2.4.3
     // https://html.spec.whatwg.org/multipage/parsing.html#push-onto-the-list-of-active-formatting-elements
     private void PushOntoTheListOfActiveFormattingElements(Element element) {
+        // If there are already three elements in the list of active formatting elements after the last marker, if any, or anywhere in the list if there are no markers, that have the same tag name, namespace, and attributes as element, then remove the earliest such element from the list of active formatting elements. For these purposes, the attributes must be compared as they were when the elements were created by the parser; two elements have the same attributes if all their parsed attributes can be paired such that the two attributes in each pair have identical names, namespaces, and values (the order of the attributes does not matter).
         // todo
+        // Add element to the list of active formatting elements.
+        ListOfActiveFormattingElements.Add(element);
     }
 
     // 13.2.4.3
     // https://html.spec.whatwg.org/multipage/parsing.html#reconstruct-the-active-formatting-elements
     private void ReconstructTheActiveFormattingElements() {
-        // todo
+        // 1. If there are no entries in the list of active formatting elements, then there is nothing to reconstruct; stop this algorithm.
+        if (ListOfActiveFormattingElements.Count == 0) return;
+        // 2. If the last (most recently added) entry in the list of active formatting elements is a marker, or if it is an element that is in the stack of open elements, then there is nothing to reconstruct; stop this algorithm.        
+        if (ListOfActiveFormattingElements[^1] == null || stackOfOpenElements.Contains(ListOfActiveFormattingElements[^1]!)) return;
+        // 3. Let entry be the last (most recently added) element in the list of active formatting elements.
+        var index = ListOfActiveFormattingElements.Count - 1;
+        var entry = ListOfActiveFormattingElements[index];
+    // 4. Rewind: If there are no entries before entry in the list of active formatting elements, then jump to the step labeled create.
+    rewind:
+        if (index == 0)
+            goto create;
+        // 5. Let entry be the entry one earlier than entry in the list of active formatting elements.
+        entry = ListOfActiveFormattingElements[--index];
+        // 6. If entry is neither a marker nor an element that is also in the stack of open elements, go to the step labeled rewind.
+        if (entry != null && !stackOfOpenElements.Contains(entry)) {
+            goto rewind;
+        }
+    // 7. Advance: Let entry be the element one later than entry in the list of active formatting elements.
+    advance:
+        entry = ListOfActiveFormattingElements[++index];
+    // 8. Create: Insert an HTML element for the token for which the element entry was created, to obtain new element.
+    create:
+        var elem = InsertAnHTMLElement(new StartTag(entry.localName)); // todo this is wrong we should have the token in the list of elements
+        // 9. Replace the entry for entry in the list with an entry for new element.
+        ListOfActiveFormattingElements[index] = elem;
+        // 10. If the entry for new element in the list of active formatting elements is not the last entry in the list, return to the step labeled advance.
+        if (index != ListOfActiveFormattingElements.Count - 1)
+            goto advance;
+        // This has the effect of reopening all the formatting elements that were opened in the current body, cell, or caption (whichever is youngest) that haven't been explicitly closed.
+        // NOTE: The way this specification is written, the list of active formatting elements always consists of elements in chronological order with the least recently added element first and the most recently added element last (except for while steps 7 to 10 of the above algorithm are being executed, of course).
     }
 
     // https://html.spec.whatwg.org/multipage/parsing.html#generate-implied-end-tags
@@ -826,37 +1369,61 @@ public class TreeBuilder(bool debugPrint = false) {
         }
     }
 
-    // https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-scope
-    private static List<string> ElementInScopeSpecialList = ["applet", "caption", "html", "table", "td", "th", "marquee", "object", "template"];
-    // todo these elements should also be part of the list: They have a different namespace: "MathML mi" , "MathML mo" , "MathML mn" , "MathML ms" , "MathML mtext" , "MathML annotation-xml" , "SVG foreignObject" , "SVG desc" , "SVG title"
-
-    // https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-button-scope
-    private bool StackOfOpenElementsInButtonScope(params ReadOnlySpan<string> elementsName) {
-        List<string> button = ["button"];
-        button.AddRange(ElementInScopeSpecialList);
-        return HasAnElementInTheSpecificScope(elementsName, button);
-    }
-
-    // https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-table-scope
-    private bool StackOfOpenElementsInTableScope(params ReadOnlySpan<string> elementsName) {
-        List<string> list = ["html", "table", "template"];
-        list.AddRange(ElementInScopeSpecialList);
-        return HasAnElementInTheSpecificScope(elementsName, list);
-    }
 
     // https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-the-specific-scope
     private bool HasAnElementInTheSpecificScope(ReadOnlySpan<string> elementsName, List<string> list) {
         // 1. initialize node to be the current node (the bottommost node of the stack).
-        foreach (var el in stackOfOpenElements) {
+        var index = stackOfOpenElements.Count - 1;
+        var node = stackOfOpenElements[index];
+        while (true) {
             // 2. If node is target node, terminate in a match state.
-            if (elementsName.Contains(el.localName)) {
+            if (elementsName.Contains(node.localName)) {
                 return true;
             }
             // 3. Otherwise, if node is one of the element types in list, terminate in a failure state.
-            if (list.Contains(el.localName)) {
+            if (list.Contains(node.localName)) {
                 return false;
             }
             // 4. Otherwise, set node to the previous entry in the stack of open elements and return to step 2.
+            node = stackOfOpenElements[--index];
+            //    (This will never fail, since the loop will always terminate in the previous step if the top of the stack — an html element — is reached.)
+        }
+        throw new InvalidOperationException();
+    }
+    // https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-scope
+    private static List<string> ElementInScopeSpecialList = ["applet", "caption", "html", "table", "td", "th", "marquee", "object", "template"];
+    // todo these elements should also be part of the list: They have a different namespace: "MathML mi" , "MathML mo" , "MathML mn" , "MathML ms" , "MathML mtext" , "MathML annotation-xml" , "SVG foreignObject" , "SVG desc" , "SVG title"
+
+    //https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-scope
+    private bool HasAElementInScope(params ReadOnlySpan<string> elementsName) {
+        return HasAnElementInTheSpecificScope(elementsName, ElementInScopeSpecialList);
+    }
+    // https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-button-scope
+    private bool HasAElementInButtonScope(params ReadOnlySpan<string> elementsName) {
+        return HasAnElementInTheSpecificScope(elementsName, ["button", .. ElementInScopeSpecialList]);
+    }
+    // https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-table-scope
+    private bool HasAELementInTableScope(params ReadOnlySpan<string> elementsName) {
+        return HasAnElementInTheSpecificScope(elementsName, ["html", "table", "template"]);
+    }
+    // https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-select-scope
+    private bool HasAElementInSelectScope(params ReadOnlySpan<string> elementsName) {
+        List<string> list = ["optgroup", "option"];
+        // 1. initialize node to be the current node (the bottommost node of the stack).
+        var index = stackOfOpenElements.Count - 1;
+        var node = stackOfOpenElements[index];
+        while (true) {
+            // 2. If node is target node, terminate in a match state.
+            if (elementsName.Contains(node.localName)) {
+                return true;
+            }
+            // 3. Otherwise, if node is one of the element types in list, terminate in a failure state.
+            // NOTE: this is special for select: consisting of all element types EXCEPT the following:
+            if (!list.Contains(node.localName)) {
+                return false;
+            }
+            // 4. Otherwise, set node to the previous entry in the stack of open elements and return to step 2.
+            node = stackOfOpenElements[--index];
             //    (This will never fail, since the loop will always terminate in the previous step if the top of the stack — an html element — is reached.)
         }
         throw new InvalidOperationException();
@@ -865,26 +1432,26 @@ public class TreeBuilder(bool debugPrint = false) {
     // https://html.spec.whatwg.org/multipage/parsing.html#insert-a-character
     private void InsertACharacter(Character token) {
         // Let the adjusted insertion location be the appropriate place for inserting a node.
-        // todo
+        var adjustedInsertionLocation = AppropriatePlaceForInsertingANode();
         // If the adjusted insertion location is in a Document node, then return.
-        if (currentNode is Document) {
+        if (adjustedInsertionLocation.elem is Document) {
             return;
         }
         // If there is a Text node immediately before the adjusted insertion location, then append data to that Text node's data.
-        if (currentNode.childNodes.Count > 0 && currentNode.childNodes[^1] is Text lastChild) {
+        if (adjustedInsertionLocation.elem.childNodes.Count > 0 && adjustedInsertionLocation.elem.childNodes[adjustedInsertionLocation.childPos - 1] is Text lastChild) {
             lastChild.data += token.data;
         } else {
             // Otherwise, create a new Text node whose data is data and whose node document is the same as that of the element in which the adjusted insertion location finds itself, and insert the newly created node at the adjusted insertion location.                
-            currentNode.childNodes.Add(new Text(document, token.data.ToString()));
+            adjustedInsertionLocation.elem.childNodes.Insert(adjustedInsertionLocation.childPos, new Text(adjustedInsertionLocation.elem.ownerDocument, token.data.ToString()));
         }
     }
 
     // https://html.spec.whatwg.org/multipage/parsing.html#insert-a-foreign-element
     private Element InsertAForeignElement(Tag token, string @namespace, bool onlyAddToELementStack) {
         // Let the adjustedInsertionLocation be the appropriate place for inserting a node.
-        // todo
+        var adjustedInsertionLocation = AppropriatePlaceForInsertingANode();
         // Let element be the result of creating an element for the token given token, namespace, and the element in which the adjustedInsertionLocation finds itself.
-        var element = CreateAnElementForTheToken(token, @namespace, currentNode);
+        var element = CreateAnElementForAToken(token, @namespace, adjustedInsertionLocation.elem);
         // If onlyAddToElementStack is false, then run insert an element at the adjusted insertion location with element.
         if (!onlyAddToELementStack) {
             InsertAnElementAtTheAdjustedInsertionLocation(element);
@@ -897,15 +1464,16 @@ public class TreeBuilder(bool debugPrint = false) {
 
     // https://html.spec.whatwg.org/multipage/parsing.html#insert-an-element-at-the-adjusted-insertion-location
     private void InsertAnElementAtTheAdjustedInsertionLocation(Element element) {
-        // Let the adjusted insertion location be the appropriate place for inserting a node.
+        // 1. Let the adjusted insertion location be the appropriate place for inserting a node.
+        var adjustedInsertionLocation = AppropriatePlaceForInsertingANode();
+        // 2. If it is not possible to insert element at the adjusted insertion location, abort these steps.
 
-        // If it is not possible to insert element at the adjusted insertion location, abort these steps.
+        // 3. If the parser was not created as part of the HTML fragment parsing algorithm, then push a new element queue onto element's relevant agent's custom element reactions stack.
 
-        // If the parser was not created as part of the HTML fragment parsing algorithm, then push a new element queue onto element's relevant agent's custom element reactions stack.
-
-        // Insert element at the adjusted insertion location.
-        currentNode.childNodes.Add(element);
-        // If the parser was not created as part of the HTML fragment parsing algorithm, then pop the element queue from element's relevant agent's custom element reactions stack, and invoke custom element reactions in that queue.
+        // 4. Insert element at the adjusted insertion location.
+        adjustedInsertionLocation.elem.childNodes.Insert(adjustedInsertionLocation.childPos, element);
+        // 5. If the parser was not created as part of the HTML fragment parsing algorithm, then pop the element queue from element's relevant agent's custom element reactions stack, and invoke custom element reactions in that queue.
+        // NOTE: If the adjusted insertion location cannot accept more elements, e.g., because it's a Document that already has an element child, then element is dropped on the floor.
     }
     // https://html.spec.whatwg.org/multipage/parsing.html#insert-an-html-element
     private Element InsertAnHTMLElement(Tag token) {
@@ -913,8 +1481,48 @@ public class TreeBuilder(bool debugPrint = false) {
         return InsertAForeignElement(token, Namespaces.HTML, false);
     }
 
+    #region 13.2.6.1 Creating and inserting nodes
+    // https://html.spec.whatwg.org/multipage/parsing.html#appropriate-place-for-inserting-a-node
+    private (Node elem, int childPos) AppropriatePlaceForInsertingANode(Element? overrideTarget = null) {
+        (Node, int) adjustedInsertionLocation;
+        // 1. If there was an override target specified, then let target be the override target.
+        // Otherwise, let target be the current node.
+        var target = overrideTarget ?? currentNode;
+        // 2. Determine the adjusted insertion location using the first matching steps from the following list:
+
+        // If foster parenting is enabled and target is a table, tbody, tfoot, thead, or tr element
+        // NOTE: Foster parenting happens when content is misnested in tables.
+        if (fosterParenting && target is Element { localName: "table" or "tbody" or "tfoot" or "thead" or "tr" }) {
+            // Run these substeps:
+            throw new NotImplementedException();
+            // 1. Let last template be the last template element in the stack of open elements, if any.
+
+            // 2. Let last table be the last table element in the stack of open elements, if any.
+
+            // 3. If there is a last template and either there is no last table, or there is one, but last template is lower (more recently added) than last table in the stack of open elements, then: let adjusted insertion location be inside last template's template contents, after its last child (if any), and abort these steps.
+
+            // 4. If there is no last table, then let adjusted insertion location be inside the first element in the stack of open elements (the html element), after its last child (if any), and abort these steps. (fragment case)
+
+            // 5. If last table has a parent node, then let adjusted insertion location be inside last table's parent node, immediately before last table, and abort these steps.
+
+            // 6. Let previous element be the element immediately above last table in the stack of open elements.
+
+            // 7. Let adjusted insertion location be inside previous element, after its last child (if any).
+
+            // NOTE: These steps are involved in part because it's possible for elements, the table element in this case in particular, to have been moved by a script around in the DOM, or indeed removed from the DOM entirely, after the element was inserted by the parser.
+        } else {
+            // Otherwise
+            // Let adjusted insertion location be inside target, after its last child (if any).
+            adjustedInsertionLocation = (target, target.childNodes.Count);
+        }
+        // 3. If the adjusted insertion location is inside a template element, let it instead be inside the template element's template contents, after its last child (if any).
+        // todo
+        // 4. Return the adjusted insertion location.
+        return adjustedInsertionLocation;
+    }
+    #endregion
     // https://html.spec.whatwg.org/multipage/parsing.html#create-an-element-for-the-token
-    private Element CreateAnElementForTheToken(Tag token, string @namespace, Node intendedParent) {
+    private Element CreateAnElementForAToken(Tag token, string @namespace, Node intendedParent) {
         // 1. If the active speculative HTML parser is not null, then return the result of creating a speculative mock element given namespace, token's tag name, and token's attributes.
 
         // 2. Otherwise, optionally create a speculative mock element given namespace, token's tag name, and token's attributes.
@@ -999,13 +1607,36 @@ public class TreeBuilder(bool debugPrint = false) {
 
 
 public static class ListExtensions {
-    public static void Pop<T>(this List<T> list) {
+    public static T Pop<T>(this List<T> list) {
         if (list == null) {
             throw new ArgumentNullException(nameof(list));
         }
         if (list.Count == 0) {
             throw new InvalidOperationException("The list is empty. Cannot pop from an empty List.");
         }
+        var elem = list[^1];
         list.RemoveAt(list.Count - 1);
+        return elem;
+    }
+    public static void Put<T>(this List<T> list, T elem) {
+        if (list == null) {
+            throw new ArgumentNullException(nameof(list));
+        }
+        list.Add(elem);
+    }
+
+    public static void Push<T>(this List<T> list, T elem) {
+        Put(list, elem);
+    }
+
+    public static T Peek<T>(this List<T> list) {
+        if (list == null) {
+            throw new ArgumentNullException(nameof(list));
+        }
+        if (list.Count == 0) {
+            throw new InvalidOperationException("The list is empty. Cannot peek from an empty List.");
+        }
+        return list[^1];
     }
 }
+

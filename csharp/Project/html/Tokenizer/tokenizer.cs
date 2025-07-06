@@ -492,7 +492,9 @@ public class Tokenizer(string content) {
             case '-':
                 return SetState(State.CommentStartDashState);
             case '>':
-                throw new NotImplementedException();
+                // todo parse error
+                SetState(State.DataState);
+                return currentCommentTag;
             default:
                 Reconsume();
                 return SetState(State.CommentState);
