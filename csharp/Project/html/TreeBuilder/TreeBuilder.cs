@@ -117,6 +117,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
     private List<ParseError> parseErrors = [];
 
     private Tokenizer.Tokenizer tokenizer = tokenizer;
+    private bool framesetOk = false;
 
     public void build() {
         Token? reprocessToken = null;
@@ -142,7 +143,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             break; // ignore the token
                         case DOCTYPE doctype:
                             if (doctype.name is not "html" || doctype.publicId is not null || doctype.systemId is not null or "about:legacy-compat") {
-                                // todo parse error
+                                AddParseError("InsertionMode.Initial - doctype not html");
                             }
                             document.childNodes.Add(new DocumentType(document, doctype.name ?? "", doctype.publicId ?? "", doctype.systemId ?? ""));
                             // todo quirks mode
@@ -321,7 +322,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             // Insert an HTML element for the token.
                             InsertAnHTMLElement(tagToken);
                             // Set the frameset-ok flag to "not ok".
-                            // todo
+                            framesetOk = false;
                             // Switch the insertion mode to "in body".
                             insertionMode = InsertionMode.InBody;
                             break;
@@ -498,7 +499,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                                 InsertAnHTMLElement(tagToken);
                                 insertionMode = InsertionMode.InCell;
                                 // Insert a marker at the end of the list of active formatting elements.
-                                // todo
+                                ListOfActiveFormattingElements.Add(null);
                                 break;
                             case EndTag { name: "tr" }:
                                 throw new NotImplementedException();
@@ -546,7 +547,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             if (element.localName is "td" or "th") break;
                         }
                         // Clear the list of active formatting elements up to the last marker.
-                        // todo
+                        ClearTheListOfACtiveFormattingElementsUpToTheLastMarker();
                         // Switch the insertion mode to "in row".
                         insertionMode = InsertionMode.InRow;
                     };
@@ -606,7 +607,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                         case EndTag { name: "select" }:
                             // If the stack of open elements does not have a select element in select scope, this is a parse error; ignore the token. (fragment case)
                             if (!HasAElementInSelectScope("select")) {
-                                // todo parse error
+                                AddParseError("IN SELECT: no select in scope");
                             } else {
                                 // Otherwise:
                                 // Pop elements from the stack of open elements until a select element has been popped from the stack.
@@ -622,7 +623,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
 
                         case StartTag { name: "select" }:
                             // Parse error.
-                            // todo
+                            AddParseError("IN SELECT: select in select");
                             // If the stack of open elements does not have a select element in select scope, ignore the token. (fragment case)
                             if (!HasAElementInSelectScope("select")) {
 
@@ -650,7 +651,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             }
                             break;
                         default:
-                            // todo parse error
+                            AddParseError("IN SELECT: default");
                             // ignore the token;
                             break;
 
@@ -705,6 +706,21 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
         }
 
 
+    }
+
+    // 13.2.4.3 The list of active formatting elements
+    // https://html.spec.whatwg.org/multipage/parsing.html#clear-the-list-of-active-formatting-elements-up-to-the-last-marker
+    private void ClearTheListOfACtiveFormattingElementsUpToTheLastMarker() {
+        // 1. Let entry be the last (most recently added) entry in the list of active formatting elements.
+        while (true) {
+            // 2. Remove entry from the list of active formatting elements.
+            var entry = ListOfActiveFormattingElements.Pop();
+            // 3. If entry was a marker, then stop the algorithm at this point. The list has been cleared up to the last marker.
+            if (entry is null) {
+                break;
+            }
+            // 4. Go to step 1.
+        }
     }
 
     private void AddParseError(string error) {
@@ -773,7 +789,6 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                     }
                     // 2. Reset the insertion mode appropriately.
                     ResetTheInsertionModeAppropriately();
-                    //todo
                 }
                 break;
             case EndTag { name: "body" or "caption" or "col" or "colgroup" or "html" or "tbody" or "td" or "tfoot" or "th" or "thead" or "tr" }:
@@ -803,17 +818,17 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
             case Character { data: '\0' }: throw new NotImplementedException();
             case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' } cToken:
                 // Reconstruct the active formatting elements, if any.
-                // todo
+                ReconstructTheActiveFormattingElements();
                 // Insert the token's character.
                 InsertACharacter(cToken);
                 break;
             case Character cToken:
                 // Reconstruct the active formatting elements, if any.
-                //todo
+                ReconstructTheActiveFormattingElements();
                 // Insert the token's character.
                 InsertACharacter(cToken);
                 // Set the frameset-ok flag to "not ok".
-                // todo
+                framesetOk = false;
                 break;
             case Tokenizer.Comment comment:
                 InsertAComment(comment);
@@ -840,9 +855,14 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 }
             case EndTag { name: "body" }:
                 // If the stack of open elements does not have a body element in scope, this is a parse error; ignore the token.
-                // todo
+                if (!HasAElementInScope("body")) {
+                    AddParseError("IN BODY NOT BODY IN SCOPE");
+                    break;
+                }
                 // Otherwise, if there is a node in the stack of open elements that is not either a dd element, a dt element, an li element, an optgroup element, an option element, a p element, an rb element, an rp element, an rt element, an rtc element, a tbody element, a td element, a tfoot element, a th element, a thead element, a tr element, the body element, or the html element, then this is a parse error.
-                // todo
+                if (stackOfOpenElements.Any((elem) => elem is not Element { localName: "dd" or "dt" or "li" or "optgroup" or "option" or "p" or "rb" or "rp" or "rt" or "rtc" or "tbody" or "td" or "tfoot" or "th" or "thead" or "tr" or "body" or "html" })) {
+                    AddParseError("IN BODY END-Tag body Otherwise");
+                }
                 // Switch the insertion mode to "after body".
                 insertionMode = InsertionMode.AfterBody;
                 break;
@@ -853,7 +873,9 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                     break;
                 }
                 // Otherwise, if there is a node in the stack of open elements that is not either a dd element, a dt element, an li element, an optgroup element, an option element, a p element, an rb element, an rp element, an rt element, an rtc element, a tbody element, a td element, a tfoot element, a th element, a thead element, a tr element, the body element, or the html element, then this is a parse error.
-                //todo
+                if (stackOfOpenElements.Any((elem) => elem is not Element { localName: "dd" or "dt" or "li" or "optgroup" or "option" or "p" or "rb" or "rp" or "rt" or "rtc" or "tbody" or "td" or "tfoot" or "th" or "thead" or "tr" or "body" or "html" })) {
+                    AddParseError("IN BODY END-Tag html");
+                }
                 // Switch the insertion mode to "after body".
                 insertionMode = InsertionMode.AfterBody;
                 // Reprocess the token.
@@ -908,8 +930,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // 3. Insert an HTML element for the token.
                 InsertAnHTMLElement(tagToken);
                 // 4. Set the frameset-ok flag to "not ok".
-                // todo
-
+                framesetOk = false;
                 break;
             case EndTag {
                 name: "address" or "article" or "aside" or "blockquote" or "button" or "center" or
@@ -946,10 +967,10 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                     };
                     var elem = ttr1("a");
                     if (elem is not null) {
-                        // todo parse error
+                        AddParseError("IN BODY a");
                         AdoptionAgencyAlgorithm(tagToken);
                         ListOfActiveFormattingElements.Remove(elem);
-                        // todo remove element from stack
+                        stackOfOpenElements.Remove(elem);
                     }
                     // EXAMPLE: In the non-conforming stream <a href="a">a<table><a href="b">b</table>x, the first a element would be closed upon seeing the second one, and the "x" character would be inside a link to "b", not to "a". This is despite the fact that the outer a element is not in table scope (meaning that a regular </a> end tag at the start of the table wouldn't close the outer a element). The result is that the two a elements are indirectly nested inside each other — non-conforming markup will often result in non-conforming DOMs when parsed.
                     // Reconstruct the active formatting elements, if any.
@@ -977,7 +998,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // Insert a marker at the end of the list of active formatting elements.
                 ListOfActiveFormattingElements.Add(null);
                 // Set the frameset-ok flag to "not ok".
-                // todo
+                framesetOk = false;
                 break;
             case EndTag { name: "applet" or "marquee" or "object" }: throw new NotImplementedException();
             case StartTag { name: "table" } tagToken:
@@ -986,21 +1007,21 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // Insert an HTML element for the token.
                 InsertAnHTMLElement(tagToken);
                 // Set the frameset-ok flag to "not ok".
-                // todo
+                framesetOk = false;
                 // Switch the insertion mode to "in table".
                 insertionMode = InsertionMode.InTable;
                 break;
             case EndTag { name: "br" }: throw new NotImplementedException();
             case StartTag { name: "area" or "br" or "embed" or "img" or "keygen" or "wbr" } tagToken:
                 // Reconstruct the active formatting elements, if any.
-                // todo
+                ReconstructTheActiveFormattingElements();
                 // Insert an HTML element for the token. Immediately pop the current node off the stack of open elements.
                 InsertAnHTMLElement(tagToken);
                 stackOfOpenElements.Pop();
                 // Acknowledge the token's self-closing flag, if it is set.
                 // todo
                 // Set the frameset-ok flag to "not ok".
-                // todo
+                framesetOk = false;
                 break;
             case StartTag { name: "input" }: throw new NotImplementedException();
             case StartTag { name: "param" or "source" or "track" }: throw new NotImplementedException();
@@ -1015,7 +1036,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // Acknowledge the token's self-closing flag, if it is set.
                 // todo
                 // Set the frameset-ok flag to "not ok".
-                // todo
+                framesetOk = false;
                 break;
             case StartTag { name: "image" }: throw new NotImplementedException();
             case StartTag { name: "textarea" }: throw new NotImplementedException();
@@ -1029,7 +1050,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // Insert an HTML element for the token.
                 InsertAnHTMLElement(tagToken);
                 // Set the frameset-ok flag to "not ok".
-                // todo
+                framesetOk = false;
                 // If the insertion mode is one of "in table", "in caption", "in table body", "in row", or "in cell", then switch the insertion mode to "in select in table". Otherwise, switch the insertion mode to "in select".
                 if (insertionMode is InsertionMode.InTable or InsertionMode.InCaption or InsertionMode.InTableBody or InsertionMode.InRow or InsertionMode.InCell) {
                     insertionMode = InsertionMode.InSelectInTable;
@@ -1068,7 +1089,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                         GenerateImpliedEndTags(tagToken.name);
                         // 2. If node is not the current node, then this is a parse error.
                         if (currentNode != node) {
-                            // todo
+                            AddParseError("IN BODY: currentNode != node");
                         }
                         // 3. Pop all the nodes from the current node up to node, including node, then stop these steps.
                         while (true) {
@@ -1079,7 +1100,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                     } else {
                         // 3. Otherwise, if node is in the special category, then this is a parse error; ignore the token, and return.    
                         if (specialListElements.Contains(node.localName)) {
-                            // todo parse error
+                            AddParseError("IN BODY END TAG - special elements");
                             break;
                         }
                     }
@@ -1245,20 +1266,21 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // 4. If node is a select element, run these substeps:
                 case Element { localName: "select" }:
                     // 1. If last is true, jump to the step below labeled done.
-
+                    // todo
                     // 2. Let ancestor be node.
-
+                    // todo
                     // 3. Loop: If ancestor is the first node in the stack of open elements, jump to the step below labeled done.
-
+                    // todo
                     // 4. Let ancestor be the node before ancestor in the stack of open elements.
-
+                    // todo
                     // 5. If ancestor is a template node, jump to the step below labeled done.
-
+                    // todo
                     // 6. If ancestor is a table node, switch the insertion mode to "in select in table" and return.
-
+                    // todo
                     // 7. Jump back to the step labeled loop.
-
+                    // todo
                     // 8. Done: Switch the insertion mode to "in select" and return.
+                    // todo
                     break;
 
                 // 5. If node is a td or th element and last is false, then switch the insertion mode to "in cell" and return.
@@ -1387,7 +1409,9 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
         // Generate implied end tags, except for p elements.
         GenerateImpliedEndTags("p");
         // If the current node is not a p element, then this is a parse error.
-        // todo
+        if (currentNode is not Element { localName: "p" }) {
+            AddParseError("CLOSEAPELEMENT not p");
+        }
         // Pop elements from the stack of open elements until a p element has been popped from the stack.
         while (true) {
             var element = stackOfOpenElements.Pop();
