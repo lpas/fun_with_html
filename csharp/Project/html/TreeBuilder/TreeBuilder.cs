@@ -104,7 +104,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
     private InsertionMode originalInsertionMode = InsertionMode.Initial;
     private List<Element> stackOfOpenElements = [];
     private Element currentNode { get => stackOfOpenElements.Peek(); }
-    public List<ParseError> Errors { get => parseErrors; }
+    public List<ParseError> Errors { get => [.. parseErrors]; }
 
     private Element? headElementPointer = null;
 
@@ -114,7 +114,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
 
     private bool fosterParenting = false;
 
-    private List<ParseError> parseErrors = [];
+    private HashSet<ParseError> parseErrors = [];
 
     private Tokenizer.Tokenizer tokenizer = tokenizer;
     private bool framesetOk = false;
@@ -953,32 +953,34 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
             case EndTag { name: "dd" or "dt" }: throw new NotImplementedException();
             case EndTag { name: "h1" or "h2" or "h3" or "h4" or "h5" or "h6" }: throw new NotImplementedException();
             case EndTag { name: "sarcasm" }: throw new NotImplementedException();
-            case StartTag { name: "a" } tagToken: {
-                    // If the list of active formatting elements contains an a element between the end of the list and the last marker on the list (or the start of the list if there is no marker on the list), then this is a parse error; run the adoption agency algorithm for the token, then remove that element from the list of active formatting elements and the stack of open elements if the adoption agency algorithm didn't already remove it (it might not have if the element is not in table scope).
-                    var ttr1 = (string localName) => { // todo rename/move
-                        foreach (var elem in Enumerable.Reverse(ListOfActiveFormattingElements)) {
-                            if (elem is not null) {
-                                if (elem.localName == localName) {
-                                    return elem;
-                                }
-                            } else break;
-                        }
-                        return null;
-                    };
-                    var elem = ttr1("a");
-                    if (elem is not null) {
-                        AddParseError("IN BODY a");
-                        AdoptionAgencyAlgorithm(tagToken);
-                        ListOfActiveFormattingElements.Remove(elem);
-                        stackOfOpenElements.Remove(elem);
+            case StartTag { name: "a" } tagToken:
+                // If the list of active formatting elements contains an a element between the end of the list and the last marker on the list (or the start of the list if there is no marker on the list), then this is a parse error; run the adoption agency algorithm for the token, then remove that element from the list of active formatting elements and the stack of open elements if the adoption agency algorithm didn't already remove it (it might not have if the element is not in table scope).
+                var ttr1 = (string localName) => { // todo rename/move
+                    foreach (var elem in Enumerable.Reverse(ListOfActiveFormattingElements)) {
+                        if (elem is not null) {
+                            if (elem.localName == localName) {
+                                return elem;
+                            }
+                        } else break;
                     }
-                    // EXAMPLE: In the non-conforming stream <a href="a">a<table><a href="b">b</table>x, the first a element would be closed upon seeing the second one, and the "x" character would be inside a link to "b", not to "a". This is despite the fact that the outer a element is not in table scope (meaning that a regular </a> end tag at the start of the table wouldn't close the outer a element). The result is that the two a elements are indirectly nested inside each other — non-conforming markup will often result in non-conforming DOMs when parsed.
-                    // Reconstruct the active formatting elements, if any.
-                    ReconstructTheActiveFormattingElements();
-                    // Insert an HTML element for the token. Push onto the list of active formatting elements that element.
-                    InsertAnHTMLElement(tagToken);
-                    break;
+                    return null;
+                };
+                var elem = ttr1("a");
+                if (elem is not null) {
+                    AddParseError("IN BODY a");
+                    if (AdoptionAgencyAlgorithm(tagToken)) {
+                        InsertionModeInBodyAnyOtherEndTag(tagToken);
+                    }
+                    ListOfActiveFormattingElements.Remove(elem);
+                    stackOfOpenElements.Remove(elem);
                 }
+                // EXAMPLE: In the non-conforming stream <a href="a">a<table><a href="b">b</table>x, the first a element would be closed upon seeing the second one, and the "x" character would be inside a link to "b", not to "a". This is despite the fact that the outer a element is not in table scope (meaning that a regular </a> end tag at the start of the table wouldn't close the outer a element). The result is that the two a elements are indirectly nested inside each other — non-conforming markup will often result in non-conforming DOMs when parsed.
+                // Reconstruct the active formatting elements, if any.
+                ReconstructTheActiveFormattingElements();
+                // Insert an HTML element for the token. Push onto the list of active formatting elements that element.
+                InsertAnHTMLElement(tagToken);
+                break;
+
             case StartTag { name: "b" or "big" or "code" or "em" or "font" or "i" or "s" or "small" or "strike" or "strong" or "tt" or "u" } tagToken:
                 // Reconstruct the active formatting elements, if any.
                 ReconstructTheActiveFormattingElements();
@@ -989,6 +991,9 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
             case EndTag { name: "a" or "b" or "big" or "code" or "em" or "font" or "i" or "s" or "small" or "strike" or "strong" or "tt" or "u" } tagToken:
                 // Run the adoption agency algorithm for the token.
                 AdoptionAgencyAlgorithm(tagToken);
+                if (AdoptionAgencyAlgorithm(tagToken)) {
+                    InsertionModeInBodyAnyOtherEndTag(tagToken);
+                }
                 break;
             case StartTag { name: "applet" or "marquee" or "object" } tagToken:
                 // Reconstruct the active formatting elements, if any.
@@ -1080,38 +1085,42 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 InsertAnHTMLElement(tagToken);
                 break;
             case EndTag tagToken:
-                // 1. Initialize node to be the current node (the bottommost node of the stack).
-                var node = currentNode;
-                // 2. Loop: If node is an HTML element with the same tag name as the token, then:
-                while (true) {
-                    if (node.localName == tagToken.name) {
-                        // 1. Generate implied end tags, except for HTML elements with the same tag name as the token.
-                        GenerateImpliedEndTags(tagToken.name);
-                        // 2. If node is not the current node, then this is a parse error.
-                        if (currentNode != node) {
-                            AddParseError("IN BODY: currentNode != node");
-                        }
-                        // 3. Pop all the nodes from the current node up to node, including node, then stop these steps.
-                        while (true) {
-                            if (node == stackOfOpenElements.Pop()) {
-                                break;
-                            }
-                        }
-                    } else {
-                        // 3. Otherwise, if node is in the special category, then this is a parse error; ignore the token, and return.    
-                        if (specialListElements.Contains(node.localName)) {
-                            AddParseError("IN BODY END TAG - special elements");
-                            break;
-                        }
-                    }
-                    // 4. Set node to the previous entry in the stack of open elements.
-                    node = currentNode;
-                    // 5. Return to the step labeled loop.
-                }
+                InsertionModeInBodyAnyOtherEndTag(tagToken);
                 break;
         }
 
         return true;
+    }
+
+    private void InsertionModeInBodyAnyOtherEndTag(Tag tagToken) {
+        // 1. Initialize node to be the current node (the bottommost node of the stack).
+        var node = currentNode;
+        // 2. Loop: If node is an HTML element with the same tag name as the token, then:
+        while (true) {
+            if (node.localName == tagToken.name) {
+                // 1. Generate implied end tags, except for HTML elements with the same tag name as the token.
+                GenerateImpliedEndTags(tagToken.name);
+                // 2. If node is not the current node, then this is a parse error.
+                if (currentNode != node) {
+                    AddParseError("IN BODY: currentNode != node");
+                }
+                // 3. Pop all the nodes from the current node up to node, including node, then stop these steps.
+                while (true) {
+                    if (node == stackOfOpenElements.Pop()) {
+                        return;
+                    }
+                }
+            } else {
+                // 3. Otherwise, if node is in the special category, then this is a parse error; ignore the token, and return.    
+                if (specialListElements.Contains(node.localName)) {
+                    AddParseError("unexpected-end-tag");
+                    return;
+                }
+            }
+            // 4. Set node to the previous entry in the stack of open elements.
+            node = currentNode;
+            // 5. Return to the step labeled loop.
+        }
     }
 
 
@@ -1124,21 +1133,21 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
 
     // 13.2.6.4.7 
     // https://html.spec.whatwg.org/multipage/parsing.html#adoption-agency-algorithm
-    private void AdoptionAgencyAlgorithm(Tag tagToken) {
+    private bool AdoptionAgencyAlgorithm(Tag tagToken) {
         // 1. Let subject be token's tag name.
         var subject = tagToken.name;
         // 2. If the current node is an HTML element whose tag name is subject, and the current node is not in the list of active formatting elements, then pop the current node off the stack of open elements and return.
         if (currentNode is Element e)
             if (e.localName == subject && !ListOfActiveFormattingElements.Contains(currentNode)) {
                 stackOfOpenElements.Pop();
-                return;
+                return false;
             }
         // 3. Let outerLoopCounter be 0.
         var outerLoopCounter = 0;
         // 4. While true:
         while (true) {
             // 1. If outerLoopCounter is greater than or equal to 8, then return.
-            if (outerLoopCounter >= 8) return;
+            if (outerLoopCounter >= 8) return false;
             // 2. Increment outerLoopCounter by 1.
             outerLoopCounter++;
             // 3. Let formattingElement be the last element in the list of active formatting elements that:
@@ -1147,17 +1156,18 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
             // * has the tag name subject.
             var formattingElementPos = 0;
             for (var i = ListOfActiveFormattingElements.Count - 1; i >= 0; i--) {
-                var elem = ListOfActiveFormattingElements[i];
-                if (elem is null) break;
-                if (elem.localName == subject) {
-                    formattingElement = elem;
+                var element = ListOfActiveFormattingElements[i];
+                if (element is null) break;
+                if (element.localName == subject) {
+                    formattingElement = element;
                     formattingElementPos = i;
                     break;
                 }
             }
             // If there is no such element, then return and instead act as described in the "any other end tag" entry above.
             if (formattingElement == null) {
-                throw new NotImplementedException();
+                InsertionModeInBodyAnyOtherEndTag(tagToken);
+                return true;
             }
             // 4. If formattingElement is not in the stack of open elements, then this is a parse error; remove the element from the list, and return.
             if (!stackOfOpenElements.Contains(formattingElement)) {
@@ -1166,26 +1176,33 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
             // 5. If formattingElement is in the stack of open elements, but the element is not in scope, then this is a parse error; return.
             if (!HasAElementInScope(formattingElement.localName)) {
                 AddParseError("AdoptionAgencyAlgorithm: HasAElementInScope");
-                return;
+                return false;
             }
             // 6. If formattingElement is not the current node, this is a parse error. (But do not return.)
             if (formattingElement != currentNode) {
-                AddParseError("AdoptionAgencyAlgorithm: formattingElement != currentNode");
+                AddParseError("adoption-agency-1.3");
             }
             // 7. Let furthestBlock be the topmost node in the stack of open elements that is lower in the stack than formattingElement, and is an element in the special category. There might not be one.
             Element? furthestBlock = null;
             var furthestBlockPos = 0;
             for (var i = stackOfOpenElements.Count - 1; i >= 0; i--) {
-                var elem = stackOfOpenElements[i];
-                if (elem == formattingElement) break;
-                if (specialListElements.Contains(elem.localName)) {
-                    furthestBlock = elem;
+                var element = stackOfOpenElements[i];
+                if (element == formattingElement) break;
+                if (specialListElements.Contains(element.localName)) {
+                    furthestBlock = element;
                     furthestBlockPos = i;
                 }
             }
             // 8. If there is no furthestBlock, then the UA must first pop all the nodes from the bottom of the stack of open elements, from the current node up to and including formattingElement, then remove formattingElement from the list of active formatting elements, and finally return.
             if (furthestBlock == null) {
-                throw new NotImplementedException();
+                while (true) {
+                    var element = stackOfOpenElements.Pop();
+                    if (element == formattingElement) {
+                        break;
+                    }
+                }
+                ListOfActiveFormattingElements.Remove(formattingElement);
+                return false;
             }
             // 9. Let commonAncestor be the element immediately above formattingElement in the stack of open elements.            
             Element commonAncestor = stackOfOpenElements[furthestBlockPos - 1];
@@ -1222,7 +1239,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 node = element;
                 // 7. If lastNode is furthestBlock, then move the aforementioned bookmark to be immediately after the new node in the list of active formatting elements.
                 if (lastNode == furthestBlock) {
-                    // todo
+                    bookmark = index + 1;
                 }
                 // 8. Append lastNode to node.
                 node.childNodes.Append(lastNode);
@@ -1230,20 +1247,24 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 lastNode = node;
 
             }
-            throw new NotImplementedException();
             // 14. Insert whatever lastNode ended up being in the previous step at the appropriate place for inserting a node, but using commonAncestor as the override target.
-            // todo
+            var adjustedInsertionLocation = AppropriatePlaceForInsertingANode(commonAncestor);
+            adjustedInsertionLocation.elem.childNodes.Insert(adjustedInsertionLocation.childPos, lastNode);
             // 15. Create an element for the token for which formattingElement was created, in the HTML namespace, with furthestBlock as the intended parent.
-
+            var elem = CreateAnElementForAToken(new StartTag(formattingElement.localName), Namespaces.HTML, furthestBlock);
             // 16. Take all of the child nodes of furthestBlock and append them to the element created in the last step.
-
+            elem.childNodes = [.. furthestBlock.childNodes];
+            furthestBlock.childNodes.Clear();
             // 17. Append that new element to furthestBlock.
-
+            furthestBlock.childNodes.Add(elem);
             // 18. Remove formattingElement from the list of active formatting elements, and insert the new element into the list of active formatting elements at the position of the aforementioned bookmark.
-
+            ListOfActiveFormattingElements[bookmark] = elem;
+            ListOfActiveFormattingElements.Remove(formattingElement);
             // 19. Remove formattingElement from the stack of open elements, and insert the new element into the stack of open elements immediately below the position of furthestBlock in that stack.
-
-
+            stackOfOpenElements.Remove(formattingElement);
+            var indexA = stackOfOpenElements.IndexOf(furthestBlock);
+            stackOfOpenElements.Insert(indexA + 1, elem);
+            return false;
 
         }
     }
