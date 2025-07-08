@@ -188,6 +188,7 @@ public class Tokenizer(string content) {
         if (content.Length > index) {
             return content[index++];
         } else {
+            index++;
             return null;
         }
     }
@@ -280,7 +281,7 @@ public class Tokenizer(string content) {
                 State.CommentLessThanSignBangDashDashState => CommentLessThanSignBangDashDashState(),
                 State.CommentEndDashState => CommentEndDashState(),
                 State.CommentEndState => CommentEndState(),
-                State.CommentEndBangState => throw new NotImplementedException(),
+                State.CommentEndBangState => CommentEndBangState(),
                 State.DOCTYPEState => DOCTYPEState(),
                 State.BeforeDOCTYPENameState => BeforeDOCTYPENameState(),
                 State.DOCTYPENameState => DOCTYPENameState(),
@@ -351,7 +352,10 @@ public class Tokenizer(string content) {
                 currentCommentTag = new();
                 Reconsume();
                 return SetState(State.BogusCommentState);
-            case null: throw new NotImplementedException();
+            case null:
+                // todo parse error
+                currentTokens.Enqueue(new EndOfFile());
+                return new Character('<');
             default:
                 // todo parse error
                 Reconsume();
@@ -402,9 +406,11 @@ public class Tokenizer(string content) {
                     currentTag.name += (char)(byte)(c | 0x20);
                     break;
                 case '\0':
-                    throw new NotImplementedException();
+                    currentTag.name += '\uFFFD';
+                    break;
                 case null:
-                    throw new NotImplementedException();
+                    // todo parse error
+                    return new EndOfFile();
                 default:
                     currentTag.name += c;
                     break;
@@ -424,7 +430,10 @@ public class Tokenizer(string content) {
                     Reconsume();
                     return SetState(State.AfterAttributeNameState);
                 case '=':
-                    throw new NotImplementedException();
+                    // todo parse error
+                    AddCurrentAttributeToCurrentTag();
+                    currentAttribute.name += c;
+                    return SetState(State.AttributeNameState);
                 default:
                     AddCurrentAttributeToCurrentTag();
                     Reconsume();
@@ -448,7 +457,9 @@ public class Tokenizer(string content) {
                     currentAttribute.name += (char)(byte)(c | 0x20);
                     break;
                 case '\0':
-                    throw new NotImplementedException();
+                    // todo parse error
+                    currentAttribute.name += '\uFFFD';
+                    break;
                 case '"' or '\'' or '<':
                     // todo parse error
                     goto default;
@@ -498,7 +509,9 @@ public class Tokenizer(string content) {
                 case '\'':
                     return SetState(State.AttributeValueSingleQuotedState);
                 case '>':
-                    throw new NotImplementedException();
+                    // todo parse error
+                    SetState(State.DataState);
+                    return BuildCurrentTagToken();
                 default:
                     Reconsume();
                     return SetState(State.AttributeValueUnquotesState);
@@ -515,9 +528,12 @@ public class Tokenizer(string content) {
                 case '"':
                     return SetState(State.AfterAttributeValueQuotedState);
                 case '&':
-                    throw new NotImplementedException();
+                    returnState = State.AttributeValueDoubleQuotedState;
+                    return SetState(State.CharacterReferenceState);
                 case '\0':
-                    throw new NotImplementedException();
+                    // todo parse error
+                    currentAttribute.value += '\uFFFD';
+                    break;
                 case null:
                     throw new NotImplementedException();
                 default:
@@ -567,7 +583,9 @@ public class Tokenizer(string content) {
                     SetState(State.DataState);
                     return BuildCurrentTagToken();
                 case '\0':
-                    throw new NotImplementedException();
+                    // todo parse error
+                    currentAttribute.value += '\uFFFD';
+                    break;
                 case '"' or '\'' or '<' or '=' or '`':
                     // todo parse error
                     goto default;
@@ -708,11 +726,12 @@ public class Tokenizer(string content) {
                 case '<':
                     currentCommentTag.data += c;
                     return SetState(State.CommentLessThanSignState);
-                case '-': return SetState(State.CommentEndDashState);
+                case '-':
+                    return SetState(State.CommentEndDashState);
                 case '\0':
                     // todo parse error
                     currentCommentTag.data += '\uFFFD';
-                    throw new NotImplementedException();
+                    break;
                 case null:
                     // todo parse error
                     currentTokens.Enqueue(new EndOfFile());
@@ -791,7 +810,10 @@ public class Tokenizer(string content) {
         switch (c) {
             case '-':
                 return SetState(State.CommentEndState);
-            case null: throw new NotImplementedException();
+            case null:
+                // todo parse error
+                currentTokens.Enqueue(new EndOfFile());
+                return currentCommentTag;
             default:
                 currentCommentTag.data += '-';
                 Reconsume();
@@ -822,6 +844,30 @@ public class Tokenizer(string content) {
             }
         }
     }
+
+    // 13.2.5.52 Comment end bang state
+    // https://html.spec.whatwg.org/multipage/parsing.html#comment-end-bang-state
+    private Token? CommentEndBangState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case '-':
+                currentCommentTag.data += "--!";
+                return SetState(State.CommentEndDashState);
+            case '>':
+                // todo parse error
+                SetState(State.DataState);
+                return currentCommentTag;
+            case null:
+                // todo parse error
+                currentTokens.Enqueue(new EndOfFile());
+                return currentCommentTag;
+            default:
+                currentCommentTag.data += "--!";
+                Reconsume();
+                return SetState(State.CommentState);
+        }
+    }
+
     // 13.2.5.53 DOCTYPE state
     // https://html.spec.whatwg.org/multipage/parsing.html#doctype-state
     private Token? DOCTYPEState() {
@@ -893,7 +939,10 @@ public class Tokenizer(string content) {
                 case >= 'A' and <= 'Z':
                     currentDOCTYPE.name += (char)(byte)(c | 0x20);
                     break;
-                case '\0': throw new NotImplementedException();
+                case '\0':
+                    // todo parse error
+                    currentDOCTYPE.name += '\uFFFD';
+                    break;
                 case null:
                     // todo parse error eof-in-doctype
                     currentDOCTYPE.forceQuirks = true;
