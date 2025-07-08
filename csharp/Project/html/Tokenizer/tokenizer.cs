@@ -184,6 +184,8 @@ public class Tokenizer(string content) {
 
     private string temporaryBuffer = "";
 
+    private double characterReferenceCode = 0;
+
     private char? ConsumeNextInputCharacter() {
         if (content.Length > index) {
             return content[index++];
@@ -223,6 +225,18 @@ public class Tokenizer(string content) {
                 // todo emit duplicate-attribute parse error
             }
             currentAttribute = new Attribute();
+        }
+    }
+
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#flush-code-points-consumed-as-a-character-reference
+    private void FlushCodePointsConsumedAsACharacterReference() {
+        if (returnState is State.AttributeValueDoubleQuotedState or State.AttributeValueSingleQuotedState or State.AttributeValueUnquotesState) {
+            currentAttribute.value += temporaryBuffer;
+        } else {
+            foreach (var temp in temporaryBuffer) {
+                currentTokens.Enqueue(new Character(temp));
+            }
         }
     }
 
@@ -309,7 +323,7 @@ public class Tokenizer(string content) {
                 State.DecimalCharacterReferenceStartState => DecimalCharacterReferenceStartState(),
                 State.HexadecimalCharacterReferenceState => HexadecimalCharacterReferenceState(),
                 State.DecimalCharacterReferenceState => DecimalCharacterReferenceState(),
-                State.NumericCharacterReferenceEndState => throw new NotImplementedException(),
+                State.NumericCharacterReferenceEndState => NumericCharacterReferenceEndState(),
                 _ => throw new NotImplementedException(),
             };
             if (token != null)
@@ -1022,13 +1036,10 @@ public class Tokenizer(string content) {
                 temporaryBuffer += c;
                 return SetState(State.NumericCharacterReferenceState);
             default:
-                // Flush code points consumed as a character reference
-                foreach (var temp in temporaryBuffer) {
-                    currentTokens.Enqueue(new Character(temp));
-                }
+                FlushCodePointsConsumedAsACharacterReference();
                 Reconsume();
                 SetState(returnState);
-                return currentTokens.Dequeue();
+                return currentTokens.Count > 0 ? currentTokens.Dequeue() : null;
         }
     }
 
@@ -1041,7 +1052,7 @@ public class Tokenizer(string content) {
     // 13.2.5.75 Numeric character reference state
     // https://html.spec.whatwg.org/multipage/parsing.html#numeric-character-reference-state
     private Token? NumericCharacterReferenceState() {
-        // todo set character reference code to zero (0)
+        characterReferenceCode = 0;
         char? c = ConsumeNextInputCharacter();
         switch (c) {
             case 'x' or 'X':
@@ -1063,13 +1074,10 @@ public class Tokenizer(string content) {
                 return SetState(State.HexadecimalCharacterReferenceStartState);
             default:
                 // todo parse error
-                // Flush code points consumed as a character reference
-                foreach (var temp in temporaryBuffer) {
-                    currentTokens.Enqueue(new Character(temp));
-                }
+                FlushCodePointsConsumedAsACharacterReference();
                 Reconsume();
                 SetState(returnState);
-                return currentTokens.Dequeue();
+                return currentTokens.Count > 0 ? currentTokens.Dequeue() : null;
 
         }
     }
@@ -1084,13 +1092,10 @@ public class Tokenizer(string content) {
                 return SetState(State.DecimalCharacterReferenceState);
             default:
                 // todo parse error
-                // Flush code points consumed as a character reference
-                foreach (var temp in temporaryBuffer) {
-                    currentTokens.Enqueue(new Character(temp));
-                }
+                FlushCodePointsConsumedAsACharacterReference();
                 Reconsume();
                 SetState(returnState);
-                return currentTokens.Dequeue();
+                return currentTokens.Count > 0 ? currentTokens.Dequeue() : null;
         }
     }
     // 13.2.5.78 Hexadecimal character reference state
@@ -1116,17 +1121,86 @@ public class Tokenizer(string content) {
     // 13.2.5.79 Decimal character reference state
     // https://html.spec.whatwg.org/multipage/parsing.html#decimal-character-reference-state
     private Token? DecimalCharacterReferenceState() {
-        char? c = ConsumeNextInputCharacter();
-        switch (c) {
-            case not null when char.IsAsciiDigit((char)c):
-                throw new NotImplementedException();
-            case ';':
-                return SetState(State.NumericCharacterReferenceEndState);
-            default:
-                // todo parse error
-                Reconsume();
-                return SetState(State.NumericCharacterReferenceEndState);
+        while (true) {
+            char? c = ConsumeNextInputCharacter();
+            switch (c) {
+                case not null when char.IsAsciiDigit((char)c):
+                    characterReferenceCode = characterReferenceCode * 10 + char.GetNumericValue((char)c);
+                    break;
+                case ';':
+                    return SetState(State.NumericCharacterReferenceEndState);
+                default:
+                    // todo parse error
+                    Reconsume();
+                    return SetState(State.NumericCharacterReferenceEndState);
+            }
         }
+    }
+
+    // 13.2.5.80 Numeric character reference end state
+    // https://html.spec.whatwg.org/multipage/parsing.html#numeric-character-reference-end-state
+    private Token? NumericCharacterReferenceEndState() {
+        // Check the character reference code:
+        // If the number is 0x00, then this is a null-character-reference parse error. Set the character reference code to 0xFFFD.
+        if (characterReferenceCode == 0x00) {
+            //todo parse error
+            characterReferenceCode = 0xFFFD;
+        }
+        // If the number is greater than 0x10FFFF, then this is a character-reference-outside-unicode-range parse error. Set the character reference code to 0xFFFD.
+        if (characterReferenceCode > 0x10FFF) {
+            // todo parse error
+            characterReferenceCode = 0xFFFD;
+        }
+        // If the number is a surrogate, then this is a surrogate-character-reference parse error. Set the character reference code to 0xFFFD.
+        if (characterReferenceCode is >= 0xD800 and <= 0xDBFF && characterReferenceCode is >= 0xDC00 and <= 0xDFFF) {
+            // todo parse error
+            characterReferenceCode = 0xFFFD;
+        }
+        // If the number is a noncharacter, then this is a noncharacter-character-reference parse error.
+        if (characterReferenceCode is >= 0xFDD0 and <= 0xDFEF or 0xFFFF or 0x1FFFE or 0x1FFFF or 0x2FFFE or 0x2FFFF or 0x3FFFE or 0x3FFFF or 0x4FFFE or 0x4FFFF or 0x5FFFE or 0x5FFFF
+         or 0x6FFFE or 0x6FFFF or 0x7FFFE or 0x7FFFF or 0x8FFFE or 0x8FFFF or 0x9FFFE or 0x9FFFF or 0xAFFFE or 0xAFFFF or 0xBFFFE or 0xBFFFF or 0xCFFFE or 0xCFFFF or 0xDFFFE or 0xDFFFF
+          or 0xEFFFE or 0xEFFFF or 0xFFFFE or 0xFFFFF or 0x10FFFE or 0x10FFFF) {
+            // todo parse error
+        }
+        // If the number is 0x0D, or a control that's not ASCII whitespace, then this is a control-character-reference parse error. If the number is one of the numbers in the first column of the following table, then find the row with that number in the first column, and set the character reference code to the number in the second column of that row.        
+        if (characterReferenceCode is 0x0D or >= 0x00 and <= 0x001F or >= 0x007F and <= 0x009F) {
+            // todo parse error
+            switch (characterReferenceCode) {
+                case 0x80: characterReferenceCode = 0x20AC; break;
+                case 0x82: characterReferenceCode = 0x201A; break;
+                case 0x83: characterReferenceCode = 0x0192; break;
+                case 0x84: characterReferenceCode = 0x201E; break;
+                case 0x85: characterReferenceCode = 0x2026; break;
+                case 0x86: characterReferenceCode = 0x2020; break;
+                case 0x87: characterReferenceCode = 0x2021; break;
+                case 0x88: characterReferenceCode = 0x02C6; break;
+                case 0x89: characterReferenceCode = 0x2030; break;
+                case 0x8A: characterReferenceCode = 0x0160; break;
+                case 0x8B: characterReferenceCode = 0x2039; break;
+                case 0x8C: characterReferenceCode = 0x0152; break;
+                case 0x8E: characterReferenceCode = 0x017D; break;
+                case 0x91: characterReferenceCode = 0x2018; break;
+                case 0x92: characterReferenceCode = 0x2019; break;
+                case 0x93: characterReferenceCode = 0x201C; break;
+                case 0x94: characterReferenceCode = 0x201D; break;
+                case 0x95: characterReferenceCode = 0x2022; break;
+                case 0x96: characterReferenceCode = 0x2013; break;
+                case 0x97: characterReferenceCode = 0x2014; break;
+                case 0x98: characterReferenceCode = 0x02DC; break;
+                case 0x99: characterReferenceCode = 0x2122; break;
+                case 0x9A: characterReferenceCode = 0x0161; break;
+                case 0x9B: characterReferenceCode = 0x203A; break;
+                case 0x9C: characterReferenceCode = 0x0153; break;
+                case 0x9E: characterReferenceCode = 0x017E; break;
+                case 0x9F: characterReferenceCode = 0x0178; break;
+            }
+        }
+        temporaryBuffer = "";
+        temporaryBuffer += (char)characterReferenceCode;
+        FlushCodePointsConsumedAsACharacterReference();
+        SetState(returnState);
+        return currentTokens.Count > 0 ? currentTokens.Dequeue() : null;
+
     }
 
 }
