@@ -47,12 +47,12 @@ enum State {
     CommentStartDashState,
     CommentState,
     CommentLessThanSignState,
-    CommentLessThanSignBandState,
+    CommentLessThanSignBangState,
     CommentLessThanSignBangDashState,
     CommentLessThanSignBangDashDashState,
     CommentEndDashState,
     CommentEndState,
-    CommentEndBandState,
+    CommentEndBangState,
     DOCTYPEState,
     BeforeDOCTYPENameState,
     DOCTYPENameState,
@@ -85,7 +85,7 @@ enum State {
 
 
 public class Token { };
-public class DOCTYPE(): Token {
+public class DOCTYPE(): Token, IEquatable<DOCTYPE> {
     public string? name { get; set; } = null;
     public string? publicId { get; set; } = null;
     public string? systemId { get; set; } = null;
@@ -95,6 +95,18 @@ public class DOCTYPE(): Token {
         return base.ToString() + $" {{name: {name}}}";
     }
 
+    public override bool Equals(object? obj) => Equals(obj as DOCTYPE);
+    public bool Equals(DOCTYPE? other) {
+        if (other is null) return false;
+        if (ReferenceEquals(this, other)) return true;
+
+        return string.Equals(name, other.name)
+            && string.Equals(publicId, other.publicId)
+            && string.Equals(systemId, other.systemId)
+            && forceQuirks == other.forceQuirks;
+    }
+
+    public override int GetHashCode() => HashCode.Combine(name, publicId, systemId, forceQuirks);
 }
 
 public class Tag: Token {
@@ -160,12 +172,17 @@ public class Tokenizer(string content) {
     public int Col { get => index; } // todo
 
     private State state = State.DataState;
+    private State returnState = State.DataState;
 
     private Tag currentTag = new();
     private Attribute currentAttribute;
 
     private Comment currentCommentTag = new();
     private DOCTYPE currentDOCTYPE = new();
+
+    private Queue<Token> currentTokens = [];
+
+    private string temporaryBuffer = "";
 
     private char? ConsumeNextInputCharacter() {
         if (content.Length > index) {
@@ -209,6 +226,11 @@ public class Tokenizer(string content) {
     }
 
     public Token? NextToken() {
+        if (currentTokens.Count > 0) {
+            return currentTokens.Dequeue();
+        }
+
+
         while (true) {
             var token = state switch {
                 State.DataState => DataState(),
@@ -244,22 +266,22 @@ public class Tokenizer(string content) {
                 State.AfterAttributeNameState => throw new NotImplementedException(),
                 State.BeforeAttributeValueState => BeforeAttributeValueState(),
                 State.AttributeValueDoubleQuotedState => AttributeValueDoubleQuotedState(),
-                State.AttributeValueSingleQuotedState => throw new NotImplementedException(),
-                State.AttributeValueUnquotesState => throw new NotImplementedException(),
+                State.AttributeValueSingleQuotedState => AttributeValueSingleQuotedState(),
+                State.AttributeValueUnquotesState => AttributeValueUnquotedState(),
                 State.AfterAttributeValueQuotedState => AfterAttributeValueQuotedState(),
                 State.SelfClosingStartTagState => throw new NotImplementedException(),
-                State.BogusCommentState => throw new NotImplementedException(),
+                State.BogusCommentState => BogusCommentState(),
                 State.MarkupDeclarationOpenState => MarkupDeclarationOpenState(),
                 State.CommentStartState => CommentStartState(),
                 State.CommentStartDashState => CommentStartDashState(),
                 State.CommentState => CommentState(),
-                State.CommentLessThanSignState => throw new NotImplementedException(),
-                State.CommentLessThanSignBandState => throw new NotImplementedException(),
-                State.CommentLessThanSignBangDashState => throw new NotImplementedException(),
-                State.CommentLessThanSignBangDashDashState => throw new NotImplementedException(),
+                State.CommentLessThanSignState => CommentLessTanSignState(),
+                State.CommentLessThanSignBangState => CommentLessThanSignBangState(),
+                State.CommentLessThanSignBangDashState => CommentLessThanSignBangDashState(),
+                State.CommentLessThanSignBangDashDashState => CommentLessThanSignBangDashDashState(),
                 State.CommentEndDashState => CommentEndDashState(),
                 State.CommentEndState => CommentEndState(),
-                State.CommentEndBandState => throw new NotImplementedException(),
+                State.CommentEndBangState => throw new NotImplementedException(),
                 State.DOCTYPEState => DOCTYPEState(),
                 State.BeforeDOCTYPENameState => BeforeDOCTYPENameState(),
                 State.DOCTYPENameState => DOCTYPENameState(),
@@ -279,14 +301,14 @@ public class Tokenizer(string content) {
                 State.CDATASectionState => throw new NotImplementedException(),
                 State.CDATASectionBracketState => throw new NotImplementedException(),
                 State.CDATASectionEndState => throw new NotImplementedException(),
-                State.CharacterReferenceState => throw new NotImplementedException(),
-                State.NamedCharacterReferenceState => throw new NotImplementedException(),
+                State.CharacterReferenceState => CharacterReferenceState(),
+                State.NamedCharacterReferenceState => NamedCharacterReferenceState(),
                 State.AmbiguousAmpersandState => throw new NotImplementedException(),
-                State.NumericCharacterReferenceState => throw new NotImplementedException(),
-                State.HexadecimalCharacterReferenceStartState => throw new NotImplementedException(),
-                State.DecimalCharacterReferenceStartState => throw new NotImplementedException(),
-                State.HexadecimalCharacterReferenceState => throw new NotImplementedException(),
-                State.DecimalCharacterReferenceState => throw new NotImplementedException(),
+                State.NumericCharacterReferenceState => NumericCharacterReferenceState(),
+                State.HexadecimalCharacterReferenceStartState => HexadecimalCharacterReferenceStartState(),
+                State.DecimalCharacterReferenceStartState => DecimalCharacterReferenceStartState(),
+                State.HexadecimalCharacterReferenceState => HexadecimalCharacterReferenceState(),
+                State.DecimalCharacterReferenceState => DecimalCharacterReferenceState(),
                 State.NumericCharacterReferenceEndState => throw new NotImplementedException(),
                 _ => throw new NotImplementedException(),
             };
@@ -299,13 +321,17 @@ public class Tokenizer(string content) {
     // https://html.spec.whatwg.org/multipage/parsing.html#data-state
     private Token? DataState() {
         char? c = ConsumeNextInputCharacter();
-        return c switch {
-            '&' => throw new NotImplementedException(),
-            '<' => SetState(State.TagOpenState),
-            '\u0000' => throw new NotImplementedException(),
-            null => new EndOfFile(),
-            _ => new Character((char)c),
-        };
+        switch (c) {
+            case '&':
+                returnState = State.DataState;
+                return SetState(State.CharacterReferenceState);
+            case '<': return SetState(State.TagOpenState);
+            case '\u0000':
+                // todo parse error
+                return new Character((char)c);
+            case null: return new EndOfFile();
+            default: return new Character((char)c);
+        }
     }
 
     // 13.2.5.6 Tag open state
@@ -324,7 +350,10 @@ public class Tokenizer(string content) {
             case '?': throw new NotImplementedException();
             case null: throw new NotImplementedException();
             default:
-                throw new NotImplementedException();
+                // todo parse error
+                currentCommentTag = new();
+                Reconsume();
+                return SetState(State.BogusCommentState);
         }
     }
 
@@ -430,7 +459,8 @@ public class Tokenizer(string content) {
                 case '>':
                     throw new NotImplementedException();
                 default:
-                    throw new NotImplementedException();
+                    Reconsume();
+                    return SetState(State.AttributeValueUnquotesState);
             }
         }
     }
@@ -456,6 +486,61 @@ public class Tokenizer(string content) {
         }
     }
 
+    // 13.2.5.37 Attribute value (single-quoted) state
+    // https://html.spec.whatwg.org/multipage/parsing.html#attribute-value-(single-quoted)-state
+    private Token? AttributeValueSingleQuotedState() {
+        while (true) {
+            char? c = ConsumeNextInputCharacter();
+            switch (c) {
+                case '\'':
+                    return SetState(State.AfterAttributeValueQuotedState);
+                case '&':
+                    returnState = State.AttributeValueSingleQuotedState;
+                    return SetState(State.CharacterReferenceState);
+                case '\0':
+                    // todo parse error
+                    currentAttribute.value += '\uFFFD';
+                    break;
+                case null:
+                    // todo parse error
+                    return new EndOfFile();
+                default:
+                    currentAttribute.value += c;
+                    break;
+            }
+        }
+    }
+
+    // 13.2.5.38 Attribute value (unquoted) state
+    // https://html.spec.whatwg.org/multipage/parsing.html#attribute-value-(unquoted)-state
+    private Token? AttributeValueUnquotedState() {
+        while (true) {
+            char? c = ConsumeNextInputCharacter();
+            switch (c) {
+                case '\t' or '\n' or '\f' or ' ':
+                    return SetState(State.BeforeAttributeNameState);
+                case '&':
+                    returnState = State.AttributeValueUnquotesState;
+                    return SetState(State.CharacterReferenceState);
+                case '>':
+                    SetState(State.DataState);
+                    return BuildCurrentTagToken();
+                case '\0':
+                    throw new NotImplementedException();
+                case '"' or '\'' or '<' or '=' or '`':
+                    // todo parse error
+                    goto default;
+                case null:
+                    // todo parse error
+                    return new EndOfFile();
+                default:
+                    currentAttribute.value += c;
+                    break;
+            }
+        }
+
+    }
+
     // 13.2.5.39 After attribute value (quoted) state
     // https://html.spec.whatwg.org/multipage/parsing.html#after-attribute-value-(quoted)-state
     private Token? AfterAttributeValueQuotedState() {
@@ -469,22 +554,51 @@ public class Tokenizer(string content) {
                 return BuildCurrentTagToken();
             case null: throw new NotImplementedException();
             default:
-                throw new NotImplementedException();
+                // todo parse error
+                Reconsume();
+                return SetState(State.BeforeAttributeNameState);
+        }
+    }
+
+    // 13.2.5.41 Bogus comment state
+    // https://html.spec.whatwg.org/multipage/parsing.html#bogus-comment-state
+    private Token? BogusCommentState() {
+        while (true) {
+            char? c = ConsumeNextInputCharacter();
+            switch (c) {
+                case '>':
+                    SetState(State.DataState);
+                    return currentCommentTag;
+                case null:
+                    currentTokens.Enqueue(new EndOfFile());
+                    return currentCommentTag;
+                case '\0':
+                    // todo parse error
+                    currentCommentTag.data += '\uFFFD';
+                    break;
+                default:
+                    currentCommentTag.data += c;
+                    break;
+            }
         }
     }
 
     // 13.2.5.42 Markup declaration open state
     // https://html.spec.whatwg.org/multipage/parsing.html#markup-declaration-open-state
     private Token? MarkupDeclarationOpenState() {
-        if (content[index..(index + 2)] == "--") {
+        if (content.Length > index + 2 && content[index..(index + 2)] == "--") {
             ConsumeNextCharacters(2);
             currentCommentTag = new();
             return SetState(State.CommentStartState);
-        } else if (content[index..(index + 7)].Equals("doctype", StringComparison.CurrentCultureIgnoreCase)) {
+        } else if (content.Length > index + 7 && content[index..(index + 7)].Equals("doctype", StringComparison.CurrentCultureIgnoreCase)) {
             ConsumeNextCharacters(7);
             return SetState(State.DOCTYPEState);
-        } else {
+        } else if (content.Length > index + 7 && content[index..(index + 7)].Equals("[CDATA[")) {
             throw new NotImplementedException();
+        } else {
+            // todo parse error
+            currentCommentTag = new();
+            return SetState(State.BogusCommentState);
         }
     }
 
@@ -508,7 +622,21 @@ public class Tokenizer(string content) {
     // https://html.spec.whatwg.org/multipage/parsing.html#comment-start-dash-state
     private Token? CommentStartDashState() {
         char? c = ConsumeNextInputCharacter();
-        throw new NotImplementedException();
+        switch (c) {
+            case '-':
+                return SetState(State.CommentEndState);
+            case '>':
+                // todo parse error
+                SetState(State.DataState);
+                return currentCommentTag;
+            case null:
+                // todo parse error
+                currentTokens.Enqueue(new EndOfFile());
+                return currentCommentTag;
+            default:
+                Reconsume();
+                return SetState(State.CommentState);
+        }
     }
     // 13.2.5.45 Comment state
     // https://html.spec.whatwg.org/multipage/parsing.html#comment-state
@@ -516,16 +644,85 @@ public class Tokenizer(string content) {
         while (true) {
             char? c = ConsumeNextInputCharacter();
             switch (c) {
-                case '<': throw new NotImplementedException();
+                case '<':
+                    currentCommentTag.data += c;
+                    return SetState(State.CommentLessThanSignState);
                 case '-': return SetState(State.CommentEndDashState);
-                case '\0': throw new NotImplementedException();
-                case null: throw new NotImplementedException();
+                case '\0':
+                    // todo parse error
+                    currentCommentTag.data += '\uFFFD';
+                    throw new NotImplementedException();
+                case null:
+                    // todo parse error
+                    currentTokens.Enqueue(new EndOfFile());
+                    return currentCommentTag;
                 default:
                     currentCommentTag.data += c;
                     break;
             }
         }
     }
+
+    // 13.2.5.46 Comment less-than sign state
+    // https://html.spec.whatwg.org/multipage/parsing.html#comment-less-than-sign-state
+    private Token? CommentLessTanSignState() {
+        while (true) {
+            char? c = ConsumeNextInputCharacter();
+            switch (c) {
+                case '!':
+                    currentCommentTag.data += c;
+                    return SetState(State.CommentLessThanSignBangState);
+                case '<':
+                    currentCommentTag.data += c;
+                    break;
+                default:
+                    Reconsume();
+                    return SetState(State.CommentState);
+            }
+        }
+    }
+
+    // 13.2.5.47 Comment less-than sign bang state
+    // https://html.spec.whatwg.org/multipage/parsing.html#comment-less-than-sign-bang-state
+    private Token? CommentLessThanSignBangState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case '-':
+                return SetState(State.CommentLessThanSignBangDashState);
+            default:
+                Reconsume();
+                return SetState(State.CommentState);
+        }
+    }
+
+    // 13.2.5.48 Comment less-than sign bang dash state
+    // https://html.spec.whatwg.org/multipage/parsing.html#comment-less-than-sign-bang-dash-state
+    private Token? CommentLessThanSignBangDashState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case '-':
+                return SetState(State.CommentLessThanSignBangDashDashState);
+            default:
+                Reconsume();
+                return SetState(State.CommentEndDashState);
+        }
+    }
+
+    // 13.2.5.49 Comment less-than sign bang dash dash state
+    // https://html.spec.whatwg.org/multipage/parsing.html#comment-less-than-sign-bang-dash-dash-state
+    private Token? CommentLessThanSignBangDashDashState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case '>' or null:
+                Reconsume();
+                return SetState(State.CommentEndState);
+            default:
+                // todo parse error
+                Reconsume();
+                return SetState(State.CommentEndState);
+        }
+    }
+
     // 13.2.5.50 Comment end dash state
     // https://html.spec.whatwg.org/multipage/parsing.html#comment-end-dash-state
     private Token? CommentEndDashState() {
@@ -543,16 +740,25 @@ public class Tokenizer(string content) {
     // 13.2.5.51 Comment end state
     // https://html.spec.whatwg.org/multipage/parsing.html#comment-end-state
     private Token? CommentEndState() {
-        char? c = ConsumeNextInputCharacter();
-        switch (c) {
-            case '>':
-                SetState(State.DataState);
-                return currentCommentTag;
-            case '!': throw new NotImplementedException();
-            case '-': throw new NotImplementedException();
-            case null: throw new NotImplementedException();
-            default:
-                throw new NotImplementedException();
+        while (true) {
+            char? c = ConsumeNextInputCharacter();
+            switch (c) {
+                case '>':
+                    SetState(State.DataState);
+                    return currentCommentTag;
+                case '!': return SetState(State.CommentEndBangState);
+                case '-':
+                    currentCommentTag.data += '-';
+                    break;
+                case null:
+                    // todo parse error
+                    currentTokens.Enqueue(new EndOfFile());
+                    return currentCommentTag;
+                default:
+                    currentCommentTag.data += "--";
+                    Reconsume();
+                    return SetState(State.CommentState);
+            }
         }
     }
     // 13.2.5.53 DOCTYPE state
@@ -576,7 +782,9 @@ public class Tokenizer(string content) {
                 case '\t' or '\n' or '\f' or ' ':
                     break; // ignore character
                 case >= 'A' and <= 'Z':
-                    throw new NotImplementedException();
+                    currentDOCTYPE = new();
+                    currentDOCTYPE.name += (char)(byte)(c | 0x20);
+                    return SetState(State.DOCTYPENameState);
                 case '\0': throw new NotImplementedException();
                 case '>': throw new NotImplementedException();
                 case null: throw new NotImplementedException();
@@ -598,13 +806,140 @@ public class Tokenizer(string content) {
                 case '>':
                     SetState(State.DataState);
                     return currentDOCTYPE;
-                case >= 'A' and <= 'Z': throw new NotImplementedException();
+                case >= 'A' and <= 'Z':
+                    currentDOCTYPE.name += (char)(byte)(c | 0x20);
+                    break;
                 case '\0': throw new NotImplementedException();
-                case null: throw new NotImplementedException();
+                case null:
+                    // todo parse error eof-in-doctype
+                    currentDOCTYPE.forceQuirks = true;
+                    currentTokens.Enqueue(new EndOfFile());
+                    return currentDOCTYPE;
                 default:
                     currentDOCTYPE.name += c;
                     break;
             }
         }
     }
+
+    // 13.2.5.72 Character reference state
+    // https://html.spec.whatwg.org/multipage/parsing.html#character-reference-state
+    private Token? CharacterReferenceState() {
+        temporaryBuffer = "&";
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case not null when char.IsAsciiLetterOrDigit((char)c):
+                Reconsume();
+                return SetState(State.NamedCharacterReferenceState);
+            case '#':
+                temporaryBuffer += c;
+                return SetState(State.NumericCharacterReferenceState);
+            default:
+                // Flush code points consumed as a character reference
+                foreach (var temp in temporaryBuffer) {
+                    currentTokens.Enqueue(new Character(temp));
+                }
+                Reconsume();
+                SetState(returnState);
+                return currentTokens.Dequeue();
+        }
+    }
+
+    // 13.2.5.73 Named character reference state
+    // https://html.spec.whatwg.org/multipage/parsing.html#named-character-reference-state
+    private Token? NamedCharacterReferenceState() {
+        throw new NotImplementedException();
+    }
+
+    // 13.2.5.75 Numeric character reference state
+    // https://html.spec.whatwg.org/multipage/parsing.html#numeric-character-reference-state
+    private Token? NumericCharacterReferenceState() {
+        // todo set character reference code to zero (0)
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case 'x' or 'X':
+                temporaryBuffer += c;
+                return SetState(State.HexadecimalCharacterReferenceStartState);
+            default:
+                Reconsume();
+                return SetState(State.DecimalCharacterReferenceStartState);
+        }
+    }
+
+    // 13.2.5.76 Hexadecimal character reference start state
+    // https://html.spec.whatwg.org/multipage/parsing.html#hexadecimal-character-reference-start-state
+    private Token? HexadecimalCharacterReferenceStartState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case not null when char.IsAsciiHexDigit((char)c):
+                temporaryBuffer += c;
+                return SetState(State.HexadecimalCharacterReferenceStartState);
+            default:
+                // todo parse error
+                // Flush code points consumed as a character reference
+                foreach (var temp in temporaryBuffer) {
+                    currentTokens.Enqueue(new Character(temp));
+                }
+                Reconsume();
+                SetState(returnState);
+                return currentTokens.Dequeue();
+
+        }
+    }
+
+    // 13.2.5.77 Decimal character reference start state
+    // https://html.spec.whatwg.org/multipage/parsing.html#decimal-character-reference-start-state
+    private Token? DecimalCharacterReferenceStartState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case not null when char.IsAsciiDigit((char)c):
+                Reconsume();
+                return SetState(State.DecimalCharacterReferenceState);
+            default:
+                // todo parse error
+                // Flush code points consumed as a character reference
+                foreach (var temp in temporaryBuffer) {
+                    currentTokens.Enqueue(new Character(temp));
+                }
+                Reconsume();
+                SetState(returnState);
+                return currentTokens.Dequeue();
+        }
+    }
+    // 13.2.5.78 Hexadecimal character reference state
+    // https://html.spec.whatwg.org/multipage/parsing.html#hexadecimal-character-reference-state
+    private Token? HexadecimalCharacterReferenceState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case not null when char.IsAsciiDigit((char)c):
+                throw new NotImplementedException();
+            case not null when char.IsAsciiHexDigitUpper((char)c):
+                throw new NotImplementedException();
+            case not null when char.IsAsciiHexDigitLower((char)c):
+                throw new NotImplementedException();
+            case ';':
+                return SetState(State.NumericCharacterReferenceEndState);
+            default:
+                // todo parse error
+                Reconsume();
+                return SetState(State.NumericCharacterReferenceEndState);
+        }
+    }
+
+    // 13.2.5.79 Decimal character reference state
+    // https://html.spec.whatwg.org/multipage/parsing.html#decimal-character-reference-state
+    private Token? DecimalCharacterReferenceState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case not null when char.IsAsciiDigit((char)c):
+                throw new NotImplementedException();
+            case ';':
+                return SetState(State.NumericCharacterReferenceEndState);
+            default:
+                // todo parse error
+                Reconsume();
+                return SetState(State.NumericCharacterReferenceEndState);
+        }
+    }
+
 }
