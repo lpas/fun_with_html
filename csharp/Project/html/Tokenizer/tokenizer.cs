@@ -230,7 +230,6 @@ public class Tokenizer(string content) {
             return currentTokens.Dequeue();
         }
 
-
         while (true) {
             var token = state switch {
                 State.DataState => DataState(),
@@ -263,13 +262,13 @@ public class Tokenizer(string content) {
                 State.ScriptDataDoubleEscapeEndState => throw new NotImplementedException(),
                 State.BeforeAttributeNameState => BeforeAttributeNameState(),
                 State.AttributeNameState => AttributeNameState(),
-                State.AfterAttributeNameState => throw new NotImplementedException(),
+                State.AfterAttributeNameState => AfterAttributeNameState(),
                 State.BeforeAttributeValueState => BeforeAttributeValueState(),
                 State.AttributeValueDoubleQuotedState => AttributeValueDoubleQuotedState(),
                 State.AttributeValueSingleQuotedState => AttributeValueSingleQuotedState(),
                 State.AttributeValueUnquotesState => AttributeValueUnquotedState(),
                 State.AfterAttributeValueQuotedState => AfterAttributeValueQuotedState(),
-                State.SelfClosingStartTagState => throw new NotImplementedException(),
+                State.SelfClosingStartTagState => SelfClosingStartTagState(),
                 State.BogusCommentState => BogusCommentState(),
                 State.MarkupDeclarationOpenState => MarkupDeclarationOpenState(),
                 State.CommentStartState => CommentStartState(),
@@ -285,7 +284,7 @@ public class Tokenizer(string content) {
                 State.DOCTYPEState => DOCTYPEState(),
                 State.BeforeDOCTYPENameState => BeforeDOCTYPENameState(),
                 State.DOCTYPENameState => DOCTYPENameState(),
-                State.AfterDOCTYPENameState => throw new NotImplementedException(),
+                State.AfterDOCTYPENameState => AfterDOCTYPENameState(),
                 State.AfterDOCTYPEpublicKeywordState => throw new NotImplementedException(),
                 State.BeforeDOCTYPEpublicIdentifierState => throw new NotImplementedException(),
                 State.DOCTYPEPublicIDentifierDoubleQuotedState => throw new NotImplementedException(),
@@ -297,7 +296,7 @@ public class Tokenizer(string content) {
                 State.DOCTYPESystemIdentifierDoubleQuotedState => throw new NotImplementedException(),
                 State.DOCTYPESystemIdentifierSingleQuotedState => throw new NotImplementedException(),
                 State.AfterDOCTYPESystemIdentifierState => throw new NotImplementedException(),
-                State.BogusDoctypeState => throw new NotImplementedException(),
+                State.BogusDoctypeState => BogusDoctypeState(),
                 State.CDATASectionState => throw new NotImplementedException(),
                 State.CDATASectionBracketState => throw new NotImplementedException(),
                 State.CDATASectionEndState => throw new NotImplementedException(),
@@ -347,13 +346,17 @@ public class Tokenizer(string content) {
                 currentTag = new StartTag();
                 Reconsume();
                 return SetState(State.TagNameState);
-            case '?': throw new NotImplementedException();
-            case null: throw new NotImplementedException();
-            default:
+            case '?':
                 // todo parse error
                 currentCommentTag = new();
                 Reconsume();
                 return SetState(State.BogusCommentState);
+            case null: throw new NotImplementedException();
+            default:
+                // todo parse error
+                Reconsume();
+                SetState(State.DataState);
+                return new Character('<');
         }
     }
 
@@ -366,9 +369,19 @@ public class Tokenizer(string content) {
                 currentTag = new EndTag();
                 Reconsume();
                 return SetState(State.TagNameState);
-            case '>': throw new NotImplementedException();
-            case null: throw new NotImplementedException();
-            default: throw new NotImplementedException();
+            case '>':
+                // todo parse error
+                return SetState(State.DataState);
+            case null:
+                // todo parse error
+                currentTokens.Enqueue(new Character('/'));
+                currentTokens.Enqueue(new EndOfFile());
+                return new Character('<');
+            default:
+                // todo parse error
+                currentCommentTag = new();
+                Reconsume();
+                return SetState(State.BogusCommentState);
         }
     }
 
@@ -380,7 +393,8 @@ public class Tokenizer(string content) {
             switch (c) {
                 case '\t' or '\n' or '\f' or ' ':
                     return SetState(State.BeforeAttributeNameState);
-                case '/': throw new NotImplementedException();
+                case '/':
+                    return SetState(State.SelfClosingStartTagState);
                 case '>':
                     SetState(State.DataState);
                     return BuildCurrentTagToken();
@@ -436,10 +450,37 @@ public class Tokenizer(string content) {
                 case '\0':
                     throw new NotImplementedException();
                 case '"' or '\'' or '<':
-                    throw new NotImplementedException();
+                    // todo parse error
+                    goto default;
                 default:
                     currentAttribute.name += c;
                     break;
+            }
+        }
+    }
+
+    // 13.2.5.34 After attribute name state
+    // https://html.spec.whatwg.org/multipage/parsing.html#after-attribute-name-state
+    private Token? AfterAttributeNameState() {
+        while (true) {
+            char? c = ConsumeNextInputCharacter();
+            switch (c) {
+                case '\t' or '\n' or '\f' or ' ':
+                    break; // ignore the character
+                case '/':
+                    return SetState(State.SelfClosingStartTagState);
+                case '=':
+                    return SetState(State.BeforeAttributeValueState);
+                case '>':
+                    SetState(State.DataState);
+                    return BuildCurrentTagToken();
+                case null:
+                    // todo parse error
+                    return new EndOfFile();
+                default:
+                    AddCurrentAttributeToCurrentTag();
+                    Reconsume();
+                    return SetState(State.AttributeNameState);
             }
         }
     }
@@ -548,11 +589,31 @@ public class Tokenizer(string content) {
         switch (c) {
             case '\t' or '\n' or '\f' or ' ':
                 return SetState(State.BeforeAttributeNameState);
-            case '/': throw new NotImplementedException();
+            case '/':
+                return SetState(State.SelfClosingStartTagState);
             case '>':
                 SetState(State.DataState);
                 return BuildCurrentTagToken();
             case null: throw new NotImplementedException();
+            default:
+                // todo parse error
+                Reconsume();
+                return SetState(State.BeforeAttributeNameState);
+        }
+    }
+
+    // 13.2.5.40 Self-closing start tag state
+    // https://html.spec.whatwg.org/multipage/parsing.html#self-closing-start-tag-state
+    private Token? SelfClosingStartTagState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case '>':
+                currentTag.selfClosing = true;
+                SetState(State.DataState);
+                return BuildCurrentTagToken();
+            case null:
+                // todo parse error
+                return new EndOfFile();
             default:
                 // todo parse error
                 Reconsume();
@@ -768,9 +829,19 @@ public class Tokenizer(string content) {
         switch (c) {
             case '\t' or '\n' or '\f' or ' ':
                 return SetState(State.BeforeDOCTYPENameState);
-            case '>': throw new NotImplementedException();
-            case null: throw new NotImplementedException();
-            default: throw new NotImplementedException();
+            case '>':
+                Reconsume();
+                return SetState(State.BeforeDOCTYPENameState);
+            case null:
+                // todo parse error
+                currentDOCTYPE = new();
+                currentDOCTYPE.forceQuirks = true;
+                currentTokens.Enqueue(new EndOfFile());
+                return currentDOCTYPE;
+            default:
+                // todo parse error
+                Reconsume();
+                return SetState(State.BeforeDOCTYPENameState);
         }
     }
     // 13.2.5.54 Before DOCTYPE name state
@@ -785,9 +856,22 @@ public class Tokenizer(string content) {
                     currentDOCTYPE = new();
                     currentDOCTYPE.name += (char)(byte)(c | 0x20);
                     return SetState(State.DOCTYPENameState);
-                case '\0': throw new NotImplementedException();
-                case '>': throw new NotImplementedException();
-                case null: throw new NotImplementedException();
+                case '\0':
+                    // todo parse error;
+                    currentDOCTYPE = new();
+                    currentDOCTYPE.name += '\uFFFD';
+                    return SetState(State.DOCTYPENameState);
+                case '>':
+                    // todo parse error
+                    currentDOCTYPE = new();
+                    currentDOCTYPE.forceQuirks = true;
+                    return SetState(State.DataState);
+                case null:
+                    // todo parse error;
+                    currentDOCTYPE = new();
+                    currentDOCTYPE.forceQuirks = true;
+                    currentTokens.Enqueue(new EndOfFile());
+                    return currentDOCTYPE;
                 default:
                     currentDOCTYPE = new();
                     currentDOCTYPE.name += c;
@@ -818,6 +902,60 @@ public class Tokenizer(string content) {
                 default:
                     currentDOCTYPE.name += c;
                     break;
+            }
+        }
+    }
+
+    // 13.2.5.56 After DOCTYPE name state
+    // https://html.spec.whatwg.org/multipage/parsing.html#after-doctype-name-state
+    private Token? AfterDOCTYPENameState() {
+        while (true) {
+            char? c = ConsumeNextInputCharacter();
+            switch (c) {
+                case '\t' or '\n' or '\f' or ' ':
+                    break; // ignore the character
+                case '>':
+                    SetState(State.DataState);
+                    return currentDOCTYPE;
+                case null:
+                    // todo parse error eof-in-doctype
+                    currentDOCTYPE.forceQuirks = true;
+                    currentTokens.Enqueue(new EndOfFile());
+                    return currentDOCTYPE;
+                default:
+                    if (content.Length > index + 6 && content[index..(index + 6)].Equals("PUBLIC", StringComparison.OrdinalIgnoreCase)) {
+                        ConsumeNextCharacters(6);
+                        return SetState(State.AfterDOCTYPEpublicKeywordState);
+                    } else if (content.Length > index + 6 && content[index..(index + 7)].Equals("SYSTEM", StringComparison.OrdinalIgnoreCase)) {
+                        ConsumeNextCharacters(6);
+                        return SetState(State.AfterDoctypeSystemKeywordState);
+                    } else {
+                        // todo parse error
+                        currentDOCTYPE.forceQuirks = true;
+                        Reconsume();
+                        return SetState(State.BogusDoctypeState);
+                    }
+            }
+        }
+    }
+
+    // 13.2.5.68 Bogus DOCTYPE state
+    // https://html.spec.whatwg.org/multipage/parsing.html#bogus-doctype-state
+    private Token? BogusDoctypeState() {
+        while (true) {
+            char? c = ConsumeNextInputCharacter();
+            switch (c) {
+                case '>':
+                    SetState(State.DataState);
+                    return currentDOCTYPE;
+                case '\0':
+                    // todo parse error
+                    break;
+                case null:
+                    currentTokens.Enqueue(new EndOfFile());
+                    return currentDOCTYPE;
+                default:
+                    break; // ignore the character
             }
         }
     }
