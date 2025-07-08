@@ -109,7 +109,7 @@ public class DOCTYPE(): Token, IEquatable<DOCTYPE> {
     public override int GetHashCode() => HashCode.Combine(name, publicId, systemId, forceQuirks);
 }
 
-public class Tag: Token {
+public class Tag: Token, IEquatable<Tag> {
     public string name { get; set; } = "";
     public bool selfClosing { get; set; } = false;
     public Dictionary<string, string> Attributes { get; set; } = [];
@@ -118,6 +118,17 @@ public class Tag: Token {
         return base.ToString() + $" {{name: {name}}}";
     }
 
+    public override bool Equals(object? obj) => Equals(obj as Tag);
+    public bool Equals(Tag? other) {
+        if (other is null) return false;
+        if (ReferenceEquals(this, other)) return true;
+
+        return string.Equals(name, other.name)
+            && selfClosing == other.selfClosing
+            && Attributes.Count == other.Attributes.Count && !Attributes.Except(other.Attributes).Any();
+    }
+
+    public override int GetHashCode() => HashCode.Combine(name, selfClosing, Attributes);
 }
 
 public class StartTag: Tag {
@@ -127,16 +138,26 @@ public class StartTag: Tag {
     }
 }
 public class EndTag: Tag;
-public class Comment(): Token {
+public class Comment(): Token, IEquatable<Comment> {
     public string data { get; set; } = "";
 
     public override string ToString() {
-        return base.ToString() + $" {{name: {data}}}";
+        return base.ToString() + $" {{data: {data}}}";
     }
+
+    public override bool Equals(object? obj) => Equals(obj as Comment);
+    public bool Equals(Comment? other) {
+        if (other is null) return false;
+        if (ReferenceEquals(this, other)) return true;
+
+        return string.Equals(data, other.data);
+    }
+
+    public override int GetHashCode() => HashCode.Combine(data);
 
 }
 
-public class Character(char data): Token {
+public class Character(char data): Token, IEquatable<Character> {
     public char data { get; set; } = data;
 
     public override string ToString() {
@@ -151,6 +172,16 @@ public class Character(char data): Token {
 
         return base.ToString() + $" {{data: {c}}}";
     }
+
+    public override bool Equals(object? obj) => Equals(obj as Character);
+    public bool Equals(Character? other) {
+        if (other is null) return false;
+        if (ReferenceEquals(this, other)) return true;
+
+        return Equals(data, other.data);
+    }
+
+    public override int GetHashCode() => HashCode.Combine(data);
 
 }
 
