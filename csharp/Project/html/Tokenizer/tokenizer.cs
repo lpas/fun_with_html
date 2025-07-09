@@ -7,7 +7,7 @@ enum State {
     DataState,
     RCDATAState,
     RAWTEXTState,
-    ScriptDAtaState,
+    ScriptDataState,
     PLAINTEXState,
     TagOpenState,
     EndTagOpenState,
@@ -18,10 +18,10 @@ enum State {
     RAWTEXTLessTanSignState,
     RAWTEXTEndTagOpenState,
     RAWTEXTEmdTagNameState,
-    ScriptDataLessTanSignState,
+    ScriptDataLessThanSignState,
     ScriptDataEndTagOpenState,
     ScriptDataEndTagNameState,
-    ScriptDataEscapeSTartState,
+    ScriptDataEscapeStartState,
     ScriptDataEscapedDasState,
     ScriptDataEscapedLessTahSignState,
     ScriptDataEscapedEndTagOpenState,
@@ -202,7 +202,7 @@ public class Tokenizer(string content) {
     public int Line { get => 1; } // todo 
     public int Col { get => index; } // todo
 
-    private State state = State.DataState;
+    internal State state = State.DataState;
     private State returnState = State.DataState;
 
     private Tag currentTag = new();
@@ -216,6 +216,8 @@ public class Tokenizer(string content) {
     private string temporaryBuffer = "";
 
     private double characterReferenceCode = 0;
+
+    private string? lastStartTagTagName = null;
 
     private char? ConsumeNextInputCharacter() {
         if (content.Length > index) {
@@ -271,9 +273,17 @@ public class Tokenizer(string content) {
         }
     }
 
+    private bool IsAppropriateEndTagToken() {
+        return currentTag.name == lastStartTagTagName;
+    }
+
     public Token? NextToken() {
         if (currentTokens.Count > 0) {
-            return currentTokens.Dequeue();
+            var token = currentTokens.Dequeue();
+            if (token is StartTag startTag) {
+                lastStartTagTagName = startTag.name;
+            }
+            return token;
         }
 
         while (true) {
@@ -281,7 +291,7 @@ public class Tokenizer(string content) {
                 State.DataState => DataState(),
                 State.RCDATAState => throw new NotImplementedException(),
                 State.RAWTEXTState => throw new NotImplementedException(),
-                State.ScriptDAtaState => throw new NotImplementedException(),
+                State.ScriptDataState => ScriptDataState(),
                 State.PLAINTEXState => throw new NotImplementedException(),
                 State.TagOpenState => TagOpenState(),
                 State.EndTagOpenState => EndTagOpenState(),
@@ -292,10 +302,10 @@ public class Tokenizer(string content) {
                 State.RAWTEXTLessTanSignState => throw new NotImplementedException(),
                 State.RAWTEXTEndTagOpenState => throw new NotImplementedException(),
                 State.RAWTEXTEmdTagNameState => throw new NotImplementedException(),
-                State.ScriptDataLessTanSignState => throw new NotImplementedException(),
-                State.ScriptDataEndTagOpenState => throw new NotImplementedException(),
-                State.ScriptDataEndTagNameState => throw new NotImplementedException(),
-                State.ScriptDataEscapeSTartState => throw new NotImplementedException(),
+                State.ScriptDataLessThanSignState => ScriptDataLessThanSignState(),
+                State.ScriptDataEndTagOpenState => ScriptDataEndTagOpenState(),
+                State.ScriptDataEndTagNameState => ScriptDataEndTagNameState(),
+                State.ScriptDataEscapeStartState => ScriptDataEscapeStartState(),
                 State.ScriptDataEscapedDasState => throw new NotImplementedException(),
                 State.ScriptDataEscapedLessTahSignState => throw new NotImplementedException(),
                 State.ScriptDataEscapedEndTagOpenState => throw new NotImplementedException(),
@@ -357,8 +367,12 @@ public class Tokenizer(string content) {
                 State.NumericCharacterReferenceEndState => NumericCharacterReferenceEndState(),
                 _ => throw new NotImplementedException(),
             };
-            if (token != null)
+            if (token != null) {
+                if (token is StartTag startTag) {
+                    lastStartTagTagName = startTag.name;
+                }
                 return token;
+            }
         }
     }
 
@@ -376,6 +390,23 @@ public class Tokenizer(string content) {
                 return new Character((char)c);
             case null: return new EndOfFile();
             default: return new Character((char)c);
+        }
+    }
+
+    // 13.2.5.4 Script data state
+    // https://html.spec.whatwg.org/multipage/parsing.html#script-data-state
+    private Token? ScriptDataState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case '<':
+                return SetState(State.ScriptDataLessThanSignState);
+            case '\0':
+                // todo parse error
+                return new Character('\uFFFD');
+            case null:
+                return new EndOfFile();
+            default:
+                return new Character((char)c);
         }
     }
 
@@ -460,6 +491,91 @@ public class Tokenizer(string content) {
                     currentTag.name += c;
                     break;
             }
+        }
+    }
+
+    // 13.2.5.15 Script data less-than sign state
+    // https://html.spec.whatwg.org/multipage/parsing.html#script-data-less-than-sign-state
+    private Token? ScriptDataLessThanSignState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case '/':
+                temporaryBuffer = "";
+                return SetState(State.ScriptDataEndTagOpenState);
+            case '!':
+                SetState(State.ScriptDataEscapeStartState);
+                currentTokens.Enqueue(new Character('!'));
+                return new Character('<');
+            default:
+                Reconsume();
+                SetState(State.ScriptDataState);
+                return new Character('<');
+        }
+    }
+
+    // 13.2.5.16 Script data end tag open state
+    // https://html.spec.whatwg.org/multipage/parsing.html#script-data-end-tag-open-state
+    private Token? ScriptDataEndTagOpenState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case >= 'a' and <= 'z' or >= 'A' and <= 'Z':
+                currentTag = new EndTag();
+                Reconsume();
+                return SetState(State.ScriptDataEndTagNameState);
+            default:
+                Reconsume();
+                SetState(State.ScriptDataState);
+                currentTokens.Enqueue(new Character('/'));
+                return new Character('<');
+        }
+    }
+
+    // 13.2.5.17 Script data end tag name state
+    // https://html.spec.whatwg.org/multipage/parsing.html#script-data-end-tag-name-state
+    private Token? ScriptDataEndTagNameState() {
+        while (true) {
+            char? c = ConsumeNextInputCharacter();
+            switch (c) {
+                case '\t' or '\n' or '\f' or ' ':
+                    throw new NotImplementedException();
+                case '/': throw new NotImplementedException();
+                case '>':
+                    if (IsAppropriateEndTagToken()) {
+                        SetState(State.DataState);
+                        return BuildCurrentTagToken();
+                    } else {
+                        goto default;
+                    }
+                case >= 'A' and <= 'Z': throw new NotImplementedException();
+                case >= 'a' and <= 'z':
+                    currentTag.name += c;
+                    temporaryBuffer += c;
+                    break;
+                default:
+                    currentTokens.Enqueue(new Character('<'));
+                    currentTokens.Enqueue(new Character('/'));
+                    foreach (var chr in temporaryBuffer) {
+                        currentTokens.Enqueue(new Character(chr));
+                    }
+                    Reconsume();
+                    SetState(State.ScriptDataState);
+                    return currentTokens.Dequeue();
+            }
+        }
+
+    }
+
+    // 13.2.5.18 Script data escape start state
+    // https://html.spec.whatwg.org/multipage/parsing.html#script-data-escape-start-state
+    private Token? ScriptDataEscapeStartState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case '-':
+                SetState(State.ScriptDataEscapeStartState);
+                return new Character('-');
+            default:
+                Reconsume();
+                return SetState(State.ScriptDataState);
         }
     }
 
@@ -1101,8 +1217,8 @@ public class Tokenizer(string content) {
         char? c = ConsumeNextInputCharacter();
         switch (c) {
             case not null when char.IsAsciiHexDigit((char)c):
-                temporaryBuffer += c;
-                return SetState(State.HexadecimalCharacterReferenceStartState);
+                Reconsume();
+                return SetState(State.HexadecimalCharacterReferenceState);
             default:
                 // todo parse error
                 FlushCodePointsConsumedAsACharacterReference();
@@ -1132,20 +1248,25 @@ public class Tokenizer(string content) {
     // 13.2.5.78 Hexadecimal character reference state
     // https://html.spec.whatwg.org/multipage/parsing.html#hexadecimal-character-reference-state
     private Token? HexadecimalCharacterReferenceState() {
-        char? c = ConsumeNextInputCharacter();
-        switch (c) {
-            case not null when char.IsAsciiDigit((char)c):
-                throw new NotImplementedException();
-            case not null when char.IsAsciiHexDigitUpper((char)c):
-                throw new NotImplementedException();
-            case not null when char.IsAsciiHexDigitLower((char)c):
-                throw new NotImplementedException();
-            case ';':
-                return SetState(State.NumericCharacterReferenceEndState);
-            default:
-                // todo parse error
-                Reconsume();
-                return SetState(State.NumericCharacterReferenceEndState);
+        while (true) {
+            char? c = ConsumeNextInputCharacter();
+            switch (c) {
+                case not null when char.IsAsciiDigit((char)c):
+                    characterReferenceCode = characterReferenceCode * 16 + (int)c - 0x0030;
+                    break;
+                case not null when char.IsAsciiHexDigitUpper((char)c):
+                    characterReferenceCode = characterReferenceCode * 16 + (int)c - 0x0037;
+                    throw new NotImplementedException();
+                case not null when char.IsAsciiHexDigitLower((char)c):
+                    characterReferenceCode = characterReferenceCode * 16 + (int)c - 0x0057;
+                    break;
+                case ';':
+                    return SetState(State.NumericCharacterReferenceEndState);
+                default:
+                    // todo parse error
+                    Reconsume();
+                    return SetState(State.NumericCharacterReferenceEndState);
+            }
         }
     }
 
@@ -1156,7 +1277,7 @@ public class Tokenizer(string content) {
             char? c = ConsumeNextInputCharacter();
             switch (c) {
                 case not null when char.IsAsciiDigit((char)c):
-                    characterReferenceCode = characterReferenceCode * 10 + char.GetNumericValue((char)c);
+                    characterReferenceCode = characterReferenceCode * 10 + (int)c - 0x0030;
                     break;
                 case ';':
                     return SetState(State.NumericCharacterReferenceEndState);
