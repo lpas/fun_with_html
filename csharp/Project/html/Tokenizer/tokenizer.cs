@@ -115,7 +115,7 @@ public class Tag: Token, IEquatable<Tag> {
     public Dictionary<string, string> Attributes { get; set; } = [];
 
     public override string ToString() {
-        return base.ToString() + $" {{name: {name}}}";
+        return base.ToString() + $" {{name: {name}}} {{selfClosing: {selfClosing}}}";
     }
 
     public override bool Equals(object? obj) => Equals(obj as Tag);
@@ -170,7 +170,7 @@ public class Character(char data): Token, IEquatable<Character> {
         };
 
 
-        return base.ToString() + $" {{data: {c}}}";
+        return base.ToString() + $" {{data: {c} {(int)data}}}";
     }
 
     public override bool Equals(object? obj) => Equals(obj as Character);
@@ -826,14 +826,14 @@ public class Tokenizer(string content) {
     // 13.2.5.42 Markup declaration open state
     // https://html.spec.whatwg.org/multipage/parsing.html#markup-declaration-open-state
     private Token? MarkupDeclarationOpenState() {
-        if (content.Length > index + 2 && content[index..(index + 2)] == "--") {
+        if (content.Length >= index + 2 && content[index..(index + 2)] == "--") {
             ConsumeNextCharacters(2);
             currentCommentTag = new();
             return SetState(State.CommentStartState);
-        } else if (content.Length > index + 7 && content[index..(index + 7)].Equals("doctype", StringComparison.CurrentCultureIgnoreCase)) {
+        } else if (content.Length >= index + 7 && content[index..(index + 7)].Equals("doctype", StringComparison.CurrentCultureIgnoreCase)) {
             ConsumeNextCharacters(7);
             return SetState(State.DOCTYPEState);
-        } else if (content.Length > index + 7 && content[index..(index + 7)].Equals("[CDATA[")) {
+        } else if (content.Length >= index + 7 && content[index..(index + 7)].Equals("[CDATA[")) {
             throw new NotImplementedException();
         } else {
             // todo parse error
@@ -874,6 +874,7 @@ public class Tokenizer(string content) {
                 currentTokens.Enqueue(new EndOfFile());
                 return currentCommentTag;
             default:
+                currentCommentTag.data += '-';
                 Reconsume();
                 return SetState(State.CommentState);
         }
@@ -1642,7 +1643,7 @@ public class Tokenizer(string content) {
             characterReferenceCode = 0xFFFD;
         }
         // If the number is a surrogate, then this is a surrogate-character-reference parse error. Set the character reference code to 0xFFFD.
-        if (characterReferenceCode is >= 0xD800 and <= 0xDBFF && characterReferenceCode is >= 0xDC00 and <= 0xDFFF) {
+        if (characterReferenceCode is >= 0xD800 and <= 0xDBFF || characterReferenceCode is >= 0xDC00 and <= 0xDFFF) {
             // todo parse error
             characterReferenceCode = 0xFFFD;
         }
