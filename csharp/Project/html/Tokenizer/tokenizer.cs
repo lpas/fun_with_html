@@ -196,7 +196,7 @@ struct Attribute {
 }
 
 public class Tokenizer(string content) {
-    private readonly string content = content;
+    private readonly string content = NormalizeNewLines(content);
     private int index = 0;
 
     public int Line { get => 1; } // todo 
@@ -219,6 +219,11 @@ public class Tokenizer(string content) {
 
     private string? lastStartTagTagName = null;
 
+    private static string NormalizeNewLines(string str) {
+        // To normalize newlines in a string, replace every U+000D CR U+000A LF code point pair with a single U+000A LF code point, and then replace every remaining U+000D CR code point with a U+000A LF code point.
+        if (str.Length == 0) return str;
+        return str.Replace("\r\n", "\n").Replace("\r", "\n");
+    }
     private char? ConsumeNextInputCharacter() {
         if (content.Length > index) {
             return content[index++];
@@ -1219,7 +1224,7 @@ public class Tokenizer(string content) {
             case '\'':
                 // todo parse error
                 currentDOCTYPE.publicId = "";
-                return SetState(State.DOCTYPESystemIdentifierSingleQuotedState);
+                return SetState(State.DOCTYPEPublicIdentifierSingleQuotedState);
             case '>':
                 // todo parse error
                 currentDOCTYPE.forceQuirks = true;
