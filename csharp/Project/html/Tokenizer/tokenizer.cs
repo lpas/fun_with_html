@@ -8,7 +8,7 @@ enum State {
     RCDATAState,
     RAWTEXTState,
     ScriptDataState,
-    PLAINTEXState,
+    PLAINTEXTState,
     TagOpenState,
     EndTagOpenState,
     TagNameState,
@@ -289,10 +289,10 @@ public class Tokenizer(string content) {
         while (true) {
             var token = state switch {
                 State.DataState => DataState(),
-                State.RCDATAState => throw new NotImplementedException(),
-                State.RAWTEXTState => throw new NotImplementedException(),
+                State.RCDATAState => RCDATAState(),
+                State.RAWTEXTState => RAWTEXTState(),
                 State.ScriptDataState => ScriptDataState(),
-                State.PLAINTEXState => throw new NotImplementedException(),
+                State.PLAINTEXTState => PLAINTEXTState(),
                 State.TagOpenState => TagOpenState(),
                 State.EndTagOpenState => EndTagOpenState(),
                 State.TagNameState => TagNameState(),
@@ -353,7 +353,7 @@ public class Tokenizer(string content) {
                 State.DOCTYPESystemIdentifierSingleQuotedState => DOCTYPESystemIdentifierSingleQuotedState(),
                 State.AfterDOCTYPESystemIdentifierState => AfterDOCTYPESystemIdentifierState(),
                 State.BogusDoctypeState => BogusDoctypeState(),
-                State.CDATASectionState => throw new NotImplementedException(),
+                State.CDATASectionState => CDATASectionState(),
                 State.CDATASectionBracketState => throw new NotImplementedException(),
                 State.CDATASectionEndState => throw new NotImplementedException(),
                 State.CharacterReferenceState => CharacterReferenceState(),
@@ -393,6 +393,43 @@ public class Tokenizer(string content) {
         }
     }
 
+    // 13.2.5.2 RCDATA state
+    // https://html.spec.whatwg.org/multipage/parsing.html#rcdata-state
+    private Token? RCDATAState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case '&':
+                returnState = State.DataState;
+                return SetState(State.CharacterReferenceState);
+            case '<':
+                return SetState(State.RCDATALessTanSignState);
+            case '\0':
+                // todo parse error
+                return new Character('\uFFFD');
+            case null:
+                return new EndOfFile();
+            default:
+                return new Character((char)c);
+        }
+    }
+
+    // 13.2.5.3 RAWTEXT state
+    // https://html.spec.whatwg.org/multipage/parsing.html#rawtext-state
+    private Token? RAWTEXTState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case '<':
+                return SetState(State.RAWTEXTLessTanSignState);
+            case '\0':
+                // todo parse error
+                return new Character('\uFFFD');
+            case null:
+                return new EndOfFile();
+            default:
+                return new Character((char)c);
+        }
+    }
+
     // 13.2.5.4 Script data state
     // https://html.spec.whatwg.org/multipage/parsing.html#script-data-state
     private Token? ScriptDataState() {
@@ -407,6 +444,23 @@ public class Tokenizer(string content) {
                 return new EndOfFile();
             default:
                 return new Character((char)c);
+        }
+    }
+
+    // 13.2.5.5 PLAINTEXT state
+    // https://html.spec.whatwg.org/multipage/parsing.html#plaintext-state
+    private Token? PLAINTEXTState() {
+        while (true) {
+            char? c = ConsumeNextInputCharacter();
+            switch (c) {
+                case '\0':
+                    // todo parse error
+                    return new Character('\uFFFD');
+                case null:
+                    return new EndOfFile();
+                default:
+                    return new Character((char)c);
+            }
         }
     }
 
@@ -1506,6 +1560,21 @@ public class Tokenizer(string content) {
                 default:
                     break; // ignore the character
             }
+        }
+    }
+
+    // 13.2.5.69 CDATA section state
+    // https://html.spec.whatwg.org/multipage/parsing.html#cdata-section-state
+    private Token? CDATASectionState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case ']':
+                return SetState(State.CDATASectionBracketState);
+            case null:
+                // todo parse error
+                return new EndOfFile();
+            default:
+                return new Character((char)c);
         }
     }
 
