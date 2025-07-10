@@ -60,7 +60,7 @@ enum State {
     AfterDOCTYPEpublicKeywordState,
     BeforeDOCTYPEpublicIdentifierState,
     DOCTYPEPublicIDentifierDoubleQuotedState,
-    DOCTYPEPublicIdentifierDingleQuotedState,
+    DOCTYPEPublicIdentifierSingleQuotedState,
     AfterDOCTYPEPublicIdentifierState,
     BetweenDoctypePublicAndSystemIdentifiersState,
     AfterDoctypeSystemKeywordState,
@@ -92,7 +92,7 @@ public class DOCTYPE(): Token, IEquatable<DOCTYPE> {
     public bool forceQuirks { get; set; } = false;
 
     public override string ToString() {
-        return base.ToString() + $" {{name: {name}}}";
+        return base.ToString() + $" {{name: {name}}} {{publicId: {publicId}}} {{systemId: {systemId}}}";
     }
 
     public override bool Equals(object? obj) => Equals(obj as DOCTYPE);
@@ -341,17 +341,17 @@ public class Tokenizer(string content) {
                 State.BeforeDOCTYPENameState => BeforeDOCTYPENameState(),
                 State.DOCTYPENameState => DOCTYPENameState(),
                 State.AfterDOCTYPENameState => AfterDOCTYPENameState(),
-                State.AfterDOCTYPEpublicKeywordState => throw new NotImplementedException(),
-                State.BeforeDOCTYPEpublicIdentifierState => throw new NotImplementedException(),
-                State.DOCTYPEPublicIDentifierDoubleQuotedState => throw new NotImplementedException(),
-                State.DOCTYPEPublicIdentifierDingleQuotedState => throw new NotImplementedException(),
-                State.AfterDOCTYPEPublicIdentifierState => throw new NotImplementedException(),
-                State.BetweenDoctypePublicAndSystemIdentifiersState => throw new NotImplementedException(),
-                State.AfterDoctypeSystemKeywordState => throw new NotImplementedException(),
-                State.BeforeDoctypeSystemIdentifierState => throw new NotImplementedException(),
-                State.DOCTYPESystemIdentifierDoubleQuotedState => throw new NotImplementedException(),
-                State.DOCTYPESystemIdentifierSingleQuotedState => throw new NotImplementedException(),
-                State.AfterDOCTYPESystemIdentifierState => throw new NotImplementedException(),
+                State.AfterDOCTYPEpublicKeywordState => AfterDOCTYPEpublicKeywordState(),
+                State.BeforeDOCTYPEpublicIdentifierState => BeforeDOCTYPEpublicIdentifierState(),
+                State.DOCTYPEPublicIDentifierDoubleQuotedState => DOCTYPEPublicIdentifierDoubleQuotedState(),
+                State.DOCTYPEPublicIdentifierSingleQuotedState => DOCTYPEPublicIdentifierSingleQuotedState(),
+                State.AfterDOCTYPEPublicIdentifierState => AfterDOCTYPEPublicIdentifierState(),
+                State.BetweenDoctypePublicAndSystemIdentifiersState => BetweenDoctypePublicAndSystemIdentifiersState(),
+                State.AfterDoctypeSystemKeywordState => AfterDoctypeSystemKeywordState(),
+                State.BeforeDoctypeSystemIdentifierState => BeforeDoctypeSystemIdentifierState(),
+                State.DOCTYPESystemIdentifierDoubleQuotedState => DOCTYPESystemIdentifierDoubleQuotedState(),
+                State.DOCTYPESystemIdentifierSingleQuotedState => DOCTYPESystemIdentifierSingleQuotedState(),
+                State.AfterDOCTYPESystemIdentifierState => AfterDOCTYPESystemIdentifierState(),
                 State.BogusDoctypeState => BogusDoctypeState(),
                 State.CDATASectionState => throw new NotImplementedException(),
                 State.CDATASectionBracketState => throw new NotImplementedException(),
@@ -1133,11 +1133,12 @@ public class Tokenizer(string content) {
                     currentTokens.Enqueue(new EndOfFile());
                     return currentDOCTYPE;
                 default:
-                    if (content.Length > index + 6 && content[index..(index + 6)].Equals("PUBLIC", StringComparison.OrdinalIgnoreCase)) {
-                        ConsumeNextCharacters(6);
+                    var cIndex = index - 1; // index was increased with ConsumeNextInputCharacter;
+                    if (content.Length > cIndex + 6 && content[cIndex..(cIndex + 6)].Equals("PUBLIC", StringComparison.OrdinalIgnoreCase)) {
+                        ConsumeNextCharacters(5); // we consume only 5 because ConsumeNextInputCharacter already consumed one
                         return SetState(State.AfterDOCTYPEpublicKeywordState);
-                    } else if (content.Length > index + 6 && content[index..(index + 7)].Equals("SYSTEM", StringComparison.OrdinalIgnoreCase)) {
-                        ConsumeNextCharacters(6);
+                    } else if (content.Length > cIndex + 6 && content[cIndex..(cIndex + 6)].Equals("SYSTEM", StringComparison.OrdinalIgnoreCase)) {
+                        ConsumeNextCharacters(5); // we consume only 5 because ConsumeNextInputCharacter already consumed one
                         return SetState(State.AfterDoctypeSystemKeywordState);
                     } else {
                         // todo parse error
@@ -1145,6 +1146,343 @@ public class Tokenizer(string content) {
                         Reconsume();
                         return SetState(State.BogusDoctypeState);
                     }
+            }
+        }
+    }
+
+    // 13.2.5.57 After DOCTYPE public keyword state
+    // https://html.spec.whatwg.org/multipage/parsing.html#after-doctype-public-keyword-state
+    private Token? AfterDOCTYPEpublicKeywordState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case '\t' or '\n' or '\f' or ' ':
+                return SetState(State.BeforeDOCTYPEpublicIdentifierState);
+            case '"':
+                // todo parse error
+                currentDOCTYPE.publicId = "";
+                return SetState(State.DOCTYPEPublicIDentifierDoubleQuotedState);
+            case '\'':
+                // todo parse error
+                currentDOCTYPE.publicId = "";
+                return SetState(State.DOCTYPESystemIdentifierSingleQuotedState);
+            case '>':
+                // todo parse error
+                currentDOCTYPE.forceQuirks = true;
+                SetState(State.DataState);
+                return currentDOCTYPE;
+            case null:
+                // todo parse error
+                currentDOCTYPE.forceQuirks = true;
+                currentTokens.Enqueue(new EndOfFile());
+                return currentDOCTYPE;
+            default:
+                // todo parse error
+                currentDOCTYPE.forceQuirks = true;
+                Reconsume();
+                return SetState(State.BogusDoctypeState);
+        }
+    }
+
+    // 13.2.5.58 Before DOCTYPE public identifier state
+    // https://html.spec.whatwg.org/multipage/parsing.html#before-doctype-public-identifier-state
+    private Token? BeforeDOCTYPEpublicIdentifierState() {
+        while (true) {
+            char? c = ConsumeNextInputCharacter();
+            switch (c) {
+                case '\t' or '\n' or '\f' or ' ':
+                    break; // ignore character
+                case '"':
+                    currentDOCTYPE.publicId = "";
+                    return SetState(State.DOCTYPEPublicIDentifierDoubleQuotedState);
+                case '\'':
+                    currentDOCTYPE.publicId = "";
+                    return SetState(State.DOCTYPEPublicIdentifierSingleQuotedState);
+                case '>':
+                    // parse error
+                    currentDOCTYPE.forceQuirks = true;
+                    SetState(State.DataState);
+                    return currentDOCTYPE;
+                case null:
+                    // parse error
+                    currentDOCTYPE.forceQuirks = true;
+                    currentTokens.Enqueue(new EndOfFile());
+                    return currentDOCTYPE;
+                default:
+                    // todo parse error
+                    currentDOCTYPE.forceQuirks = true;
+                    Reconsume();
+                    return SetState(State.BogusDoctypeState);
+            }
+        }
+
+    }
+
+    // 13.2.5.59 DOCTYPE public identifier (double-quoted) state
+    // https://html.spec.whatwg.org/multipage/parsing.html#doctype-public-identifier-(double-quoted)-state
+    private Token? DOCTYPEPublicIdentifierDoubleQuotedState() {
+        while (true) {
+            char? c = ConsumeNextInputCharacter();
+            switch (c) {
+                case '"':
+                    return SetState(State.AfterDOCTYPEPublicIdentifierState);
+                case '\0':
+                    // todo parse error
+                    currentDOCTYPE.publicId += '\uFFFD';
+                    break;
+                case '>':
+                    // todo parse error
+                    currentDOCTYPE.forceQuirks = true;
+                    SetState(State.DataState);
+                    return currentDOCTYPE;
+                case null:
+                    // todo parse error
+                    currentDOCTYPE.forceQuirks = true;
+                    currentTokens.Enqueue(new EndOfFile());
+                    return currentDOCTYPE;
+                default:
+                    currentDOCTYPE.publicId += c;
+                    break;
+            }
+        }
+    }
+
+    // 13.2.5.60 DOCTYPE public identifier (single-quoted) state
+    // https://html.spec.whatwg.org/multipage/parsing.html#doctype-public-identifier-(single-quoted)-state
+    private Token? DOCTYPEPublicIdentifierSingleQuotedState() {
+        while (true) {
+            char? c = ConsumeNextInputCharacter();
+            switch (c) {
+                case '\'':
+                    return SetState(State.AfterDOCTYPEPublicIdentifierState);
+                case '\0':
+                    // todo parse error
+                    currentDOCTYPE.publicId += '\uFFFD';
+                    break;
+                case '>':
+                    // todo parse error
+                    currentDOCTYPE.forceQuirks = true;
+                    SetState(State.DataState);
+                    return currentDOCTYPE;
+                case null:
+                    // todo parse error
+                    currentDOCTYPE.forceQuirks = true;
+                    currentTokens.Enqueue(new EndOfFile());
+                    return currentDOCTYPE;
+                default:
+                    currentDOCTYPE.publicId += c;
+                    break;
+            }
+        }
+    }
+
+
+    // 13.2.5.62 Between DOCTYPE public and system identifiers state
+    // https://html.spec.whatwg.org/multipage/parsing.html#between-doctype-public-and-system-identifiers-state
+    private Token? BetweenDoctypePublicAndSystemIdentifiersState() {
+        while (true) {
+            char? c = ConsumeNextInputCharacter();
+            switch (c) {
+                case '\t' or '\n' or '\f' or ' ':
+                    break; // ignore character
+                case '>':
+                    SetState(State.DataState);
+                    return currentDOCTYPE;
+                case '"':
+                    currentDOCTYPE.systemId = "";
+                    return SetState(State.DOCTYPESystemIdentifierDoubleQuotedState);
+                case '\'':
+                    currentDOCTYPE.systemId = "";
+                    return SetState(State.DOCTYPESystemIdentifierSingleQuotedState);
+                case null:
+                    // todo parse error
+                    currentDOCTYPE.forceQuirks = true;
+                    currentTokens.Enqueue(new EndOfFile());
+                    return currentDOCTYPE;
+                default:
+                    // todo parse error
+                    currentDOCTYPE.forceQuirks = true;
+                    Reconsume();
+                    return SetState(State.BogusDoctypeState);
+            }
+        }
+    }
+
+    // 3.2.5.61 After DOCTYPE public identifier state
+    // https://html.spec.whatwg.org/multipage/parsing.html#after-doctype-public-identifier-state
+    private Token? AfterDOCTYPEPublicIdentifierState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case '\t' or '\n' or '\f' or ' ':
+                return SetState(State.BetweenDoctypePublicAndSystemIdentifiersState);
+            case '>':
+                SetState(State.DataState);
+                return currentDOCTYPE;
+            case '"':
+                // todo parse error
+                currentDOCTYPE.systemId = "";
+                return SetState(State.DOCTYPESystemIdentifierDoubleQuotedState);
+            case '\'':
+                // todo parse error
+                currentDOCTYPE.systemId = "";
+                return SetState(State.DOCTYPESystemIdentifierSingleQuotedState);
+            case null:
+                // todo parse error
+                currentDOCTYPE.forceQuirks = true;
+                currentTokens.Enqueue(new EndOfFile());
+                return currentDOCTYPE;
+            default:
+                // todo parse error
+                currentDOCTYPE.forceQuirks = true;
+                Reconsume();
+                return SetState(State.BogusDoctypeState);
+        }
+    }
+
+    // 13.2.5.63 After DOCTYPE system keyword state
+    // https://html.spec.whatwg.org/multipage/parsing.html#after-doctype-system-keyword-state
+    private Token? AfterDoctypeSystemKeywordState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case '\t' or '\n' or '\f' or ' ':
+                return SetState(State.BeforeDoctypeSystemIdentifierState);
+            case '"':
+                // todo parse error;
+                currentDOCTYPE.systemId = "";
+                return SetState(State.DOCTYPESystemIdentifierDoubleQuotedState);
+            case '\'':
+                // todo parse error;
+                currentDOCTYPE.systemId = "";
+                return SetState(State.DOCTYPESystemIdentifierSingleQuotedState);
+            case '>':
+                // todo parse error
+                currentDOCTYPE.forceQuirks = true;
+                SetState(State.DataState);
+                return currentDOCTYPE;
+            case null:
+                // todo parse error
+                currentDOCTYPE.forceQuirks = true;
+                currentTokens.Enqueue(new EndOfFile());
+                return currentDOCTYPE;
+            default:
+                // todo parse error
+                currentDOCTYPE.forceQuirks = true;
+                Reconsume();
+                return SetState(State.BogusDoctypeState);
+        }
+    }
+
+    // 13.2.5.64 Before DOCTYPE system identifier state
+    // https://html.spec.whatwg.org/multipage/parsing.html#before-doctype-system-identifier-state
+    private Token? BeforeDoctypeSystemIdentifierState() {
+        while (true) {
+            char? c = ConsumeNextInputCharacter();
+            switch (c) {
+                case '\t' or '\n' or '\f' or ' ':
+                    break; // ignore character
+                case '"':
+                    currentDOCTYPE.systemId = "";
+                    return SetState(State.DOCTYPESystemIdentifierDoubleQuotedState);
+                case '\'':
+                    currentDOCTYPE.systemId = "";
+                    return SetState(State.DOCTYPESystemIdentifierSingleQuotedState);
+                case '>':
+                    // todo parse error
+                    currentDOCTYPE.forceQuirks = true;
+                    SetState(State.DataState);
+                    return currentDOCTYPE;
+                case null:
+                    // todo parse error
+                    currentDOCTYPE.forceQuirks = true;
+                    currentTokens.Enqueue(new EndOfFile());
+                    return currentDOCTYPE;
+                default:
+                    // todo parse error
+                    currentDOCTYPE.forceQuirks = true;
+                    Reconsume();
+                    return SetState(State.BogusDoctypeState);
+            }
+        }
+    }
+
+    // 13.2.5.65 DOCTYPE system identifier (double-quoted) state
+    // https://html.spec.whatwg.org/multipage/parsing.html#doctype-system-identifier-(double-quoted)-state
+    private Token? DOCTYPESystemIdentifierDoubleQuotedState() {
+        while (true) {
+            char? c = ConsumeNextInputCharacter();
+            switch (c) {
+                case '"':
+                    return SetState(State.AfterDOCTYPESystemIdentifierState);
+                case '\0':
+                    // parse error
+                    currentDOCTYPE.systemId += '\uFFFD';
+                    break;
+                case '>':
+                    // todo parse error
+                    currentDOCTYPE.forceQuirks = true;
+                    SetState(State.DataState);
+                    return currentDOCTYPE;
+                case null:
+                    // todo parse error
+                    currentDOCTYPE.forceQuirks = true;
+                    currentTokens.Enqueue(new EndOfFile());
+                    return currentDOCTYPE;
+                default:
+                    currentDOCTYPE.systemId += c;
+                    break;
+            }
+        }
+    }
+
+    // 13.2.5.66 DOCTYPE system identifier (single-quoted) state
+    // https://html.spec.whatwg.org/multipage/parsing.html#doctype-system-identifier-(single-quoted)-state
+    private Token? DOCTYPESystemIdentifierSingleQuotedState() {
+        while (true) {
+            char? c = ConsumeNextInputCharacter();
+            switch (c) {
+                case '\'':
+                    return SetState(State.AfterDOCTYPESystemIdentifierState);
+                case '\0':
+                    // parse error
+                    currentDOCTYPE.systemId += '\uFFFD';
+                    break;
+                case '>':
+                    // todo parse error
+                    currentDOCTYPE.forceQuirks = true;
+                    SetState(State.DataState);
+                    return currentDOCTYPE;
+                case null:
+                    // todo parse error
+                    currentDOCTYPE.forceQuirks = true;
+                    currentTokens.Enqueue(new EndOfFile());
+                    return currentDOCTYPE;
+                default:
+                    currentDOCTYPE.systemId += c;
+                    break;
+            }
+        }
+    }
+
+
+    // 13.2.5.67 After DOCTYPE system identifier state
+    // https://html.spec.whatwg.org/multipage/parsing.html#after-doctype-system-identifier-state
+    private Token? AfterDOCTYPESystemIdentifierState() {
+        while (true) {
+            char? c = ConsumeNextInputCharacter();
+            switch (c) {
+                case '\t' or '\n' or '\f' or ' ':
+                    break; // ignore character
+                case '>':
+                    SetState(State.DataState);
+                    return currentDOCTYPE;
+                case null:
+                    // todo parse error
+                    currentDOCTYPE.forceQuirks = true;
+                    currentTokens.Enqueue(new EndOfFile());
+                    return currentDOCTYPE;
+                default:
+                    // todo parse error
+                    Reconsume();
+                    return SetState(State.BogusDoctypeState);
             }
         }
     }
@@ -1256,7 +1594,7 @@ public class Tokenizer(string content) {
                     break;
                 case not null when char.IsAsciiHexDigitUpper((char)c):
                     characterReferenceCode = characterReferenceCode * 16 + (int)c - 0x0037;
-                    throw new NotImplementedException();
+                    break;
                 case not null when char.IsAsciiHexDigitLower((char)c):
                     characterReferenceCode = characterReferenceCode * 16 + (int)c - 0x0057;
                     break;
