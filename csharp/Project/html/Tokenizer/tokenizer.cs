@@ -1,4 +1,5 @@
 
+using System.Text;
 using FunWithHtml.html.TreeBuilder;
 
 namespace FunWithHtml.html.Tokenizer;
@@ -114,10 +115,17 @@ public class DOCTYPE(): Token, IEquatable<DOCTYPE> {
 public class Tag: Token, IEquatable<Tag> {
     public string name { get; set; } = "";
     public bool selfClosing { get; set; } = false;
-    public Dictionary<string, string?> Attributes { get; set; } = [];
+    public List<Attribute> Attributes { get; set; } = [];
 
     public override string ToString() {
-        return base.ToString() + $" {{name: {name}}} {{selfClosing: {selfClosing}}} {{Attr Length: {Attributes.Count}}}";
+        var sb = new StringBuilder();
+        sb.Append(base.ToString());
+        sb.Append($" {{name: {name}}}");
+        sb.Append(" {Attributes: ");
+        sb.AppendJoin(" ", Attributes.Select((item) => $"\"{item.name}\"=\"{item.value}\""));
+        sb.Append('}');
+        sb.Append($" {{selfClosing: {selfClosing}}}");
+        return sb.ToString();
     }
 
     public override bool Equals(object? obj) => Equals(obj as Tag);
@@ -190,11 +198,29 @@ public class Character(char data): Token, IEquatable<Character> {
 class EndOfFile: Token { }
 
 
-struct Attribute {
-    public string name = "";
-    public string value = "";
+public class Attribute: IEquatable<Attribute> {
+    public string name;
+    public string value;
 
-    public Attribute() { }
+    public Attribute(char name, string value) {
+        this.name = name.ToString();
+        this.value = value;
+    }
+    public Attribute(string name, string value) {
+        this.name = name;
+        this.value = value;
+    }
+
+    public override bool Equals(object? obj) => Equals(obj as Attribute);
+    public bool Equals(Attribute? other) {
+        if (other is null) return false;
+        if (ReferenceEquals(this, other)) return true;
+
+        return string.Equals(name, other.name) && string.Equals(value, other.value);
+    }
+
+    public override int GetHashCode() => HashCode.Combine(name, value);
+
 }
 
 public class Tokenizer(string content) {
@@ -255,27 +281,6 @@ public class Tokenizer(string content) {
         this.state = state;
         return null;
     }
-
-    private Token BuildCurrentTagToken() {
-        AddCurrentAttributeToCurrentTag();
-        return currentTag;
-    }
-
-    private void AddCurrentAttributeToCurrentTag() {
-        if (currentTag == null) return;
-        if (currentAttribute.name is not null) {
-            /*  When the user agent leaves the attribute name state (and before emitting the tag token,
-                if appropriate), the complete attribute's name must be compared to the other attributes on
-                the same token; if there is already an attribute on the token with the exact same name,
-                then this is a duplicate-attribute parse error and the new attribute must be removed
-                from the token. */
-            if (!currentTag.Attributes.TryAdd(currentAttribute.name, currentAttribute.value)) {
-                AddParseError("duplicate-attribute");
-            }
-            currentAttribute = new Attribute();
-        }
-    }
-
 
     // https://html.spec.whatwg.org/multipage/parsing.html#flush-code-points-consumed-as-a-character-reference
     private void FlushCodePointsConsumedAsACharacterReference() {
@@ -558,7 +563,7 @@ public class Tokenizer(string content) {
                     return SetState(State.SelfClosingStartTagState);
                 case '>':
                     SetState(State.DataState);
-                    return BuildCurrentTagToken();
+                    return currentTag;
                 case >= 'A' and <= 'Z':
                     currentTag.name += (char)(byte)(c | 0x20);
                     break;
@@ -623,7 +628,7 @@ public class Tokenizer(string content) {
                 case '>':
                     if (IsAppropriateEndTagToken()) {
                         SetState(State.DataState);
-                        return BuildCurrentTagToken();
+                        return currentTag;
                     } else {
                         goto default;
                     }
@@ -673,11 +678,12 @@ public class Tokenizer(string content) {
                     return SetState(State.AfterAttributeNameState);
                 case '=':
                     AddParseError("unexpected-equals-sign-before-attribute-name");
-                    AddCurrentAttributeToCurrentTag();
-                    currentAttribute.name += c;
+                    currentAttribute = new Attribute((char)c, "");
+                    currentTag.Attributes.Add(currentAttribute);
                     return SetState(State.AttributeNameState);
                 default:
-                    AddCurrentAttributeToCurrentTag();
+                    currentAttribute = new Attribute("", "");
+                    currentTag.Attributes.Add(currentAttribute);
                     Reconsume();
                     return SetState(State.AttributeNameState);
             }
@@ -687,13 +693,25 @@ public class Tokenizer(string content) {
     // 13.2.5.33 Attribute name state
     // https://html.spec.whatwg.org/multipage/parsing.html#attribute-name-state
     private Token? AttributeNameState() {
+        /* When the user agent leaves the attribute name state (and before emitting the tag token, if appropriate),
+        the complete attribute's name must be compared to the other attributes on the same token; if there is already
+        an attribute on the token with the exact same name, then this is a duplicate-attribute parse error and the new
+        attribute must be removed from the token. */
+        void HandleDuplicatedAttribute() {
+            if (currentTag.Attributes.Any((item) => item.name == currentAttribute.name && !ReferenceEquals(item, currentAttribute))) {
+                AddParseError("duplicate-attribute");
+                currentTag.Attributes.RemoveAt(currentTag.Attributes.Count - 1);
+            }
+        }
         while (true) {
             char? c = ConsumeNextInputCharacter();
             switch (c) {
                 case '\t' or '\n' or '\f' or ' ' or '/' or '>' or null:
                     Reconsume();
+                    HandleDuplicatedAttribute();
                     return SetState(State.AfterAttributeNameState);
                 case '=':
+                    HandleDuplicatedAttribute();
                     return SetState(State.BeforeAttributeValueState);
                 case >= 'A' and <= 'Z':
                     currentAttribute.name += (char)(byte)(c | 0x20);
@@ -726,12 +744,13 @@ public class Tokenizer(string content) {
                     return SetState(State.BeforeAttributeValueState);
                 case '>':
                     SetState(State.DataState);
-                    return BuildCurrentTagToken();
+                    return currentTag;
                 case null:
                     AddParseError("eof-in-tag");
                     return new EndOfFile();
                 default:
-                    AddCurrentAttributeToCurrentTag();
+                    currentAttribute = new Attribute("", "");
+                    currentTag.Attributes.Add(currentAttribute);
                     Reconsume();
                     return SetState(State.AttributeNameState);
             }
@@ -753,7 +772,7 @@ public class Tokenizer(string content) {
                 case '>':
                     AddParseError("missing-attribute-value");
                     SetState(State.DataState);
-                    return BuildCurrentTagToken();
+                    return currentTag;
                 default:
                     Reconsume();
                     return SetState(State.AttributeValueUnquotesState);
@@ -823,7 +842,7 @@ public class Tokenizer(string content) {
                     return SetState(State.CharacterReferenceState);
                 case '>':
                     SetState(State.DataState);
-                    return BuildCurrentTagToken();
+                    return currentTag;
                 case '\0':
                     AddParseError("unexpected-null-character");
                     currentAttribute.value += '\uFFFD';
@@ -853,7 +872,7 @@ public class Tokenizer(string content) {
                 return SetState(State.SelfClosingStartTagState);
             case '>':
                 SetState(State.DataState);
-                return BuildCurrentTagToken();
+                return currentTag;
             case null: throw new NotImplementedException();
             default:
                 AddParseError("missing-whitespace-between-attributes");
@@ -870,7 +889,7 @@ public class Tokenizer(string content) {
             case '>':
                 currentTag.selfClosing = true;
                 SetState(State.DataState);
-                return BuildCurrentTagToken();
+                return currentTag;
             case null:
                 AddParseError("eof-in-tag");
                 return new EndOfFile();
