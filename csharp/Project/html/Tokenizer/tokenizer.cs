@@ -1,4 +1,6 @@
 
+using FunWithHtml.html.TreeBuilder;
+
 namespace FunWithHtml.html.Tokenizer;
 
 
@@ -112,10 +114,10 @@ public class DOCTYPE(): Token, IEquatable<DOCTYPE> {
 public class Tag: Token, IEquatable<Tag> {
     public string name { get; set; } = "";
     public bool selfClosing { get; set; } = false;
-    public Dictionary<string, string> Attributes { get; set; } = [];
+    public Dictionary<string, string?> Attributes { get; set; } = [];
 
     public override string ToString() {
-        return base.ToString() + $" {{name: {name}}} {{selfClosing: {selfClosing}}}";
+        return base.ToString() + $" {{name: {name}}} {{selfClosing: {selfClosing}}} {{Attr Length: {Attributes.Count}}}";
     }
 
     public override bool Equals(object? obj) => Equals(obj as Tag);
@@ -219,11 +221,19 @@ public class Tokenizer(string content) {
 
     private string? lastStartTagTagName = null;
 
+    public List<ParseError> Errors { get => parseErrors; }
+    private List<ParseError> parseErrors = [];
+
     private static string NormalizeNewLines(string str) {
         // To normalize newlines in a string, replace every U+000D CR U+000A LF code point pair with a single U+000A LF code point, and then replace every remaining U+000D CR code point with a U+000A LF code point.
         if (str.Length == 0) return str;
         return str.Replace("\r\n", "\n").Replace("\r", "\n");
     }
+
+    private void AddParseError(string error, int? col = null) {
+        parseErrors.Add(new ParseError { line = Line, col = col ?? Col, error = error });
+    }
+
     private char? ConsumeNextInputCharacter() {
         if (content.Length > index) {
             return content[index++];
@@ -253,14 +263,14 @@ public class Tokenizer(string content) {
 
     private void AddCurrentAttributeToCurrentTag() {
         if (currentTag == null) return;
-        if (currentAttribute.name == "") {
+        if (currentAttribute.name is not null) {
             /*  When the user agent leaves the attribute name state (and before emitting the tag token,
                 if appropriate), the complete attribute's name must be compared to the other attributes on
                 the same token; if there is already an attribute on the token with the exact same name,
                 then this is a duplicate-attribute parse error and the new attribute must be removed
                 from the token. */
             if (!currentTag.Attributes.TryAdd(currentAttribute.name, currentAttribute.value)) {
-                // todo emit duplicate-attribute parse error
+                AddParseError("duplicate-attribute");
             }
             currentAttribute = new Attribute();
         }
@@ -282,12 +292,26 @@ public class Tokenizer(string content) {
         return currentTag.name == lastStartTagTagName;
     }
 
-    public Token? NextToken() {
+    private void HandleTokenEmit(Token token) {
+        if (token is StartTag startTag) {
+            lastStartTagTagName = startTag.name;
+        }
+        if (token is EndTag endTag) {
+            if (endTag.selfClosing) {
+                AddParseError("end-tag-with-trailing-solidus");
+                endTag.selfClosing = false;
+            }
+            if (endTag.Attributes.Count != 0) {
+                AddParseError("end-tag-with-attributes");
+                endTag.Attributes.Clear();
+            }
+        }
+    }
+
+    public Token NextToken() {
         if (currentTokens.Count > 0) {
             var token = currentTokens.Dequeue();
-            if (token is StartTag startTag) {
-                lastStartTagTagName = startTag.name;
-            }
+            HandleTokenEmit(token);
             return token;
         }
 
@@ -373,9 +397,7 @@ public class Tokenizer(string content) {
                 _ => throw new NotImplementedException(),
             };
             if (token != null) {
-                if (token is StartTag startTag) {
-                    lastStartTagTagName = startTag.name;
-                }
+                HandleTokenEmit(token);
                 return token;
             }
         }
@@ -391,7 +413,7 @@ public class Tokenizer(string content) {
                 return SetState(State.CharacterReferenceState);
             case '<': return SetState(State.TagOpenState);
             case '\u0000':
-                // todo parse error
+                AddParseError("unexpected-null-character");
                 return new Character((char)c);
             case null: return new EndOfFile();
             default: return new Character((char)c);
@@ -409,7 +431,7 @@ public class Tokenizer(string content) {
             case '<':
                 return SetState(State.RCDATALessTanSignState);
             case '\0':
-                // todo parse error
+                AddParseError("unexpected-null-character");
                 return new Character('\uFFFD');
             case null:
                 return new EndOfFile();
@@ -426,7 +448,7 @@ public class Tokenizer(string content) {
             case '<':
                 return SetState(State.RAWTEXTLessTanSignState);
             case '\0':
-                // todo parse error
+                AddParseError("unexpected-null-character");
                 return new Character('\uFFFD');
             case null:
                 return new EndOfFile();
@@ -443,7 +465,7 @@ public class Tokenizer(string content) {
             case '<':
                 return SetState(State.ScriptDataLessThanSignState);
             case '\0':
-                // todo parse error
+                AddParseError("unexpected-null-character");
                 return new Character('\uFFFD');
             case null:
                 return new EndOfFile();
@@ -459,7 +481,7 @@ public class Tokenizer(string content) {
             char? c = ConsumeNextInputCharacter();
             switch (c) {
                 case '\0':
-                    // todo parse error
+                    AddParseError("unexpected-null-character");
                     return new Character('\uFFFD');
                 case null:
                     return new EndOfFile();
@@ -483,16 +505,16 @@ public class Tokenizer(string content) {
                 Reconsume();
                 return SetState(State.TagNameState);
             case '?':
-                // todo parse error
+                AddParseError("unexpected-question-mark-instead-of-tag-name");
                 currentCommentTag = new();
                 Reconsume();
                 return SetState(State.BogusCommentState);
             case null:
-                // todo parse error
+                AddParseError("eof-before-tag-name");
                 currentTokens.Enqueue(new EndOfFile());
                 return new Character('<');
             default:
-                // todo parse error
+                AddParseError("invalid-first-character-of-tag-name");
                 Reconsume();
                 SetState(State.DataState);
                 return new Character('<');
@@ -509,15 +531,15 @@ public class Tokenizer(string content) {
                 Reconsume();
                 return SetState(State.TagNameState);
             case '>':
-                // todo parse error
+                AddParseError("missing-end-tag-name");
                 return SetState(State.DataState);
             case null:
-                // todo parse error
+                AddParseError("eof-before-tag-name");
                 currentTokens.Enqueue(new Character('/'));
                 currentTokens.Enqueue(new EndOfFile());
                 return new Character('<');
             default:
-                // todo parse error
+                AddParseError("invalid-first-character-of-tag-name");
                 currentCommentTag = new();
                 Reconsume();
                 return SetState(State.BogusCommentState);
@@ -544,7 +566,7 @@ public class Tokenizer(string content) {
                     currentTag.name += '\uFFFD';
                     break;
                 case null:
-                    // todo parse error
+                    AddParseError("unexpected-null-character");
                     return new EndOfFile();
                 default:
                     currentTag.name += c;
@@ -650,7 +672,7 @@ public class Tokenizer(string content) {
                     Reconsume();
                     return SetState(State.AfterAttributeNameState);
                 case '=':
-                    // todo parse error
+                    AddParseError("unexpected-equals-sign-before-attribute-name");
                     AddCurrentAttributeToCurrentTag();
                     currentAttribute.name += c;
                     return SetState(State.AttributeNameState);
@@ -677,11 +699,11 @@ public class Tokenizer(string content) {
                     currentAttribute.name += (char)(byte)(c | 0x20);
                     break;
                 case '\0':
-                    // todo parse error
+                    AddParseError("unexpected-null-character");
                     currentAttribute.name += '\uFFFD';
                     break;
                 case '"' or '\'' or '<':
-                    // todo parse error
+                    AddParseError("unexpected-character-in-attribute-name");
                     goto default;
                 default:
                     currentAttribute.name += c;
@@ -706,7 +728,7 @@ public class Tokenizer(string content) {
                     SetState(State.DataState);
                     return BuildCurrentTagToken();
                 case null:
-                    // todo parse error
+                    AddParseError("eof-in-tag");
                     return new EndOfFile();
                 default:
                     AddCurrentAttributeToCurrentTag();
@@ -729,7 +751,7 @@ public class Tokenizer(string content) {
                 case '\'':
                     return SetState(State.AttributeValueSingleQuotedState);
                 case '>':
-                    // todo parse error
+                    AddParseError("missing-attribute-value");
                     SetState(State.DataState);
                     return BuildCurrentTagToken();
                 default:
@@ -751,7 +773,7 @@ public class Tokenizer(string content) {
                     returnState = State.AttributeValueDoubleQuotedState;
                     return SetState(State.CharacterReferenceState);
                 case '\0':
-                    // todo parse error
+                    AddParseError("unexpected-null-character");
                     currentAttribute.value += '\uFFFD';
                     break;
                 case null:
@@ -775,11 +797,11 @@ public class Tokenizer(string content) {
                     returnState = State.AttributeValueSingleQuotedState;
                     return SetState(State.CharacterReferenceState);
                 case '\0':
-                    // todo parse error
+                    AddParseError("unexpected-null-character");
                     currentAttribute.value += '\uFFFD';
                     break;
                 case null:
-                    // todo parse error
+                    AddParseError("eof-in-tag");
                     return new EndOfFile();
                 default:
                     currentAttribute.value += c;
@@ -803,14 +825,14 @@ public class Tokenizer(string content) {
                     SetState(State.DataState);
                     return BuildCurrentTagToken();
                 case '\0':
-                    // todo parse error
+                    AddParseError("unexpected-null-character");
                     currentAttribute.value += '\uFFFD';
                     break;
                 case '"' or '\'' or '<' or '=' or '`':
-                    // todo parse error
+                    AddParseError("unexpected-character-in-unquoted-attribute-value");
                     goto default;
                 case null:
-                    // todo parse error
+                    AddParseError("eof-in-tag");
                     return new EndOfFile();
                 default:
                     currentAttribute.value += c;
@@ -834,7 +856,7 @@ public class Tokenizer(string content) {
                 return BuildCurrentTagToken();
             case null: throw new NotImplementedException();
             default:
-                // todo parse error
+                AddParseError("missing-whitespace-between-attributes");
                 Reconsume();
                 return SetState(State.BeforeAttributeNameState);
         }
@@ -850,10 +872,10 @@ public class Tokenizer(string content) {
                 SetState(State.DataState);
                 return BuildCurrentTagToken();
             case null:
-                // todo parse error
+                AddParseError("eof-in-tag");
                 return new EndOfFile();
             default:
-                // todo parse error
+                AddParseError("unexpected-solidus-in-tag");
                 Reconsume();
                 return SetState(State.BeforeAttributeNameState);
         }
@@ -872,7 +894,7 @@ public class Tokenizer(string content) {
                     currentTokens.Enqueue(new EndOfFile());
                     return currentCommentTag;
                 case '\0':
-                    // todo parse error
+                    AddParseError("unexpected-null-character");
                     currentCommentTag.data += '\uFFFD';
                     break;
                 default:
@@ -895,7 +917,7 @@ public class Tokenizer(string content) {
         } else if (content.Length >= index + 7 && content[index..(index + 7)].Equals("[CDATA[")) {
             throw new NotImplementedException();
         } else {
-            // todo parse error
+            AddParseError("incorrectly-opened-comment", Col + 1);
             currentCommentTag = new();
             return SetState(State.BogusCommentState);
         }
@@ -909,7 +931,7 @@ public class Tokenizer(string content) {
             case '-':
                 return SetState(State.CommentStartDashState);
             case '>':
-                // todo parse error
+                AddParseError("abrupt-closing-of-empty-comment");
                 SetState(State.DataState);
                 return currentCommentTag;
             default:
@@ -925,11 +947,11 @@ public class Tokenizer(string content) {
             case '-':
                 return SetState(State.CommentEndState);
             case '>':
-                // todo parse error
+                AddParseError("abrupt-closing-of-empty-comment");
                 SetState(State.DataState);
                 return currentCommentTag;
             case null:
-                // todo parse error
+                AddParseError("eof-in-comment");
                 currentTokens.Enqueue(new EndOfFile());
                 return currentCommentTag;
             default:
@@ -950,11 +972,11 @@ public class Tokenizer(string content) {
                 case '-':
                     return SetState(State.CommentEndDashState);
                 case '\0':
-                    // todo parse error
+                    AddParseError("unexpected-null-character");
                     currentCommentTag.data += '\uFFFD';
                     break;
                 case null:
-                    // todo parse error
+                    AddParseError("eof-in-comment");
                     currentTokens.Enqueue(new EndOfFile());
                     return currentCommentTag;
                 default:
@@ -1018,7 +1040,7 @@ public class Tokenizer(string content) {
                 Reconsume();
                 return SetState(State.CommentEndState);
             default:
-                // todo parse error
+                AddParseError("nested-comment");
                 Reconsume();
                 return SetState(State.CommentEndState);
         }
@@ -1032,7 +1054,7 @@ public class Tokenizer(string content) {
             case '-':
                 return SetState(State.CommentEndState);
             case null:
-                // todo parse error
+                AddParseError("eof-in-comment");
                 currentTokens.Enqueue(new EndOfFile());
                 return currentCommentTag;
             default:
@@ -1055,7 +1077,7 @@ public class Tokenizer(string content) {
                     currentCommentTag.data += '-';
                     break;
                 case null:
-                    // todo parse error
+                    AddParseError("eof-in-comment");
                     currentTokens.Enqueue(new EndOfFile());
                     return currentCommentTag;
                 default:
@@ -1075,11 +1097,11 @@ public class Tokenizer(string content) {
                 currentCommentTag.data += "--!";
                 return SetState(State.CommentEndDashState);
             case '>':
-                // todo parse error
+                AddParseError("incorrectly-closed-comment");
                 SetState(State.DataState);
                 return currentCommentTag;
             case null:
-                // todo parse error
+                AddParseError("eof-in-comment");
                 currentTokens.Enqueue(new EndOfFile());
                 return currentCommentTag;
             default:
@@ -1100,13 +1122,13 @@ public class Tokenizer(string content) {
                 Reconsume();
                 return SetState(State.BeforeDOCTYPENameState);
             case null:
-                // todo parse error
+                AddParseError("eof-in-doctype");
                 currentDOCTYPE = new();
                 currentDOCTYPE.forceQuirks = true;
                 currentTokens.Enqueue(new EndOfFile());
                 return currentDOCTYPE;
             default:
-                // todo parse error
+                AddParseError("missing-whitespace-before-doctype-name");
                 Reconsume();
                 return SetState(State.BeforeDOCTYPENameState);
         }
@@ -1124,17 +1146,17 @@ public class Tokenizer(string content) {
                     currentDOCTYPE.name += (char)(byte)(c | 0x20);
                     return SetState(State.DOCTYPENameState);
                 case '\0':
-                    // todo parse error;
+                    AddParseError("unexpected-null-character");
                     currentDOCTYPE = new();
                     currentDOCTYPE.name += '\uFFFD';
                     return SetState(State.DOCTYPENameState);
                 case '>':
-                    // todo parse error
+                    AddParseError("missing-doctype-name");
                     currentDOCTYPE = new();
                     currentDOCTYPE.forceQuirks = true;
                     return SetState(State.DataState);
                 case null:
-                    // todo parse error;
+                    AddParseError("eof-in-doctype");
                     currentDOCTYPE = new();
                     currentDOCTYPE.forceQuirks = true;
                     currentTokens.Enqueue(new EndOfFile());
@@ -1161,11 +1183,11 @@ public class Tokenizer(string content) {
                     currentDOCTYPE.name += (char)(byte)(c | 0x20);
                     break;
                 case '\0':
-                    // todo parse error
+                    AddParseError("unexpected-null-character");
                     currentDOCTYPE.name += '\uFFFD';
                     break;
                 case null:
-                    // todo parse error eof-in-doctype
+                    AddParseError("eof-in-doctype");
                     currentDOCTYPE.forceQuirks = true;
                     currentTokens.Enqueue(new EndOfFile());
                     return currentDOCTYPE;
@@ -1188,7 +1210,7 @@ public class Tokenizer(string content) {
                     SetState(State.DataState);
                     return currentDOCTYPE;
                 case null:
-                    // todo parse error eof-in-doctype
+                    AddParseError("eof-in-doctype");
                     currentDOCTYPE.forceQuirks = true;
                     currentTokens.Enqueue(new EndOfFile());
                     return currentDOCTYPE;
@@ -1201,7 +1223,7 @@ public class Tokenizer(string content) {
                         ConsumeNextCharacters(5); // we consume only 5 because ConsumeNextInputCharacter already consumed one
                         return SetState(State.AfterDoctypeSystemKeywordState);
                     } else {
-                        // todo parse error
+                        AddParseError("invalid-character-sequence-after-doctype-name");
                         currentDOCTYPE.forceQuirks = true;
                         Reconsume();
                         return SetState(State.BogusDoctypeState);
@@ -1218,25 +1240,25 @@ public class Tokenizer(string content) {
             case '\t' or '\n' or '\f' or ' ':
                 return SetState(State.BeforeDOCTYPEpublicIdentifierState);
             case '"':
-                // todo parse error
+                AddParseError("missing-whitespace-after-doctype-public-keyword");
                 currentDOCTYPE.publicId = "";
                 return SetState(State.DOCTYPEPublicIDentifierDoubleQuotedState);
             case '\'':
-                // todo parse error
+                AddParseError("missing-whitespace-after-doctype-public-keyword");
                 currentDOCTYPE.publicId = "";
                 return SetState(State.DOCTYPEPublicIdentifierSingleQuotedState);
             case '>':
-                // todo parse error
+                AddParseError("missing-doctype-public-identifier");
                 currentDOCTYPE.forceQuirks = true;
                 SetState(State.DataState);
                 return currentDOCTYPE;
             case null:
-                // todo parse error
+                AddParseError("eof-in-doctype");
                 currentDOCTYPE.forceQuirks = true;
                 currentTokens.Enqueue(new EndOfFile());
                 return currentDOCTYPE;
             default:
-                // todo parse error
+                AddParseError("missing-quote-before-doctype-public-identifier");
                 currentDOCTYPE.forceQuirks = true;
                 Reconsume();
                 return SetState(State.BogusDoctypeState);
@@ -1258,17 +1280,17 @@ public class Tokenizer(string content) {
                     currentDOCTYPE.publicId = "";
                     return SetState(State.DOCTYPEPublicIdentifierSingleQuotedState);
                 case '>':
-                    // parse error
+                    AddParseError("missing-doctype-public-identifier");
                     currentDOCTYPE.forceQuirks = true;
                     SetState(State.DataState);
                     return currentDOCTYPE;
                 case null:
-                    // parse error
+                    AddParseError("eof-in-doctype");
                     currentDOCTYPE.forceQuirks = true;
                     currentTokens.Enqueue(new EndOfFile());
                     return currentDOCTYPE;
                 default:
-                    // todo parse error
+                    AddParseError("missing-quote-before-doctype-public-identifier");
                     currentDOCTYPE.forceQuirks = true;
                     Reconsume();
                     return SetState(State.BogusDoctypeState);
@@ -1286,16 +1308,16 @@ public class Tokenizer(string content) {
                 case '"':
                     return SetState(State.AfterDOCTYPEPublicIdentifierState);
                 case '\0':
-                    // todo parse error
+                    AddParseError("unexpected-null-character");
                     currentDOCTYPE.publicId += '\uFFFD';
                     break;
                 case '>':
-                    // todo parse error
+                    AddParseError("abrupt-doctype-public-identifier");
                     currentDOCTYPE.forceQuirks = true;
                     SetState(State.DataState);
                     return currentDOCTYPE;
                 case null:
-                    // todo parse error
+                    AddParseError("eof-in-doctype");
                     currentDOCTYPE.forceQuirks = true;
                     currentTokens.Enqueue(new EndOfFile());
                     return currentDOCTYPE;
@@ -1315,16 +1337,16 @@ public class Tokenizer(string content) {
                 case '\'':
                     return SetState(State.AfterDOCTYPEPublicIdentifierState);
                 case '\0':
-                    // todo parse error
+                    AddParseError("unexpected-null-character");
                     currentDOCTYPE.publicId += '\uFFFD';
                     break;
                 case '>':
-                    // todo parse error
+                    AddParseError("abrupt-doctype-public-identifier");
                     currentDOCTYPE.forceQuirks = true;
                     SetState(State.DataState);
                     return currentDOCTYPE;
                 case null:
-                    // todo parse error
+                    AddParseError("eof-in-doctype");
                     currentDOCTYPE.forceQuirks = true;
                     currentTokens.Enqueue(new EndOfFile());
                     return currentDOCTYPE;
@@ -1335,6 +1357,36 @@ public class Tokenizer(string content) {
         }
     }
 
+    // 3.2.5.61 After DOCTYPE public identifier state
+    // https://html.spec.whatwg.org/multipage/parsing.html#after-doctype-public-identifier-state
+    private Token? AfterDOCTYPEPublicIdentifierState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case '\t' or '\n' or '\f' or ' ':
+                return SetState(State.BetweenDoctypePublicAndSystemIdentifiersState);
+            case '>':
+                SetState(State.DataState);
+                return currentDOCTYPE;
+            case '"':
+                AddParseError("missing-whitespace-between-doctype-public-and-system-identifiers");
+                currentDOCTYPE.systemId = "";
+                return SetState(State.DOCTYPESystemIdentifierDoubleQuotedState);
+            case '\'':
+                AddParseError("missing-whitespace-between-doctype-public-and-system-identifiers");
+                currentDOCTYPE.systemId = "";
+                return SetState(State.DOCTYPESystemIdentifierSingleQuotedState);
+            case null:
+                AddParseError("eof-in-doctype");
+                currentDOCTYPE.forceQuirks = true;
+                currentTokens.Enqueue(new EndOfFile());
+                return currentDOCTYPE;
+            default:
+                AddParseError("missing-quote-before-doctype-system-identifier");
+                currentDOCTYPE.forceQuirks = true;
+                Reconsume();
+                return SetState(State.BogusDoctypeState);
+        }
+    }
 
     // 13.2.5.62 Between DOCTYPE public and system identifiers state
     // https://html.spec.whatwg.org/multipage/parsing.html#between-doctype-public-and-system-identifiers-state
@@ -1354,47 +1406,16 @@ public class Tokenizer(string content) {
                     currentDOCTYPE.systemId = "";
                     return SetState(State.DOCTYPESystemIdentifierSingleQuotedState);
                 case null:
-                    // todo parse error
+                    AddParseError("eof-in-doctype");
                     currentDOCTYPE.forceQuirks = true;
                     currentTokens.Enqueue(new EndOfFile());
                     return currentDOCTYPE;
                 default:
-                    // todo parse error
+                    AddParseError("missing-quote-before-doctype-system-identifier");
                     currentDOCTYPE.forceQuirks = true;
                     Reconsume();
                     return SetState(State.BogusDoctypeState);
             }
-        }
-    }
-
-    // 3.2.5.61 After DOCTYPE public identifier state
-    // https://html.spec.whatwg.org/multipage/parsing.html#after-doctype-public-identifier-state
-    private Token? AfterDOCTYPEPublicIdentifierState() {
-        char? c = ConsumeNextInputCharacter();
-        switch (c) {
-            case '\t' or '\n' or '\f' or ' ':
-                return SetState(State.BetweenDoctypePublicAndSystemIdentifiersState);
-            case '>':
-                SetState(State.DataState);
-                return currentDOCTYPE;
-            case '"':
-                // todo parse error
-                currentDOCTYPE.systemId = "";
-                return SetState(State.DOCTYPESystemIdentifierDoubleQuotedState);
-            case '\'':
-                // todo parse error
-                currentDOCTYPE.systemId = "";
-                return SetState(State.DOCTYPESystemIdentifierSingleQuotedState);
-            case null:
-                // todo parse error
-                currentDOCTYPE.forceQuirks = true;
-                currentTokens.Enqueue(new EndOfFile());
-                return currentDOCTYPE;
-            default:
-                // todo parse error
-                currentDOCTYPE.forceQuirks = true;
-                Reconsume();
-                return SetState(State.BogusDoctypeState);
         }
     }
 
@@ -1406,25 +1427,25 @@ public class Tokenizer(string content) {
             case '\t' or '\n' or '\f' or ' ':
                 return SetState(State.BeforeDoctypeSystemIdentifierState);
             case '"':
-                // todo parse error;
+                AddParseError("missing-whitespace-after-doctype-system-keyword");
                 currentDOCTYPE.systemId = "";
                 return SetState(State.DOCTYPESystemIdentifierDoubleQuotedState);
             case '\'':
-                // todo parse error;
+                AddParseError("missing-whitespace-after-doctype-system-keyword");
                 currentDOCTYPE.systemId = "";
                 return SetState(State.DOCTYPESystemIdentifierSingleQuotedState);
             case '>':
-                // todo parse error
+                AddParseError("missing-doctype-system-identifier");
                 currentDOCTYPE.forceQuirks = true;
                 SetState(State.DataState);
                 return currentDOCTYPE;
             case null:
-                // todo parse error
+                AddParseError("eof-in-doctype");
                 currentDOCTYPE.forceQuirks = true;
                 currentTokens.Enqueue(new EndOfFile());
                 return currentDOCTYPE;
             default:
-                // todo parse error
+                AddParseError("missing-quote-before-doctype-system-identifier");
                 currentDOCTYPE.forceQuirks = true;
                 Reconsume();
                 return SetState(State.BogusDoctypeState);
@@ -1446,17 +1467,17 @@ public class Tokenizer(string content) {
                     currentDOCTYPE.systemId = "";
                     return SetState(State.DOCTYPESystemIdentifierSingleQuotedState);
                 case '>':
-                    // todo parse error
+                    AddParseError("missing-doctype-system-identifier");
                     currentDOCTYPE.forceQuirks = true;
                     SetState(State.DataState);
                     return currentDOCTYPE;
                 case null:
-                    // todo parse error
+                    AddParseError("eof-in-doctype");
                     currentDOCTYPE.forceQuirks = true;
                     currentTokens.Enqueue(new EndOfFile());
                     return currentDOCTYPE;
                 default:
-                    // todo parse error
+                    AddParseError("missing-quote-before-doctype-system-identifier");
                     currentDOCTYPE.forceQuirks = true;
                     Reconsume();
                     return SetState(State.BogusDoctypeState);
@@ -1473,16 +1494,16 @@ public class Tokenizer(string content) {
                 case '"':
                     return SetState(State.AfterDOCTYPESystemIdentifierState);
                 case '\0':
-                    // parse error
+                    AddParseError("unexpected-null-character");
                     currentDOCTYPE.systemId += '\uFFFD';
                     break;
                 case '>':
-                    // todo parse error
+                    AddParseError("abrupt-doctype-system-identifier");
                     currentDOCTYPE.forceQuirks = true;
                     SetState(State.DataState);
                     return currentDOCTYPE;
                 case null:
-                    // todo parse error
+                    AddParseError("eof-in-doctype");
                     currentDOCTYPE.forceQuirks = true;
                     currentTokens.Enqueue(new EndOfFile());
                     return currentDOCTYPE;
@@ -1502,16 +1523,16 @@ public class Tokenizer(string content) {
                 case '\'':
                     return SetState(State.AfterDOCTYPESystemIdentifierState);
                 case '\0':
-                    // parse error
+                    AddParseError("unexpected-null-character");
                     currentDOCTYPE.systemId += '\uFFFD';
                     break;
                 case '>':
-                    // todo parse error
+                    AddParseError("abrupt-doctype-system-identifier");
                     currentDOCTYPE.forceQuirks = true;
                     SetState(State.DataState);
                     return currentDOCTYPE;
                 case null:
-                    // todo parse error
+                    AddParseError("eof-in-doctype");
                     currentDOCTYPE.forceQuirks = true;
                     currentTokens.Enqueue(new EndOfFile());
                     return currentDOCTYPE;
@@ -1535,12 +1556,12 @@ public class Tokenizer(string content) {
                     SetState(State.DataState);
                     return currentDOCTYPE;
                 case null:
-                    // todo parse error
+                    AddParseError("eof-in-doctype");
                     currentDOCTYPE.forceQuirks = true;
                     currentTokens.Enqueue(new EndOfFile());
                     return currentDOCTYPE;
                 default:
-                    // todo parse error
+                    AddParseError("unexpected-character-after-doctype-system-identifier");
                     Reconsume();
                     return SetState(State.BogusDoctypeState);
             }
@@ -1557,7 +1578,7 @@ public class Tokenizer(string content) {
                     SetState(State.DataState);
                     return currentDOCTYPE;
                 case '\0':
-                    // todo parse error
+                    AddParseError("unexpected-null-character");
                     break;
                 case null:
                     currentTokens.Enqueue(new EndOfFile());
@@ -1576,7 +1597,7 @@ public class Tokenizer(string content) {
             case ']':
                 return SetState(State.CDATASectionBracketState);
             case null:
-                // todo parse error
+                AddParseError("eof-in-cdata");
                 return new EndOfFile();
             default:
                 return new Character((char)c);
@@ -1633,7 +1654,7 @@ public class Tokenizer(string content) {
                 Reconsume();
                 return SetState(State.HexadecimalCharacterReferenceState);
             default:
-                // todo parse error
+                AddParseError("absence-of-digits-in-numeric-character-reference");
                 FlushCodePointsConsumedAsACharacterReference();
                 Reconsume();
                 SetState(returnState);
@@ -1651,7 +1672,7 @@ public class Tokenizer(string content) {
                 Reconsume();
                 return SetState(State.DecimalCharacterReferenceState);
             default:
-                // todo parse error
+                AddParseError("absence-of-digits-in-numeric-character-reference");
                 FlushCodePointsConsumedAsACharacterReference();
                 Reconsume();
                 SetState(returnState);
@@ -1676,7 +1697,7 @@ public class Tokenizer(string content) {
                 case ';':
                     return SetState(State.NumericCharacterReferenceEndState);
                 default:
-                    // todo parse error
+                    AddParseError("missing-semicolon-after-character-reference");
                     Reconsume();
                     return SetState(State.NumericCharacterReferenceEndState);
             }
@@ -1695,7 +1716,7 @@ public class Tokenizer(string content) {
                 case ';':
                     return SetState(State.NumericCharacterReferenceEndState);
                 default:
-                    // todo parse error
+                    AddParseError("missing-semicolon-after-character-reference");
                     Reconsume();
                     return SetState(State.NumericCharacterReferenceEndState);
             }
@@ -1708,28 +1729,28 @@ public class Tokenizer(string content) {
         // Check the character reference code:
         // If the number is 0x00, then this is a null-character-reference parse error. Set the character reference code to 0xFFFD.
         if (characterReferenceCode == 0x00) {
-            //todo parse error
+            AddParseError("null-character-reference");
             characterReferenceCode = 0xFFFD;
         }
         // If the number is greater than 0x10FFFF, then this is a character-reference-outside-unicode-range parse error. Set the character reference code to 0xFFFD.
         if (characterReferenceCode > 0x10FFF) {
-            // todo parse error
+            AddParseError("character-reference-outside-unicode-range");
             characterReferenceCode = 0xFFFD;
         }
         // If the number is a surrogate, then this is a surrogate-character-reference parse error. Set the character reference code to 0xFFFD.
         if (characterReferenceCode is >= 0xD800 and <= 0xDBFF || characterReferenceCode is >= 0xDC00 and <= 0xDFFF) {
-            // todo parse error
+            AddParseError("surrogate-character-reference");
             characterReferenceCode = 0xFFFD;
         }
         // If the number is a noncharacter, then this is a noncharacter-character-reference parse error.
         if (characterReferenceCode is >= 0xFDD0 and <= 0xDFEF or 0xFFFF or 0x1FFFE or 0x1FFFF or 0x2FFFE or 0x2FFFF or 0x3FFFE or 0x3FFFF or 0x4FFFE or 0x4FFFF or 0x5FFFE or 0x5FFFF
          or 0x6FFFE or 0x6FFFF or 0x7FFFE or 0x7FFFF or 0x8FFFE or 0x8FFFF or 0x9FFFE or 0x9FFFF or 0xAFFFE or 0xAFFFF or 0xBFFFE or 0xBFFFF or 0xCFFFE or 0xCFFFF or 0xDFFFE or 0xDFFFF
           or 0xEFFFE or 0xEFFFF or 0xFFFFE or 0xFFFFF or 0x10FFFE or 0x10FFFF) {
-            // todo parse error
+            AddParseError("noncharacter-character-reference");
         }
         // If the number is 0x0D, or a control that's not ASCII whitespace, then this is a control-character-reference parse error. If the number is one of the numbers in the first column of the following table, then find the row with that number in the first column, and set the character reference code to the number in the second column of that row.        
         if (characterReferenceCode is 0x0D or >= 0x00 and <= 0x001F or >= 0x007F and <= 0x009F) {
-            // todo parse error
+            AddParseError("control-character-reference");
             switch (characterReferenceCode) {
                 case 0x80: characterReferenceCode = 0x20AC; break;
                 case 0x82: characterReferenceCode = 0x201A; break;
