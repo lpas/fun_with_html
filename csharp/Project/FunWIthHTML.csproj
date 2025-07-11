@@ -10,5 +10,8 @@
     <None Update="index.html">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>TestProject</_Parameter1>
+    </AssemblyAttribute>
   </ItemGroup>
 </Project>

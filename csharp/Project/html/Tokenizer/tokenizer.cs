@@ -195,7 +195,7 @@ public class Character(char data): Token, IEquatable<Character> {
 
 }
 
-class EndOfFile: Token { }
+public class EndOfFile: Token { }
 
 
 public class Attribute: IEquatable<Attribute> {
@@ -227,8 +227,8 @@ public class Tokenizer(string content) {
     private readonly string content = NormalizeNewLines(content);
     private int index = 0;
 
-    public int Line { get => 1; } // todo 
-    public int Col { get => index; } // todo
+    public int Line { get; private set; } = 1;
+    public int Col { get; private set; } = 0;
 
     internal State state = State.DataState;
     private State returnState = State.DataState;
@@ -250,6 +250,10 @@ public class Tokenizer(string content) {
     public List<ParseError> Errors { get => parseErrors; }
     private List<ParseError> parseErrors = [];
 
+    private bool shouldReconsume = false;
+    private char? currentCharacter = null;
+
+
     private static string NormalizeNewLines(string str) {
         // To normalize newlines in a string, replace every U+000D CR U+000A LF code point pair with a single U+000A LF code point, and then replace every remaining U+000D CR code point with a U+000A LF code point.
         if (str.Length == 0) return str;
@@ -261,20 +265,36 @@ public class Tokenizer(string content) {
     }
 
     private char? ConsumeNextInputCharacter() {
+        if (shouldReconsume) {
+            shouldReconsume = false;
+            return currentCharacter;
+        }
         if (content.Length > index) {
-            return content[index++];
+            currentCharacter = content[index++];
+            if (currentCharacter == '\n') {
+                Col = 0;
+                Line++;
+            } else {
+                Col++;
+            }
+            if (IsControl((char)currentCharacter) && !IsASCIIWhitespace((char)currentCharacter) && currentCharacter != '\0') {
+                AddParseError("control-character-in-input-stream");
+            }
         } else {
             index++;
-            return null;
+            Col++;
+            currentCharacter = null;
         }
+        return currentCharacter;
     }
 
     private void ConsumeNextCharacters(int num) {
         index += num;
+        Col += num;
     }
 
     private void Reconsume() {
-        index--;
+        shouldReconsume = true;
     }
 
     private Token? SetState(State state) {
@@ -568,10 +588,11 @@ public class Tokenizer(string content) {
                     currentTag.name += (char)(byte)(c | 0x20);
                     break;
                 case '\0':
+                    AddParseError("unexpected-null-character");
                     currentTag.name += '\uFFFD';
                     break;
                 case null:
-                    AddParseError("unexpected-null-character");
+                    AddParseError("eof-in-tag");
                     return new EndOfFile();
                 default:
                     currentTag.name += c;
@@ -796,7 +817,8 @@ public class Tokenizer(string content) {
                     currentAttribute.value += '\uFFFD';
                     break;
                 case null:
-                    throw new NotImplementedException();
+                    AddParseError("eof-in-tag");
+                    return new EndOfFile();
                 default:
                     currentAttribute.value += c;
                     break;
@@ -873,7 +895,9 @@ public class Tokenizer(string content) {
             case '>':
                 SetState(State.DataState);
                 return currentTag;
-            case null: throw new NotImplementedException();
+            case null:
+                AddParseError("eof-in-tag");
+                return new EndOfFile();
             default:
                 AddParseError("missing-whitespace-between-attributes");
                 Reconsume();
@@ -1171,13 +1195,16 @@ public class Tokenizer(string content) {
                     return SetState(State.DOCTYPENameState);
                 case '>':
                     AddParseError("missing-doctype-name");
-                    currentDOCTYPE = new();
-                    currentDOCTYPE.forceQuirks = true;
-                    return SetState(State.DataState);
+                    currentDOCTYPE = new() {
+                        forceQuirks = true
+                    };
+                    SetState(State.DataState);
+                    return currentDOCTYPE;
                 case null:
                     AddParseError("eof-in-doctype");
-                    currentDOCTYPE = new();
-                    currentDOCTYPE.forceQuirks = true;
+                    currentDOCTYPE = new() {
+                        forceQuirks = true
+                    };
                     currentTokens.Enqueue(new EndOfFile());
                     return currentDOCTYPE;
                 default:
@@ -1235,10 +1262,10 @@ public class Tokenizer(string content) {
                     return currentDOCTYPE;
                 default:
                     var cIndex = index - 1; // index was increased with ConsumeNextInputCharacter;
-                    if (content.Length > cIndex + 6 && content[cIndex..(cIndex + 6)].Equals("PUBLIC", StringComparison.OrdinalIgnoreCase)) {
+                    if (content.Length >= cIndex + 6 && content[cIndex..(cIndex + 6)].Equals("PUBLIC", StringComparison.OrdinalIgnoreCase)) {
                         ConsumeNextCharacters(5); // we consume only 5 because ConsumeNextInputCharacter already consumed one
                         return SetState(State.AfterDOCTYPEpublicKeywordState);
-                    } else if (content.Length > cIndex + 6 && content[cIndex..(cIndex + 6)].Equals("SYSTEM", StringComparison.OrdinalIgnoreCase)) {
+                    } else if (content.Length >= cIndex + 6 && content[cIndex..(cIndex + 6)].Equals("SYSTEM", StringComparison.OrdinalIgnoreCase)) {
                         ConsumeNextCharacters(5); // we consume only 5 because ConsumeNextInputCharacter already consumed one
                         return SetState(State.AfterDoctypeSystemKeywordState);
                     } else {
@@ -1757,19 +1784,17 @@ public class Tokenizer(string content) {
             characterReferenceCode = 0xFFFD;
         }
         // If the number is a surrogate, then this is a surrogate-character-reference parse error. Set the character reference code to 0xFFFD.
-        if (characterReferenceCode is >= 0xD800 and <= 0xDBFF || characterReferenceCode is >= 0xDC00 and <= 0xDFFF) {
+        if (IsSurrogate((char)characterReferenceCode)) {
             AddParseError("surrogate-character-reference");
             characterReferenceCode = 0xFFFD;
         }
         // If the number is a noncharacter, then this is a noncharacter-character-reference parse error.
-        if (characterReferenceCode is >= 0xFDD0 and <= 0xDFEF or 0xFFFF or 0x1FFFE or 0x1FFFF or 0x2FFFE or 0x2FFFF or 0x3FFFE or 0x3FFFF or 0x4FFFE or 0x4FFFF or 0x5FFFE or 0x5FFFF
-         or 0x6FFFE or 0x6FFFF or 0x7FFFE or 0x7FFFF or 0x8FFFE or 0x8FFFF or 0x9FFFE or 0x9FFFF or 0xAFFFE or 0xAFFFF or 0xBFFFE or 0xBFFFF or 0xCFFFE or 0xCFFFF or 0xDFFFE or 0xDFFFF
-          or 0xEFFFE or 0xEFFFF or 0xFFFFE or 0xFFFFF or 0x10FFFE or 0x10FFFF) {
+        if (IsNonCharacter(characterReferenceCode)) {
             AddParseError("noncharacter-character-reference");
         }
         // If the number is 0x0D, or a control that's not ASCII whitespace, then this is a control-character-reference parse error. If the number is one of the numbers in the first column of the following table, then find the row with that number in the first column, and set the character reference code to the number in the second column of that row.        
-        if (characterReferenceCode is 0x0D or >= 0x00 and <= 0x001F or >= 0x007F and <= 0x009F) {
-            AddParseError("control-character-reference");
+        if (characterReferenceCode is 0x0D || IsControl((char)characterReferenceCode) && !IsASCIIWhitespace((char)characterReferenceCode)) {
+            AddParseError("control-character-reference", Col + 1);
             switch (characterReferenceCode) {
                 case 0x80: characterReferenceCode = 0x20AC; break;
                 case 0x82: characterReferenceCode = 0x201A; break;
@@ -1807,5 +1832,39 @@ public class Tokenizer(string content) {
         return currentTokens.Count > 0 ? currentTokens.Dequeue() : null;
 
     }
+
+    // 4.6. Code points
+    // https://infra.spec.whatwg.org/#code-points
+
+
+    private static bool IsLeadingSurrogate(char c) {
+        return c is >= '\uD800' and <= '\uDBFF';
+    }
+    private static bool IsTrailingSurrogate(char c) {
+        return c is >= '\uDC00' and <= '\uDFFF';
+    }
+
+    private static bool IsSurrogate(char c) {
+        return IsLeadingSurrogate(c) || IsTrailingSurrogate(c);
+    }
+
+    private static bool IsNonCharacter(double c) {
+        return c is >= 0xFDD0 and <= 0xDFEF or 0xFFFF or 0x1FFFE or 0x1FFFF or 0x2FFFE or 0x2FFFF or 0x3FFFE or 0x3FFFF or 0x4FFFE or 0x4FFFF or 0x5FFFE or 0x5FFFF
+         or 0x6FFFE or 0x6FFFF or 0x7FFFE or 0x7FFFF or 0x8FFFE or 0x8FFFF or 0x9FFFE or 0x9FFFF or 0xAFFFE or 0xAFFFF or 0xBFFFE or 0xBFFFF or 0xCFFFE or 0xCFFFF or 0xDFFFE or 0xDFFFF
+          or 0xEFFFE or 0xEFFFF or 0xFFFFE or 0xFFFFF or 0x10FFFE or 0x10FFFF;
+    }
+
+    private static bool IsASCIIWhitespace(char c) {
+        return c is '\u0009' or '\u000A' or '\u000C' or '\u000D' or '\u0020';
+    }
+
+    private static bool IsC0Control(char c) {
+        return c is >= '\0' and <= '\u001F';
+    }
+    private static bool IsControl(char c) {
+        return IsC0Control(c) || c is >= '\u007F' and <= '\u009F';
+    }
+
+
 
 }
