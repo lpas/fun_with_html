@@ -16,11 +16,11 @@ enum State {
     EndTagOpenState,
     TagNameState,
     RCDATALessTanSignState,
-    RCDATAEndTagOpenSTate,
-    RCDATAEndTagNameSTate,
+    RCDATAEndTagOpenState,
+    RCDATAEndTagNameState,
     RAWTEXTLessTanSignState,
     RAWTEXTEndTagOpenState,
-    RAWTEXTEmdTagNameState,
+    RAWTEXTEndTagNameState,
     ScriptDataLessThanSignState,
     ScriptDataEndTagOpenState,
     ScriptDataEndTagNameState,
@@ -245,7 +245,7 @@ public class Tokenizer(string content) {
 
     private double characterReferenceCode = 0;
 
-    private string? lastStartTagTagName = null;
+    internal string? lastStartTagTagName = null;
 
     public List<ParseError> Errors { get => parseErrors; }
     private List<ParseError> parseErrors = [];
@@ -333,6 +333,10 @@ public class Tokenizer(string content) {
         }
     }
 
+    internal void SwitchState(State state) {
+        this.state = state;
+    }
+
     public Token NextToken() {
         if (currentTokens.Count > 0) {
             var token = currentTokens.Dequeue();
@@ -350,12 +354,12 @@ public class Tokenizer(string content) {
                 State.TagOpenState => TagOpenState(),
                 State.EndTagOpenState => EndTagOpenState(),
                 State.TagNameState => TagNameState(),
-                State.RCDATALessTanSignState => throw new NotImplementedException(),
-                State.RCDATAEndTagOpenSTate => throw new NotImplementedException(),
-                State.RCDATAEndTagNameSTate => throw new NotImplementedException(),
-                State.RAWTEXTLessTanSignState => throw new NotImplementedException(),
-                State.RAWTEXTEndTagOpenState => throw new NotImplementedException(),
-                State.RAWTEXTEmdTagNameState => throw new NotImplementedException(),
+                State.RCDATALessTanSignState => RCDATALessTanSignState(),
+                State.RCDATAEndTagOpenState => RCDATAEndTagOpenState(),
+                State.RCDATAEndTagNameState => RCDATAEndTagNameState(),
+                State.RAWTEXTLessTanSignState => RAWTEXTLessTanSignState(),
+                State.RAWTEXTEndTagOpenState => RAWTEXTEndTagOpenState(),
+                State.RAWTEXTEndTagNameState => RAWTEXTEndTagNameState(),
                 State.ScriptDataLessThanSignState => ScriptDataLessThanSignState(),
                 State.ScriptDataEndTagOpenState => ScriptDataEndTagOpenState(),
                 State.ScriptDataEndTagNameState => ScriptDataEndTagNameState(),
@@ -597,6 +601,138 @@ public class Tokenizer(string content) {
                 default:
                     currentTag.name += c;
                     break;
+            }
+        }
+    }
+
+    // 13.2.5.9 RCDATA less-than sign state
+    // https://html.spec.whatwg.org/multipage/parsing.html#rcdata-less-than-sign-state
+    private Token? RCDATALessTanSignState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case '/':
+                temporaryBuffer = "";
+                return SetState(State.RCDATAEndTagOpenState);
+            default:
+                Reconsume();
+                SetState(State.RCDATAState);
+                return new Character('<');
+        }
+    }
+
+    // 13.2.5.10 RCDATA end tag open state
+    // https://html.spec.whatwg.org/multipage/parsing.html#rcdata-end-tag-open-state
+    private Token? RCDATAEndTagOpenState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case >= 'a' and <= 'z' or >= 'A' and <= 'Z':
+                currentTag = new EndTag();
+                Reconsume();
+                return SetState(State.RCDATAEndTagNameState);
+            default:
+                Reconsume();
+                SetState(State.RCDATAState);
+                currentTokens.Enqueue(new Character('/'));
+                return new Character('<');
+        }
+    }
+
+    // 13.2.5.11 RCDATA end tag name state
+    // https://html.spec.whatwg.org/multipage/parsing.html#rcdata-end-tag-name-state
+    private Token? RCDATAEndTagNameState() {
+        while (true) {
+            char? c = ConsumeNextInputCharacter();
+            switch (c) {
+                case '\t' or '\n' or '\f' or ' ':
+                    throw new NotImplementedException();
+                case '/': throw new NotImplementedException();
+                case '>':
+                    if (IsAppropriateEndTagToken()) {
+                        SetState(State.DataState);
+                        return currentTag;
+                    } else {
+                        goto default;
+                    }
+                case >= 'A' and <= 'Z': throw new NotImplementedException();
+                case >= 'a' and <= 'z':
+                    currentTag.name += c;
+                    temporaryBuffer += c;
+                    break;
+                default:
+                    currentTokens.Enqueue(new Character('<'));
+                    currentTokens.Enqueue(new Character('/'));
+                    foreach (var chr in temporaryBuffer) {
+                        currentTokens.Enqueue(new Character(chr));
+                    }
+                    Reconsume();
+                    SetState(State.RCDATAState);
+                    return currentTokens.Dequeue();
+            }
+        }
+    }
+
+    // 13.2.5.12 RAWTEXT less-than sign state
+    // https://html.spec.whatwg.org/multipage/parsing.html#rawtext-less-than-sign-state
+    private Token? RAWTEXTLessTanSignState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case '/':
+                temporaryBuffer = "";
+                return SetState(State.RAWTEXTEndTagOpenState);
+            default:
+                Reconsume();
+                SetState(State.RAWTEXTState);
+                return new Character('<');
+        }
+    }
+
+    // 13.2.5.13 RAWTEXT end tag open state
+    // https://html.spec.whatwg.org/multipage/parsing.html#rawtext-end-tag-open-state
+    private Token? RAWTEXTEndTagOpenState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case >= 'a' and <= 'z' or >= 'A' and <= 'Z':
+                currentTag = new EndTag();
+                Reconsume();
+                return SetState(State.RAWTEXTEndTagNameState);
+            default:
+                Reconsume();
+                SetState(State.RAWTEXTState);
+                currentTokens.Enqueue(new Character('/'));
+                return new Character('<');
+        }
+    }
+
+    // 13.2.5.14 RAWTEXT end tag name state
+    // https://html.spec.whatwg.org/multipage/parsing.html#rawtext-end-tag-name-state
+    private Token? RAWTEXTEndTagNameState() {
+        while (true) {
+            char? c = ConsumeNextInputCharacter();
+            switch (c) {
+                case '\t' or '\n' or '\f' or ' ':
+                    throw new NotImplementedException();
+                case '/': throw new NotImplementedException();
+                case '>':
+                    if (IsAppropriateEndTagToken()) {
+                        SetState(State.DataState);
+                        return currentTag;
+                    } else {
+                        goto default;
+                    }
+                case >= 'A' and <= 'Z': throw new NotImplementedException();
+                case >= 'a' and <= 'z':
+                    currentTag.name += c;
+                    temporaryBuffer += c;
+                    break;
+                default:
+                    currentTokens.Enqueue(new Character('<'));
+                    currentTokens.Enqueue(new Character('/'));
+                    foreach (var chr in temporaryBuffer) {
+                        currentTokens.Enqueue(new Character(chr));
+                    }
+                    Reconsume();
+                    SetState(State.RAWTEXTState);
+                    return currentTokens.Dequeue();
             }
         }
     }

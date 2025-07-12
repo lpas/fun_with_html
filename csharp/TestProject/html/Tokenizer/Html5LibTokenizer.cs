@@ -18,6 +18,7 @@ public sealed class Html5LibTreeConstruction {
         ("test4.test", [11, // NamedCharacterReferenceState not implemented
                         34,35, // implementation problem utf16 and c#
                         60,61]), // no errors raised in lookahead
+        ("escapeFlag.test", [3]), // NamedCharacterReferenceState not implemented
     ];
 
     [TestMethod]
@@ -42,12 +43,8 @@ public sealed class Html5LibTreeConstruction {
 
                 var description = test.description;
                 var input = test.input;
-                var output = test.output;
-                var initialStates = test.initialStates ?? ["Data state"];
                 Console.WriteLine($"{file}:{index}|{description}");
-                List<ParseError> errors = BuildParseErrors(test);
-                List<Token> testOutput = BuildOutputTokens(output);
-                var error = checkTest(input, initialStates, errors, testOutput);
+                var error = checkTest(input, test);
                 if (error is not null) {
                     if (expectedErrors.Contains(index)) continue;
                     Assert.Fail($"({file}:{index}|{description}) {error}");
@@ -58,10 +55,19 @@ public sealed class Html5LibTreeConstruction {
         }
     }
 
-    private static string? checkTest(string input, List<string> initialStates, List<ParseError> errors, List<Token> testOutput) {
+    private static string? checkTest(string input, Test test) {
+        var output = test.output;
+        var lastStartTag = test.lastStartTag;
+        var errors = BuildParseErrors(test);
+        var testOutput = BuildOutputTokens(output);
+        var initialStates = test.initialStates ?? ["Data state"];
+
         foreach (var startState in initialStates) {
             var state = getStateEnum(startState);
             var tokenizer = new Tokenizer(input) { state = state };
+            if (lastStartTag is not null) {
+                tokenizer.lastStartTagTagName = lastStartTag;
+            }
 
             List<Token> tokenizerOutput = [];
             try {
@@ -75,7 +81,6 @@ public sealed class Html5LibTreeConstruction {
             }
 
             if (tokenizerOutput.Count != testOutput.Count) {
-                return "tokenizer != test";
                 // Console.WriteLine("test:");
                 // foreach (var item in testOutput) {
                 //     Console.WriteLine(item);
@@ -84,6 +89,7 @@ public sealed class Html5LibTreeConstruction {
                 // foreach (var item in tokenizerOutput) {
                 //     Console.WriteLine(item);
                 // }
+                return "tokenizer != test";
             }
 
             for (var i = 0; i < tokenizerOutput.Count; i++) {
@@ -181,6 +187,7 @@ class Test {
     public required List<List<JsonElement>> output { get; set; }
     public List<ErrorItem>? errors { get; set; }
     public List<string>? initialStates { get; set; }
+    public string? lastStartTag { get; set; }
 }
 
 class ErrorItem {
