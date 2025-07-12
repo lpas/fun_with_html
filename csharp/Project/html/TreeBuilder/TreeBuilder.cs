@@ -37,6 +37,7 @@ public static class Namespaces {
 public abstract class Node(Document? ownerDocument) {
     public Document? ownerDocument { get; } = ownerDocument;
     public List<Node> childNodes = [];
+    public Node? parent = null; // todo implement not parent setting in tree building
 }
 public class Document(): Node(null) {
     public override string ToString() {
@@ -141,6 +142,10 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                     switch (token) {
                         case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
                             break; // ignore the token
+                        case Tokenizer.Comment comment:
+                            // Insert a comment as the last child of the Document object.
+                            InsertAComment(comment, (document, document.childNodes.Count));
+                            break;
                         case DOCTYPE doctype:
                             if (doctype.name is not "html" || doctype.publicId is not null || doctype.systemId is not null or "about:legacy-compat") {
                                 AddParseError("InsertionMode.Initial - doctype not html");
@@ -257,7 +262,10 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             // 2. Otherwise, if the element has an http-equiv attribute whose value is an ASCII case-insensitive match for the string "Content-Type", and the element has a content attribute, and applying the algorithm for extracting a character encoding from a meta element to that attribute's value returns an encoding, and the confidence is currently tentative, then change the encoding to the extracted encoding.
 
                             break;
-                        case StartTag { name: "title" }: throw new NotImplementedException();
+                        case StartTag { name: "title" } startTag:
+                            // Follow the generic RCDATA element parsing algorithm.
+                            GenericRCDATAElementParsingAlgorithm(startTag);
+                            break;
                         case StartTag { name: "noscript" } when scriptingFlag: throw new NotImplementedException();
                         case StartTag { name: "noscript" } when !scriptingFlag: throw new NotImplementedException();
                         case StartTag { name: "script" }:
@@ -277,7 +285,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             // Push the element onto the stack of open elements so that it is the new current node.
                             stackOfOpenElements.Push(element);
                             // Switch the tokenizer to the script data state.
-                            // todo
+                            tokenizer.SwitchState(State.ScriptDataState);
                             // Set the original insertion mode to the current insertion mode.
                             originalInsertionMode = insertionMode;
                             // Switch the insertion mode to "text".
@@ -421,7 +429,11 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             break;
 
                         case EndTag:
-                            throw new NotImplementedException();
+                            // Pop the current node off the stack of open elements.
+                            stackOfOpenElements.Pop();
+                            // Switch the insertion mode to the original insertion mode.                        
+                            insertionMode = originalInsertionMode;
+                            break;
                     }
 
                     break;
@@ -461,7 +473,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             case StartTag { name: "caption" or "col" or "colgroup" or "tbody" or "tfood" or "thead" }:
                             case EndTag { name: "table" }:
                                 // If the stack of open elements does not have a tbody, thead, or tfoot element in table scope, this is a parse error; ignore the token.
-                                if (!HasAELementInTableScope("tbody", "thead", "tfoot")) {
+                                if (!HasAElementInTableScope("tbody", "thead", "tfoot")) {
                                     AddParseError("TBODY, THEAD, TFoot");
                                 } else {
                                     // Otherwise:
@@ -477,7 +489,9 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             case EndTag { name: "body" or "caption" or "col" or "colgroup" or "html" or "td" or "th" or "tr" }:
                                 throw new NotImplementedException();
                             default:
-                                throw new NotImplementedException();
+                                // Process the token using the rules for the "in table" insertion mode.
+                                reprocessToken = InsertionModeInTable(reprocessToken, token);
+                                break;
                         }
 
                         break;
@@ -486,7 +500,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // 13.2.6.4.14 The "in row" insertion mode
                 // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intr
                 case InsertionMode.InRow: {
-                        var ClearTheStackBackToTableContext = () => {
+                        var ClearTheStackBackToTableRowContext = () => {
                             while (!((ReadOnlySpan<string>)["tr", "template", "html"]).Contains(stackOfOpenElements.Peek().localName)) {
                                 stackOfOpenElements.Pop();
                             }
@@ -494,7 +508,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                         switch (token) {
                             case StartTag { name: "th" or "td" } tagToken:
                                 // Clear the stack back to a table row context. (See below.)
-                                ClearTheStackBackToTableContext();
+                                ClearTheStackBackToTableRowContext();
                                 // Insert an HTML element for the token, then switch the insertion mode to "in cell".
                                 InsertAnHTMLElement(tagToken);
                                 insertionMode = InsertionMode.InCell;
@@ -502,16 +516,28 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                                 ListOfActiveFormattingElements.Add(null);
                                 break;
                             case EndTag { name: "tr" }:
-                                throw new NotImplementedException();
+                                // If the stack of open elements does not have a tr element in table scope, this is a parse error; ignore the token.
+                                if (!HasAElementInTableScope("tr")) {
+                                    AddParseError("IN ROW - TR - table scope");
+                                    break;
+                                }
+                                // Otherwise:
+
+                                // 1. Clear the stack back to a table row context. (See below.)
+                                ClearTheStackBackToTableRowContext();
+                                // 2. Pop the current node (which will be a tr element) from the stack of open elements. Switch the insertion mode to "in table body".
+                                stackOfOpenElements.Pop();
+                                insertionMode = InsertionMode.InTableBody;
+                                break;
                             case StartTag { name: "caption" or "col" or "colgroup" or "tbody" or "tfoot" or "thead" or "tr" }:
                             case EndTag { name: "table" }:
                                 // If the stack of open elements does not have a tr element in table scope, this is a parse error; ignore the token.
-                                if (!HasAELementInTableScope("tr")) {
+                                if (!HasAElementInTableScope("tr")) {
                                     AddParseError("TR");
                                 } else {
                                     // Otherwise:
                                     // 1. Clear the stack back to a table row context. (See below.)
-                                    ClearTheStackBackToTableContext();
+                                    ClearTheStackBackToTableRowContext();
                                     // 2. Pop the current node (which will be a tr element) from the stack of open elements. Switch the insertion mode to "in table body".
                                     stackOfOpenElements.Pop();
                                     insertionMode = InsertionMode.InTableBody;
@@ -560,7 +586,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             throw new NotImplementedException();
                         case EndTag { name: "table" or "tbody" or "tfoot" or "thead" or "tr" }:
                             // If the stack of open elements does not have an element in table scope that is an HTML element with the same tag name as that of the token, then this is a parse error; ignore the token.
-                            // todo
+                            // todo parse error
                             // Otherwise, close the cell (see below) and reprocess the token.
                             CloseTheCell();
                             reprocessToken = token;
@@ -669,7 +695,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                         case StartTag { name: "html" }: throw new NotImplementedException();
                         case EndTag { name: "html" }:
                             // If the parser was created as part of the HTML fragment parsing algorithm, this is a parse error; ignore the token. (fragment case)
-                            // todo
+                            // todo parse error
                             // Otherwise, switch the insertion mode to "after after body".
                             insertionMode = InsertionMode.AfterAfterBody;
                             break;
@@ -707,6 +733,23 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
 
 
     }
+
+    // 13.2.6.2 Parsing elements that contain only text
+    // https://html.spec.whatwg.org/multipage/parsing.html#parsing-elements-that-contain-only-text
+    private void GenericRawTestElementParsingAlgorithm(StartTag tag) {
+        GenericTextElementParsingAlgorithm(tag, State.RAWTEXTState);
+    }
+    private void GenericRCDATAElementParsingAlgorithm(StartTag tag) {
+        GenericTextElementParsingAlgorithm(tag, State.RCDATAState);
+    }
+
+    private void GenericTextElementParsingAlgorithm(StartTag tag, Tokenizer.State state) {
+        InsertAnHTMLElement(tag);
+        tokenizer.SwitchState(state);
+        originalInsertionMode = insertionMode;
+        insertionMode = InsertionMode.Text;
+    }
+
 
     // 13.2.4.3 The list of active formatting elements
     // https://html.spec.whatwg.org/multipage/parsing.html#clear-the-list-of-active-formatting-elements-up-to-the-last-marker
@@ -778,7 +821,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 throw new NotImplementedException();
             case EndTag { name: "table" }:
                 // If the stack of open elements does not have a table element in table scope, this is a parse error; ignore the token.
-                if (!HasAELementInTableScope("table")) {
+                if (!HasAElementInTableScope("table")) {
                     AddParseError("InsertionModeInTable ENDTag: table");
                 } else {
                     // Otherwise:
@@ -803,8 +846,14 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
             case null:
                 throw new NotImplementedException();
             default:
-                Console.WriteLine(token);
-                throw new NotImplementedException();
+                // Parse error. Enable foster parenting, process the token using the rules for the "in body" insertion mode, and then disable foster parenting.
+                AddParseError("IN TABLE - default");
+                fosterParenting = true;
+                if (!InsertionModeInBody(ref reprocessToken, token)) {
+                    throw new NotImplementedException();
+                }
+                fosterParenting = false;
+                break;
         }
 
         return reprocessToken;
@@ -937,8 +986,26 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                                     "details" or "dialog" or "dir" or "div" or "dl" or "fieldset" or "figcaption" or "figure" or
                                     "footer" or "header" or "hgroup" or "listing" or "main" or "menu" or "nav" or "ol" or "pre" or
                                     "search" or "section" or "summary" or "ul"
-            }:
-                throw new NotImplementedException();
+            } tagToken: {
+                    // If the stack of open elements does not have an element in scope that is an HTML element with the same tag name as that of the token, then this is a parse error; ignore the token.
+                    if (!HasAElementInScope(tagToken.name)) {
+                        AddParseError("INBODY - ENDTAG");
+                        break;
+                    }
+                    // Otherwise, run these steps:
+                    // 1. Generate implied end tags.
+                    GenerateImpliedEndTags();
+                    // 2. If the current node is not an HTML element with the same tag name as that of the token, then this is a parse error.
+                    if (currentNode.localName != tagToken.name) {
+                        AddParseError("INBODY - ENDTAG - !==");
+                    }
+                    // 3. Pop elements from the stack of open elements until an HTML element with the same tag name as the token has been popped from the stack.
+                    while (true) {
+                        var element = stackOfOpenElements.Pop();
+                        if (element.localName == tagToken.name) break;
+                    }
+                    break;
+                }
             case EndTag { name: "form" }: throw new NotImplementedException();
             case EndTag { name: "p" }:
                 // If the stack of open elements does not have a p element in button scope, then this is a parse error; insert an HTML element for a "p" start tag token with no attributes.
@@ -1474,7 +1541,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
         return HasAnElementInTheSpecificScope(elementsName, ["button", .. ElementInScopeSpecialList]);
     }
     // https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-table-scope
-    private bool HasAELementInTableScope(params ReadOnlySpan<string> elementsName) {
+    private bool HasAElementInTableScope(params ReadOnlySpan<string> elementsName) {
         return HasAnElementInTheSpecificScope(elementsName, ["html", "table", "template"]);
     }
     // https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-select-scope
@@ -1555,41 +1622,55 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
     #region 13.2.6.1 Creating and inserting nodes
     // https://html.spec.whatwg.org/multipage/parsing.html#appropriate-place-for-inserting-a-node
     private (Node elem, int childPos) AppropriatePlaceForInsertingANode(Element? overrideTarget = null) {
-        (Node, int) adjustedInsertionLocation;
         // 1. If there was an override target specified, then let target be the override target.
         // Otherwise, let target be the current node.
         var target = overrideTarget ?? currentNode;
         // 2. Determine the adjusted insertion location using the first matching steps from the following list:
-
-        // If foster parenting is enabled and target is a table, tbody, tfoot, thead, or tr element
-        // NOTE: Foster parenting happens when content is misnested in tables.
-        if (fosterParenting && target is Element { localName: "table" or "tbody" or "tfoot" or "thead" or "tr" }) {
-            // Run these substeps:
-            throw new NotImplementedException();
-            // 1. Let last template be the last template element in the stack of open elements, if any.
-
-            // 2. Let last table be the last table element in the stack of open elements, if any.
-
-            // 3. If there is a last template and either there is no last table, or there is one, but last template is lower (more recently added) than last table in the stack of open elements, then: let adjusted insertion location be inside last template's template contents, after its last child (if any), and abort these steps.
-
-            // 4. If there is no last table, then let adjusted insertion location be inside the first element in the stack of open elements (the html element), after its last child (if any), and abort these steps. (fragment case)
-
-            // 5. If last table has a parent node, then let adjusted insertion location be inside last table's parent node, immediately before last table, and abort these steps.
-
-            // 6. Let previous element be the element immediately above last table in the stack of open elements.
-
-            // 7. Let adjusted insertion location be inside previous element, after its last child (if any).
-
-            // NOTE: These steps are involved in part because it's possible for elements, the table element in this case in particular, to have been moved by a script around in the DOM, or indeed removed from the DOM entirely, after the element was inserted by the parser.
-        } else {
-            // Otherwise
-            // Let adjusted insertion location be inside target, after its last child (if any).
-            adjustedInsertionLocation = (target, target.childNodes.Count);
-        }
+        var adjustedInsertionLocation = DetermineTheAdjustedInsertionLocation(target);
         // 3. If the adjusted insertion location is inside a template element, let it instead be inside the template element's template contents, after its last child (if any).
         // todo
         // 4. Return the adjusted insertion location.
         return adjustedInsertionLocation;
+
+        (Node, int) DetermineTheAdjustedInsertionLocation(Element target) {
+            // If foster parenting is enabled and target is a table, tbody, tfoot, thead, or tr element
+            // NOTE: Foster parenting happens when content is misnested in tables.
+            if (fosterParenting && target is Element { localName: "table" or "tbody" or "tfoot" or "thead" or "tr" }) {
+                // Run these substeps:
+                // 1. Let last template be the last template element in the stack of open elements, if any.
+                var lastTemplateIndex = stackOfOpenElements.FindLastIndex((element) => element.localName == "template");
+                var lastTempalte = lastTemplateIndex != -1 ? stackOfOpenElements[lastTemplateIndex] : null;
+                // 2. Let last table be the last table element in the stack of open elements, if any.
+                var lastTableIndex = stackOfOpenElements.FindLastIndex((element) => element.localName == "template");
+                var lastTable = lastTableIndex != -1 ? stackOfOpenElements[lastTableIndex] : null;
+                // 3. If there is a last template and either there is no last table, or there is one, but last template is lower (more recently added) than last table in the stack of open elements, 
+                // then: let adjusted insertion location be inside last template's template contents, after its last child (if any), and abort these steps.
+                if (lastTempalte is not null)
+                    if (lastTable is null || lastTemplateIndex < lastTableIndex) {
+                        return adjustedInsertionLocation = (lastTempalte, lastTempalte.childNodes.Count);
+                    }
+                // 4. If there is no last table, then let adjusted insertion location be inside the first element in the stack of open elements (the html element),
+                // after its last child (if any), and abort these steps. (fragment case)
+                if (lastTable is null) {
+                    return (stackOfOpenElements[0], stackOfOpenElements[0].childNodes.Count);
+                }
+                // 5. If last table has a parent node, then let adjusted insertion location be inside last table's parent node, immediately before last table, and abort these steps.
+                if (lastTable.parent is not null) {
+                    var index = lastTable.parent.childNodes.FindIndex((item) => item == lastTable);
+                    return (lastTable.parent, index);
+                }
+                // 6. Let previous element be the element immediately above last table in the stack of open elements.
+                var previousElement = stackOfOpenElements[lastTableIndex - 1];
+                // 7. Let adjusted insertion location be inside previous element, after its last child (if any).
+                return (previousElement, previousElement.childNodes.Count);
+                // NOTE: These steps are involved in part because it's possible for elements, the table element in this case in particular, to have been moved by a script around in the DOM,
+                // or indeed removed from the DOM entirely, after the element was inserted by the parser.
+            } else {
+                // Otherwise
+                // Let adjusted insertion location be inside target, after its last child (if any).
+                return (target, target.childNodes.Count);
+            }
+        }
     }
     #endregion
     // https://html.spec.whatwg.org/multipage/parsing.html#create-an-element-for-the-token
