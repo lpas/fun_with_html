@@ -120,6 +120,8 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
     private Tokenizer.Tokenizer tokenizer = tokenizer;
     private bool framesetOk = false;
 
+    private List<Character> pendingTableCharacterTokens = [];
+
     public void build() {
         Token? reprocessToken = null;
         Stack<string> lol = new();
@@ -440,11 +442,45 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // 13.2.6.4.9 The "in table" insertion mode
                 // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intable
                 case InsertionMode.InTable: {
-                        reprocessToken = InsertionModeInTable(reprocessToken, token);
-
+                        if (InsertionModeInTable(ref reprocessToken, token)) {
+                            return;
+                        }
                         break;
                     }
-
+                // 13.2.6.4.10 The "in table text" insertion mode
+                // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intabletext
+                case InsertionMode.InTableText: {
+                        switch (token) {
+                            case Character { data: '\0' }: throw new NotImplementedException();
+                            case Character cToken:
+                                // Append the character token to the pending table character tokens list.
+                                pendingTableCharacterTokens.Add(cToken);
+                                break;
+                            default:
+                                // If any of the tokens in the pending table character tokens list are character tokens that are not ASCII whitespace,
+                                // then this is a parse error: reprocess the character tokens in the pending table character tokens list using
+                                // the rules given in the "anything else" entry in the "in table" insertion mode.
+                                if (pendingTableCharacterTokens.Any((item) => item.data is not '\u0009' or '\u000A' or '\u000C' or '\u000D' or '\u0020')) {
+                                    AddParseError("InTableText");
+                                    // todo copied code
+                                    fosterParenting = true;
+                                    pendingTableCharacterTokens.ForEach((token) => {
+                                        if (!InsertionModeInBody(ref reprocessToken, token)) {
+                                            throw new NotImplementedException();
+                                        }
+                                    });
+                                    fosterParenting = false;
+                                } else {
+                                    // Otherwise, insert the characters given by the pending table character tokens list.
+                                    pendingTableCharacterTokens.ForEach(InsertACharacter);
+                                }
+                                // Switch the insertion mode to the original insertion mode and reprocess the token.
+                                insertionMode = originalInsertionMode;
+                                reprocessToken = token;
+                                break;
+                        }
+                        break;
+                    }
                 // 13.2.6.4.13 The "in table body" insertion mode
                 // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intbody
                 case InsertionMode.InTableBody: {
@@ -490,7 +526,10 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                                 throw new NotImplementedException();
                             default:
                                 // Process the token using the rules for the "in table" insertion mode.
-                                reprocessToken = InsertionModeInTable(reprocessToken, token);
+                                if (InsertionModeInTable(ref reprocessToken, token)) {
+                                    return;
+                                }
+                                ;
                                 break;
                         }
 
@@ -550,7 +589,10 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             case EndTag { name: "body" or "caption" or "col" or "colgroup" or "html" or "td" or "th" }:
                                 throw new NotImplementedException();
                             default:
-                                reprocessToken = InsertionModeInTable(reprocessToken, token);
+                                if (InsertionModeInTable(ref reprocessToken, token)) {
+                                    return;
+                                }
+                                ;
                                 break;
 
                         }
@@ -629,7 +671,13 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                         case EndTag { name: "optgroup" }:
                             throw new NotImplementedException();
                         case EndTag { name: "option" }:
-                            throw new NotImplementedException();
+                            // If the current node is an option element, then pop that node from the stack of open elements. Otherwise, this is a parse error; ignore the token.
+                            if (currentNode is Element { localName: "option" }) {
+                                stackOfOpenElements.Pop();
+                            } else {
+                                AddParseError("IN SELECT - END OPTION");
+                            }
+                            break;
                         case EndTag { name: "select" }:
                             // If the stack of open elements does not have a select element in select scope, this is a parse error; ignore the token. (fragment case)
                             if (!HasAElementInSelectScope("select")) {
@@ -690,7 +738,10 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                         case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
                             // todo
                             break;
-                        case Tokenizer.Comment: throw new NotImplementedException();
+                        case Tokenizer.Comment comment:
+                            // Insert a comment as the last child of the first element in the stack of open elements (the html element).
+                            InsertAComment(comment, (stackOfOpenElements[0], stackOfOpenElements[0].childNodes.Count));
+                            break;
                         case DOCTYPE: throw new NotImplementedException();
                         case StartTag { name: "html" }: throw new NotImplementedException();
                         case EndTag { name: "html" }:
@@ -782,7 +833,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
     }
 
     // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intable
-    private Token? InsertionModeInTable(Token? reprocessToken, Token? token) {
+    private bool InsertionModeInTable(ref Token reprocessToken, Token? token) {
         // https://html.spec.whatwg.org/multipage/parsing.html#clear-the-stack-back-to-a-table-context
         var ClearTheStackBackToTableContext = () => {
             while (!((ReadOnlySpan<string>)["table", "template", "html"]).Contains(stackOfOpenElements.Peek().localName)) {
@@ -792,9 +843,17 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
 
         switch (token) {
             case Character when currentNode is Element { localName: "table" or "tbody" or "tempalte" or "tfoot" or "thead" or "tr" }:
-                throw new NotImplementedException();
-            case Tokenizer.Comment:
-                throw new NotImplementedException();
+                // Let the pending table character tokens be an empty list of tokens.
+                pendingTableCharacterTokens = [];
+                // Set the original insertion mode to the current insertion mode.
+                originalInsertionMode = insertionMode;
+                // Switch the insertion mode to "in table text" and reprocess the token.
+                insertionMode = InsertionMode.InTableText;
+                break;
+            case Tokenizer.Comment comment:
+                // Insert a comment.
+                InsertAComment(comment);
+                break;
             case DOCTYPE:
                 throw new NotImplementedException();
             case StartTag { name: "caption" }:
@@ -850,13 +909,13 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 AddParseError("IN TABLE - default");
                 fosterParenting = true;
                 if (!InsertionModeInBody(ref reprocessToken, token)) {
-                    throw new NotImplementedException();
+                    return true;
                 }
                 fosterParenting = false;
                 break;
         }
 
-        return reprocessToken;
+        return false;
     }
 
 
@@ -958,7 +1017,44 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 break;
             case StartTag { name: "pre" or "listing" }: throw new NotImplementedException();
             case StartTag { name: "form" }: throw new NotImplementedException();
-            case StartTag { name: "li" }: throw new NotImplementedException();
+            case StartTag { name: "li" } tagToken:
+                // 1. Set the frameset-ok flag to "not ok".
+                framesetOk = false;
+                // 2. Initialize node to be the current node (the bottommost node of the stack).
+                var node = currentNode;
+            // 3. Loop: If node is an li element, then run these substeps:
+            loop:
+                if (node is Element { localName: "li" }) {
+                    // 1. Generate implied end tags, except for li elements.
+                    GenerateImpliedEndTags("li");
+                    // 2. If the current node is not an li element, then this is a parse error.
+                    if (currentNode is not Element { localName: "li" }) {
+                        AddParseError("insertionMode in body: LI");
+                    }
+                    // 3. Pop elements from the stack of open elements until an li element has been popped from the stack.
+                    while (true) {
+                        if (stackOfOpenElements.Pop() is Element { localName: "li" }) break;
+                    }
+                    // 4. Jump to the step labeled done below.
+                    goto done;
+                }
+                // 4. If node is in the special category, but is not an address, div, or p element, then jump to the step labeled done below.
+                if (node.localName is not "address" or "div" or "p" && specialListElements.Contains(node.localName)) {
+                    goto done;
+                } else {
+                    // 5. Otherwise, set node to the previous entry in the stack of open elements and return to the step labeled loop.
+                    throw new NotImplementedException();
+                    goto loop;
+                }
+            // 6. Done: If the stack of open elements has a p element in button scope, then close a p element.
+            done:
+                if (HasAElementInButtonScope("p")) {
+                    CloseAPElement();
+                }
+                // 7. Finally, insert an HTML element for the token.
+                InsertAnHTMLElement(tagToken);
+                break;
+
             case StartTag { name: "dd" or "dt" }: throw new NotImplementedException();
             case StartTag { name: "plaintext" }: throw new NotImplementedException();
             case StartTag { name: "button" } tagToken:
