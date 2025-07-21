@@ -39,6 +39,26 @@ Test
     }
 
     [TestMethod]
+    public void EmptyData() {
+        var testReader = TestReader.CreateFromString("""
+            #data
+
+            #errors
+            (1,0): expected-doctype-but-got-eof
+            #document
+            | <html>
+            |   <head>
+            |   <body>
+            """);
+        var testCase = testReader.GetTestCases().First();
+        Console.WriteLine(testCase);
+        Assert.AreEqual(1, testCase.data.Count);
+        Assert.AreEqual(1, testCase.errors.Count);
+        Assert.AreEqual(3, testCase.document.Count);
+
+    }
+
+    [TestMethod]
     public void TreeCompare() {
         var testReader = TestReader.CreateFromString(TestCaseString);
         var testCase = testReader.GetTestCases().First();

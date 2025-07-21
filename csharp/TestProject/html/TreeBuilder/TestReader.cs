@@ -51,7 +51,7 @@ public class TestReader(IEnumerable<string> iter) {
         var currentState = TestState.Data;
         var notEmitted = false;
         foreach (var line in iter) {
-            if (line == "") {
+            if (line == "" && currentState == TestState.Document) {
                 yield return testCase;
                 notEmitted = false;
                 testCase = new TestCase();

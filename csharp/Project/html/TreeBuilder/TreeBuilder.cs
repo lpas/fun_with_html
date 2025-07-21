@@ -443,8 +443,13 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                         };
 
                         switch (token) {
-                            case StartTag { name: "tr" }:
-                                throw new NotImplementedException();
+                            case StartTag { name: "tr" } tagToken:
+                                // Clear the stack back to a table body context. (See below.)
+                                ClearTheStackBackToTableContext();
+                                // Insert an HTML element for the token, then switch the insertion mode to "in row".
+                                InsertAnHTMLElement(tagToken);
+                                insertionMode = InsertionMode.InRow;
+                                break;
                             case StartTag { name: "th" or "td" }:
                                 AddParseError("unexpected-cell-in-table-body");
                                 // Clear the stack back to a table body context. (See below.)
@@ -571,8 +576,28 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                         insertionMode = InsertionMode.InRow;
                     };
                     switch (token) {
-                        case EndTag { name: "td" or "th" }:
-                            throw new NotImplementedException();
+                        case EndTag { name: "td" or "th" } tagToken:
+                            // If the stack of open elements does not have an element in table scope that is an HTML element with the same tag name as that of the token, then this is a parse error; ignore the token.
+                            if (!HasAElementInTableScope(tagToken.name)) {
+                                AddParseError("IN CELL - not in table scope");
+                            } else {
+                                // Otherwise:
+                                // 1. Generate implied end tags.
+                                GenerateImpliedEndTags();
+                                // 2. Now, if the current node is not an HTML element with the same tag name as the token, then this is a parse error.
+                                if (currentNode.localName != tagToken.name) {
+                                    AddParseError("IN CELL - Otherwise not same");
+                                }
+                                // 3. Pop elements from the stack of open elements until an HTML element with the same tag name as the token has been popped from the stack.
+                                while (true) {
+                                    if (stackOfOpenElements.Pop().localName == tagToken.name) break;
+                                }
+                                // 4. Clear the list of active formatting elements up to the last marker.
+                                ClearTheListOfACtiveFormattingElementsUpToTheLastMarker();
+                                // 5. Switch the insertion mode to "in row".
+                                insertionMode = InsertionMode.InRow;
+                            }
+                            break;
                         case StartTag { name: "caption" or "col" or "colgroup" or "tbody" or "td" or "tfoot" or "th" or "thead" or "tr" }:
                             throw new NotImplementedException();
                         case EndTag { name: "body" or "caption" or "col" or "colgroup" or "html" }:
@@ -1205,7 +1230,27 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // Set the frameset-ok flag to "not ok".
                 framesetOk = false;
                 break;
-            case EndTag { name: "applet" or "marquee" or "object" }: throw new NotImplementedException();
+            case EndTag { name: "applet" or "marquee" or "object" } tagToken:
+                // If the stack of open elements does not have an element in scope that is an HTML element with the same tag name as that of the token, then this is a parse error; ignore the token.
+                if (!HasAElementInScope(tagToken.name)) {
+                    AddParseError("IN BODY - not in scope");
+                } else {
+                    // Otherwise, run these steps:
+                    // 1. Generate implied end tags.
+                    GenerateImpliedEndTags();
+                    // 2. If the current node is not an HTML element with the same tag name as that of the token, then this is a parse error.
+                    if (currentNode.localName != tagToken.name) {
+                        AddParseError("end-tag-too-early");
+                    }
+                    // 3. Pop elements from the stack of open elements until an HTML element with the same tag name as the token has been popped from the stack.
+                    while (true) {
+                        if (stackOfOpenElements.Pop().localName == tagToken.name) break;
+                    }
+                    // 4. Clear the list of active formatting elements up to the last marker.
+                    ClearTheListOfACtiveFormattingElementsUpToTheLastMarker();
+                }
+
+                break;
             case StartTag { name: "table" } tagToken:
                 // If the Document is not set to quirks mode, and the stack of open elements has a p element in button scope, then close a p element.
                 // todo
