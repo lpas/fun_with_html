@@ -59,6 +59,36 @@ Test
     }
 
     [TestMethod]
+    public void TreeWithAttributes() {
+        var testReader = TestReader.CreateFromString("""
+            #data
+            <hr foo="bar">
+            #errors
+            (1,0): expected-doctype-but-got-eof
+            #document
+            | <html>
+            |   <head>
+            |   <body>
+            |     <hr>
+            |       foo="bar"
+            """);
+        var testCase = testReader.GetTestCases().First();
+        var document = new Document();
+        var html = new Element(document, "html");
+        document.childNodes.Add(html);
+        var head = new Element(document, "head");
+        var body = new Element(document, "body");
+        html.childNodes.AddRange([head, body]);
+        var hr = new Element(document, "hr");
+        hr.attributes.Add("foo", "bar");
+        body.childNodes.Add(hr);
+        TreeBuilder.PrintDebugDocumentTree(document);
+        TestReader.AssertEqDocument(testCase, document);
+    }
+
+
+
+    [TestMethod]
     public void TreeCompare() {
         var testReader = TestReader.CreateFromString(TestCaseString);
         var testCase = testReader.GetTestCases().First();

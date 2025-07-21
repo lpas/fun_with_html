@@ -70,10 +70,21 @@ public class Element(Document document, string localName): Node(document) {
     public string? @namespace;
     public string? namespacePrefix;
     public string localName = localName;
+    public Dictionary<string, string> attributes = [];
 
     public override string ToString() {
         return $"<{localName}>";
     }
+}
+
+public class NodeAttr(string name, string value): Node(null) {
+    public string name = name;
+    public string value = value;
+
+    public override string ToString() {
+        return $"{name}=\"{value}\"";
+    }
+
 }
 
 public class Text(Document document, string data): Node(document) {
@@ -2181,6 +2192,10 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
         );
 
         // 11. Append each attribute in the given token to element.
+        // todo this is not how this should be done: https://dom.spec.whatwg.org/#concept-element-attributes-append
+        token.Attributes.ForEach((attr) => {
+            element.attributes.Add(attr.name, attr.value);
+        });
         // Note: This can enqueue a custom element callback reaction for the attributeChangedCallback, which might run immediately (in the next step).
         // Note: Even though the is attribute governs the creation of a customized built-in element, it is not present during the execution of the relevant custom element constructor; it is appended in this step, along with all other attributes.
 
@@ -2216,6 +2231,12 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
             var (node, depth) = stack.Pop();
             var indentation = depth == 0 ? "" : ("|" + new string(' ', depth * 2 - 1));
             Console.WriteLine($"{indentation}{node}");
+            if (node is Element element && element.attributes.Count > 0) {
+                var attributeIndentation = "|" + new string(' ', (depth + 1) * 2 - 1);
+                foreach (var attr in element.attributes) {
+                    Console.WriteLine($"{attributeIndentation}{attr.Key}=\"{attr.Value}\"");
+                }
+            }
             foreach (var child in Enumerable.Reverse(node.childNodes)) {
                 stack.Push((child, depth + 1));
             }

@@ -103,6 +103,11 @@ public class TestReader(IEnumerable<string> iter) {
             if ($"{indentation}{node}" != iter.Current) {
                 Assert.Fail($"tree != testCase (diff) \n tree:     {indentation}{node} \n testCase: {iter.Current}");
             }
+            if (node is Element element && element.attributes.Count > 0) {
+                foreach (var attr in element.attributes) {
+                    stack.Push((new NodeAttr(attr.Key, attr.Value), depth + 1));
+                }
+            }
             foreach (var child in Enumerable.Reverse(node.childNodes)) {
                 stack.Push((child, depth + 1));
             }
