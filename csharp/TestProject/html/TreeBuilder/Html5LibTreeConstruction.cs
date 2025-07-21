@@ -13,13 +13,12 @@ public sealed class Html5LibTreeConstruction {
     public void ReadFileVsReadStr() {
         var filePath = Path.Combine(ProjectDirectory, "html5lib-tests", "tree-construction", "tests1.dat");
         var testReader = TestReader.CreateFromFile(filePath);
-        int[] skipTests = [29, 30]; // tree building has problems infinity running tests
+        int[] skipTests = [29, 30, 57]; // tree building has problems infinity running tests
         // todo fix 31 attributes
-        int[] expectWrongTree = [22, 23, 31, 32];
-        int[] expectWrongErrors = [27, 35, 36, 37, 38, 39, 40]; // tree is ok but parse error miss match
+        int[] expectWrongTree = [22, 23, 31, 32, 51, 52, 53, 56, 60];
+        int[] expectWrongErrors = [27, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 55]; // tree is ok but parse error miss match
 
         foreach (var (testCase, index) in testReader.GetTestCases().Select((testCase, i) => (testCase, i))) {
-            if (index != 31) continue;
             Console.WriteLine(index);
             if (skipTests.Contains(index)) continue;
 

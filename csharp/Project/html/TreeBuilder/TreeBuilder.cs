@@ -243,80 +243,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // 13.2.6.4.4 The "in head" insertion mode
                 // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inhead
                 case InsertionMode.InHead:
-                    switch (token) {
-                        case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' } cToken:
-                            InsertACharacter(cToken);
-                            break;
-                        case Tokenizer.Comment: throw new NotImplementedException();
-                        case DOCTYPE: throw new NotImplementedException();
-                        case StartTag { name: "html" }: throw new NotImplementedException();
-                        case StartTag { name: "base" or "basefont" or "bgsound" or "link" }: throw new NotImplementedException();
-                        case StartTag { name: "meta" } tagToken:
-                            // Insert an HTML element for the token. Immediately pop the current node off the stack of open elements.
-                            InsertAnHTMLElement(tagToken);
-                            stackOfOpenElements.Pop();
-                            // Acknowledge the token's self-closing flag, if it is set.
-
-                            // If the active speculative HTML parser is null, then:
-
-                            // 1. If the element has a charset attribute, and getting an encoding from its value results in an encoding, and the confidence is currently tentative, then change the encoding to the resulting encoding.
-
-                            // 2. Otherwise, if the element has an http-equiv attribute whose value is an ASCII case-insensitive match for the string "Content-Type", and the element has a content attribute, and applying the algorithm for extracting a character encoding from a meta element to that attribute's value returns an encoding, and the confidence is currently tentative, then change the encoding to the extracted encoding.
-
-                            break;
-                        case StartTag { name: "title" } startTag:
-                            // Follow the generic RCDATA element parsing algorithm.
-                            GenericRCDATAElementParsingAlgorithm(startTag);
-                            break;
-                        case StartTag { name: "noscript" } when scriptingFlag: throw new NotImplementedException();
-                        case StartTag { name: "noscript" } when !scriptingFlag: throw new NotImplementedException();
-                        case StartTag { name: "script" }:
-                            // 1. Let the adjusted insertion location be the appropriate place for inserting a node.
-                            var adjustedInsertionLocation = AppropriatePlaceForInsertingANode();
-                            // 2. Create an element for the token in the HTML namespace, with the intended parent being the element in which the adjusted insertion location finds itself.
-                            var element = CreateAnElement(document, "script", Namespaces.HTML);
-                            // 3. Set the element's parser document to the Document, and set the element's force async to false.
-                            // todo
-                            // NOTE: This ensures that, if the script is external, any document.write() calls in the script will execute in-line, instead of blowing the document away, as would happen in most other cases. It also prevents the script from executing until the end tag is seen.
-                            // If the parser was created as part of the HTML fragment parsing algorithm, then set the script element's already started to true. (fragment case)
-                            // todo
-                            // If the parser was invoked via the document.write() or document.writeln() methods, then optionally set the script element's already started to true. (For example, the user agent might use this clause to prevent execution of cross-origin scripts inserted via document.write() under slow network conditions, or when the page has already taken a long time to load.)
-                            // todo
-                            // Insert the newly created element at the adjusted insertion location.
-                            adjustedInsertionLocation.elem.childNodes.Insert(adjustedInsertionLocation.childPos, element);
-                            // Push the element onto the stack of open elements so that it is the new current node.
-                            stackOfOpenElements.Push(element);
-                            // Switch the tokenizer to the script data state.
-                            tokenizer.SwitchState(State.ScriptDataState);
-                            // Set the original insertion mode to the current insertion mode.
-                            originalInsertionMode = insertionMode;
-                            // Switch the insertion mode to "text".
-                            insertionMode = InsertionMode.Text;
-                            break;
-                        case EndTag { name: "head" }:
-                            // Pop the current node (which will be the head element) off the stack of open elements.
-                            stackOfOpenElements.Pop();
-                            // Switch the insertion mode to "after head".
-                            insertionMode = InsertionMode.AfterHead;
-                            break;
-                        case EndTag { name: "body" or "html" or "br" }:
-                            // Act as described in the "anything else" entry below.
-                            goto default;
-                        case StartTag { name: "template" }: throw new NotImplementedException();
-                        case EndTag { name: "template" }: throw new NotImplementedException();
-                        case StartTag { name: "head" }:
-                        case EndTag:
-                            AddParseError("InsertionMode.InHead: EndTag");
-                            break; // ignore the token
-                        default:
-                            //Pop the current node (which will be the head element) off the stack of open elements.
-                            stackOfOpenElements.Pop();
-                            //Switch the insertion mode to "after head".
-                            insertionMode = InsertionMode.AfterHead;
-                            //Reprocess the token.
-                            reprocessToken = token;
-                            break;
-                    }
+                    reprocessToken = InsertionModeInHead(reprocessToken, token);
                     break;
                 // 13.2.6.4.6 The "after head" insertion mode
                 // https://html.spec.whatwg.org/multipage/parsing.html#the-after-head-insertion-mode
@@ -338,7 +265,20 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             break;
                         case StartTag { name: "frameset" }: throw new NotImplementedException();
                         case StartTag { name: "base" or "basefont" or "bgsound" or "link" or "meta" or "noframes" or "script" or "style" or "template" or "title" }:
-                            throw new NotImplementedException();
+                            // Parse error.
+                            AddParseError("AfterHead -  parse error");
+                            // Push the node pointed to by the head element pointer onto the stack of open elements.
+                            stackOfOpenElements.Add(headElementPointer!);
+                            // Process the token using the rules for the "in head" insertion mode.
+                            reprocessToken = InsertionModeInHead(reprocessToken, token);
+                            // Remove the node pointed to by the head element pointer from the stack of open elements. (It might not be the current node at this point.)
+                            for (var i = stackOfOpenElements.Count - 1; i > 0; i--) {
+                                if (stackOfOpenElements[i] == headElementPointer) {
+                                    stackOfOpenElements.RemoveAt(i);
+                                }
+                            }
+                            // Note: The head element pointer cannot be null at this point.
+                            break;
                         case EndTag { name: "template" }: throw new NotImplementedException();
                         case EndTag { name: "body" or "html" or "br" }:
                             // Act as described in the "anything else" entry below.
@@ -371,7 +311,18 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             InsertACharacter(cToken);
                             break;
                         case EndOfFile:
-                            throw new NotImplementedException();
+                            // Parse error.
+                            AddParseError("Text mode EOF");
+                            // If the current node is a script element, then set its already started to true.
+                            if (currentNode is Element { localName: "script" }) {
+                                throw new NotImplementedException();
+                            }
+                            // Pop the current node off the stack of open elements.
+                            stackOfOpenElements.Pop();
+                            // Switch the insertion mode to the original insertion mode and reprocess the token.
+                            insertionMode = originalInsertionMode;
+                            reprocessToken = token;
+                            break;
                         case EndTag { name: "script" }:
                             // If the active speculative HTML parser is null and the JavaScript execution context stack is empty, then perform a microtask checkpoint.
                             // todo
@@ -831,6 +782,92 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
         // Insert the newly created node at the adjusted insertion location.
         adjustedInsertionLocation.elem.childNodes.Insert(adjustedInsertionLocation.childPos, element);
     }
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inhead
+    private Token? InsertionModeInHead(Token? reprocessToken, Token token) {
+        switch (token) {
+            case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' } cToken:
+                InsertACharacter(cToken);
+                break;
+            case Tokenizer.Comment: throw new NotImplementedException();
+            case DOCTYPE: throw new NotImplementedException();
+            case StartTag { name: "html" }: throw new NotImplementedException();
+            case StartTag { name: "base" or "basefont" or "bgsound" or "link" }: throw new NotImplementedException();
+            case StartTag { name: "meta" } tagToken:
+                // Insert an HTML element for the token. Immediately pop the current node off the stack of open elements.
+                InsertAnHTMLElement(tagToken);
+                stackOfOpenElements.Pop();
+                // Acknowledge the token's self-closing flag, if it is set.
+
+                // If the active speculative HTML parser is null, then:
+
+                // 1. If the element has a charset attribute, and getting an encoding from its value results in an encoding, and the confidence is currently tentative, then change the encoding to the resulting encoding.
+
+                // 2. Otherwise, if the element has an http-equiv attribute whose value is an ASCII case-insensitive match for the string "Content-Type", and the element has a content attribute, and applying the algorithm for extracting a character encoding from a meta element to that attribute's value returns an encoding, and the confidence is currently tentative, then change the encoding to the extracted encoding.
+
+                break;
+            case StartTag { name: "title" } startTag:
+                // Follow the generic RCDATA element parsing algorithm.
+                GenericRCDATAElementParsingAlgorithm(startTag);
+                break;
+            case StartTag { name: "noscript" } startTag when scriptingFlag:
+                GenericRawTestElementParsingAlgorithm(startTag);
+                break;
+            case StartTag { name: "noframes" or "style" } startTag:
+                GenericRawTestElementParsingAlgorithm(startTag);
+                break;
+            case StartTag { name: "noscript" } when !scriptingFlag: throw new NotImplementedException();
+            case StartTag { name: "script" }:
+                // 1. Let the adjusted insertion location be the appropriate place for inserting a node.
+                var adjustedInsertionLocation = AppropriatePlaceForInsertingANode();
+                // 2. Create an element for the token in the HTML namespace, with the intended parent being the element in which the adjusted insertion location finds itself.
+                var element = CreateAnElement(document, "script", Namespaces.HTML);
+                // 3. Set the element's parser document to the Document, and set the element's force async to false.
+                // todo
+                // NOTE: This ensures that, if the script is external, any document.write() calls in the script will execute in-line, instead of blowing the document away, as would happen in most other cases. It also prevents the script from executing until the end tag is seen.
+                // If the parser was created as part of the HTML fragment parsing algorithm, then set the script element's already started to true. (fragment case)
+                // todo
+                // If the parser was invoked via the document.write() or document.writeln() methods, then optionally set the script element's already started to true. (For example, the user agent might use this clause to prevent execution of cross-origin scripts inserted via document.write() under slow network conditions, or when the page has already taken a long time to load.)
+                // todo
+                // Insert the newly created element at the adjusted insertion location.
+                adjustedInsertionLocation.elem.childNodes.Insert(adjustedInsertionLocation.childPos, element);
+                // Push the element onto the stack of open elements so that it is the new current node.
+                stackOfOpenElements.Push(element);
+                // Switch the tokenizer to the script data state.
+                tokenizer.SwitchState(State.ScriptDataState);
+                // Set the original insertion mode to the current insertion mode.
+                originalInsertionMode = insertionMode;
+                // Switch the insertion mode to "text".
+                insertionMode = InsertionMode.Text;
+                break;
+            case EndTag { name: "head" }:
+                // Pop the current node (which will be the head element) off the stack of open elements.
+                stackOfOpenElements.Pop();
+                // Switch the insertion mode to "after head".
+                insertionMode = InsertionMode.AfterHead;
+                break;
+            case EndTag { name: "body" or "html" or "br" }:
+                // Act as described in the "anything else" entry below.
+                goto default;
+            case StartTag { name: "template" }: throw new NotImplementedException();
+            case EndTag { name: "template" }: throw new NotImplementedException();
+            case StartTag { name: "head" }:
+            case EndTag:
+                AddParseError("InsertionMode.InHead: EndTag");
+                break; // ignore the token
+            default:
+                //Pop the current node (which will be the head element) off the stack of open elements.
+                stackOfOpenElements.Pop();
+                //Switch the insertion mode to "after head".
+                insertionMode = InsertionMode.AfterHead;
+                //Reprocess the token.
+                reprocessToken = token;
+                break;
+        }
+
+        return reprocessToken;
+    }
+
 
     // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intable
     private bool InsertionModeInTable(ref Token reprocessToken, Token? token) {
@@ -1334,7 +1371,9 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
             }
             // 4. If formattingElement is not in the stack of open elements, then this is a parse error; remove the element from the list, and return.
             if (!stackOfOpenElements.Contains(formattingElement)) {
-                throw new NotImplementedException();
+                AddParseError("AdoptionAgencyAlgorithm: 4.4");
+                ListOfActiveFormattingElements.Remove(formattingElement);
+                return false;
             }
             // 5. If formattingElement is in the stack of open elements, but the element is not in scope, then this is a parse error; return.
             if (!HasAElementInScope(formattingElement.localName)) {
