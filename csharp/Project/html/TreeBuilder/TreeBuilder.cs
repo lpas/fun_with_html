@@ -108,6 +108,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
     public List<ParseError> Errors { get => [.. parseErrors]; }
 
     private Element? headElementPointer = null;
+    private Element? formElementPointer = null;
 
     private bool scriptingFlag = false;
 
@@ -191,7 +192,9 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             // Act as described in the "anything else" entry below.
                             goto default;
                         case EndTag:
-                            throw new NotImplementedException();
+                            // Parse error. Ignore the token.
+                            AddParseError("unexpected-end-tag-before-html");
+                            break;
                         default: {
                                 // Create an html element whose node document is the Document object. Append it to the Document object. Put this element in the stack of open elements.
                                 var element = CreateAnElement(document, "html", Namespaces.HTML);
@@ -263,7 +266,12 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             // Switch the insertion mode to "in body".
                             insertionMode = InsertionMode.InBody;
                             break;
-                        case StartTag { name: "frameset" }: throw new NotImplementedException();
+                        case StartTag { name: "frameset" } tagToken:
+                            // Insert an HTML element for the token.
+                            InsertAnHTMLElement(tagToken);
+                            // Switch the insertion mode to "in frameset".
+                            insertionMode = InsertionMode.InFrameset;
+                            break;
                         case StartTag { name: "base" or "basefont" or "bgsound" or "link" or "meta" or "noframes" or "script" or "style" or "template" or "title" }:
                             // Parse error.
                             AddParseError("AfterHead -  parse error");
@@ -432,6 +440,43 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                         }
                         break;
                     }
+
+                // 13.2.6.4.12 The "in column group" insertion mode
+                // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-incolgroup
+                case InsertionMode.InColumnGroup:
+                    switch (token) {
+                        case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }: throw new NotImplementedException();
+                        case Tokenizer.Comment: throw new NotImplementedException();
+                        case DOCTYPE: throw new NotImplementedException();
+                        case StartTag { name: "html" }: throw new NotImplementedException();
+                        case StartTag { name: "col" } tagToken:
+                            // Insert an HTML element for the token. Immediately pop the current node off the stack of open elements.
+                            InsertAnHTMLElement(tagToken);
+                            stackOfOpenElements.Pop();
+                            // Acknowledge the token's self-closing flag, if it is set.
+                            // todo
+                            break;
+                        case EndTag { name: "colgroup" }: throw new NotImplementedException();
+                        case EndTag { name: "col" }: throw new NotImplementedException();
+                        case StartTag { name: "template" }:
+                        case EndTag { name: "template" }:
+                            throw new NotImplementedException();
+                        case EndOfFile: throw new NotImplementedException();
+                        default:
+                            // If the current node is not a colgroup element, then this is a parse error; ignore the token.
+                            if (currentNode is not Element { localName: "colgroup" }) {
+                                AddParseError("InColumnGroup - default");
+                            } else {
+                                // Otherwise, pop the current node from the stack of open elements.
+                                stackOfOpenElements.Pop();
+                                // Switch the insertion mode to "in table".
+                                insertionMode = InsertionMode.InTable;
+                                // Reprocess the token.
+                                reprocessToken = token;
+                            }
+                            break;
+                    }
+                    break;
                 // 13.2.6.4.13 The "in table body" insertion mode
                 // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intbody
                 case InsertionMode.InTableBody: {
@@ -542,8 +587,25 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                                 break;
                             case EndTag { name: "tbody" or "tfoot" or "thead" }:
                                 throw new NotImplementedException();
-                            case EndTag { name: "body" or "caption" or "col" or "colgroup" or "html" or "td" or "th" }:
-                                throw new NotImplementedException();
+                            case EndTag { name: "body" or "caption" or "col" or "colgroup" or "html" or "td" or "th" } tagToken:
+                                // If the stack of open elements does not have an element in table scope that is an HTML element with the same tag name as the token, this is a parse error; ignore the token.
+                                if (!HasAElementInTableScope(tagToken.name)) {
+                                    AddParseError("in-row-end-tag-body");
+                                    break; // ignore token
+                                }
+                                // If the stack of open elements does not have a tr element in table scope, ignore the token.
+                                if (!HasAElementInTableScope("tr")) {
+                                    break; // ignore token
+                                }
+                                // Otherwise:
+                                // 1. Clear the stack back to a table row context. (See below.)
+                                ClearTheStackBackToTableRowContext();
+                                // 2. Pop the current node (which will be a tr element) from the stack of open elements. Switch the insertion mode to "in table body".
+                                stackOfOpenElements.Pop();
+                                insertionMode = InsertionMode.InTableBody;
+                                // 3. Reprocess the token.
+                                reprocessToken = token;
+                                break;
                             default:
                                 if (InsertionModeInTable(ref reprocessToken, token)) {
                                     return;
@@ -599,7 +661,12 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             }
                             break;
                         case StartTag { name: "caption" or "col" or "colgroup" or "tbody" or "td" or "tfoot" or "th" or "thead" or "tr" }:
-                            throw new NotImplementedException();
+                            // Assert: The stack of open elements has a td or th element in table scope.
+                            // todo
+                            // Close the cell (see below) and reprocess the token.
+                            CloseTheCell();
+                            reprocessToken = token;
+                            break;
                         case EndTag { name: "body" or "caption" or "col" or "colgroup" or "html" }:
                             throw new NotImplementedException();
                         case EndTag { name: "table" or "tbody" or "tfoot" or "thead" or "tr" }:
@@ -730,9 +797,79 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             StopParsing();
                             return;
                         default:
+                            // Parse error. Switch the insertion mode to "in body" and reprocess the token.
+                            AddParseError("After Body - unexpected tag");
+                            insertionMode = InsertionMode.InBody;
+                            reprocessToken = token;
+                            break;
+                    }
+                    break;
+
+                // 13.2.6.4.20 The "in frameset" insertion mode
+                // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inframeset
+                case InsertionMode.InFrameset:
+                    switch (token) {
+                        case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }: throw new NotImplementedException();
+                        case Tokenizer.Comment: throw new NotImplementedException();
+                        case DOCTYPE: throw new NotImplementedException();
+                        case StartTag { name: "html" }: throw new NotImplementedException();
+                        case StartTag { name: "frameset" } tagToken:
+                            // Insert an HTML element for the token.
+                            InsertAnHTMLElement(tagToken);
+                            break;
+                        case EndTag { name: "frameset" }:
+                            // If the current node is the root html element, then this is a parse error; ignore the token. (fragment case)
+                            if (currentNode.localName == "html") {
+                                AddParseError("In frameset root html");
+                            } else {
+                                // Otherwise, pop the current node from the stack of open elements.
+                                stackOfOpenElements.Pop();
+                            }
+                            // If the parser was not created as part of the HTML fragment parsing algorithm (fragment case), and the current node is no longer a frameset element, then switch the insertion mode to "after frameset".
+                            if (currentNode.localName != "frameset") {
+                                // todo add fragment case 
+                                insertionMode = InsertionMode.AfterFrameset;
+                            }
+                            break;
+                        case StartTag { name: "frame" } tagToken:
+                            // Insert an HTML element for the token. Immediately pop the current node off the stack of open elements.
+                            InsertAnHTMLElement(tagToken);
+                            stackOfOpenElements.Pop();
+                            // Acknowledge the token's self-closing flag, if it is set.
+                            // todo
+                            break;
+                        case StartTag { name: "noframes" }:
+                            // Process the token using the rules for the "in head" insertion mode.
+                            reprocessToken = InsertionModeInHead(reprocessToken, token);
+                            break;
+                        case EndOfFile:
+                            // If the current node is not the root html element, then this is a parse error.
+                            if (currentNode.localName != "html") {
+                                AddParseError("in-frameset-eof-not-html");
+                            }
+                            // Note: The current node can only be the root html element in the fragment case.
+                            // Stop parsing.
+                            StopParsing();
+                            return;
+                        default:
                             throw new NotImplementedException();
                     }
                     break;
+                // 13.2.6.4.21 The "after frameset" insertion mode
+                // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-afterframeset
+                case InsertionMode.AfterFrameset:
+                    switch (token) {
+                        case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }: throw new NotImplementedException();
+                        case Tokenizer.Comment: throw new NotImplementedException();
+                        case DOCTYPE: throw new NotImplementedException();
+                        case StartTag { name: "html" }: throw new NotImplementedException();
+                        case EndTag { name: "html" }: throw new NotImplementedException();
+                        case StartTag { name: "noframes" }: throw new NotImplementedException();
+                        case EndOfFile: return;
+                        default: throw new NotImplementedException();
+                    }
+                    break;
+
                 // 13.2.6.4.22 The "after after body" insertion mode
                 // https://html.spec.whatwg.org/multipage/parsing.html#the-after-after-body-insertion-mode
                 case InsertionMode.AfterAfterBody:
@@ -746,11 +883,15 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             StopParsing();
                             return;
                         default:
-                            throw new NotImplementedException();
+                            //Parse error. Switch the insertion mode to "in body" and reprocess the token.
+                            AddParseError("expected-eof-but-got-start-tag");
+                            insertionMode = InsertionMode.InBody;
+                            reprocessToken = token;
+                            break;
                     }
                     break;
                 default:
-                    throw new NotImplementedException();
+                    throw new NotImplementedException($"insertionMode: {insertionMode}");
 
             }
 
@@ -817,7 +958,13 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
             case Tokenizer.Comment: throw new NotImplementedException();
             case DOCTYPE: throw new NotImplementedException();
             case StartTag { name: "html" }: throw new NotImplementedException();
-            case StartTag { name: "base" or "basefont" or "bgsound" or "link" }: throw new NotImplementedException();
+            case StartTag { name: "base" or "basefont" or "bgsound" or "link" } tagToken:
+                // Insert an HTML element for the token. Immediately pop the current node off the stack of open elements.
+                InsertAnHTMLElement(tagToken);
+                stackOfOpenElements.Pop();
+                // Acknowledge the token's self-closing flag, if it is set.
+                // todo
+                break;
             case StartTag { name: "meta" } tagToken:
                 // Insert an HTML element for the token. Immediately pop the current node off the stack of open elements.
                 InsertAnHTMLElement(tagToken);
@@ -920,10 +1067,22 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 throw new NotImplementedException();
             case StartTag { name: "caption" }:
                 throw new NotImplementedException();
-            case StartTag { name: "colgroup" }:
-                throw new NotImplementedException();
+            case StartTag { name: "colgroup" } tagToken:
+                // Clear the stack back to a table context. (See below.)
+                ClearTheStackBackToTableContext();
+                // Insert an HTML element for the token, then switch the insertion mode to "in column group".
+                InsertAnHTMLElement(tagToken);
+                insertionMode = InsertionMode.InColumnGroup;
+                break;
             case StartTag { name: "col" }:
-                throw new NotImplementedException();
+                // Clear the stack back to a table context. (See below.)
+                ClearTheStackBackToTableContext();
+                // Insert an HTML element for a "colgroup" start tag token with no attributes, then switch the insertion mode to "in column group".
+                InsertAnHTMLElement(new StartTag("colgroup"));
+                insertionMode = InsertionMode.InColumnGroup;
+                // Reprocess the current token.
+                reprocessToken = token;
+                break;
             case StartTag { name: "tbody" or "tfoot" or "thead" } tagToken:
                 ClearTheStackBackToTableContext();
                 InsertAnHTMLElement(tagToken);
@@ -1006,9 +1165,24 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
             case DOCTYPE: throw new NotImplementedException();
             case StartTag { name: "html" }: throw new NotImplementedException();
             case StartTag { name: "base" or "basefont" or "bgsound" or "link" or "meta" or "noframes" or "script" or "style" or "template" or "title" }:
-                throw new NotImplementedException();
-            case EndTag { name: "template" }: throw new NotImplementedException();
-            case StartTag { name: "body" }: throw new NotImplementedException();
+            case EndTag { name: "template" }:
+                reprocessToken = InsertionModeInHead(reprocessToken, token);
+                break;
+            case StartTag { name: "body" }:
+                // Parse error.
+                AddParseError("body-in-body");
+                // If the stack of open elements has only one node on it, or if the second element on the stack of open elements is not a body element,
+                // or if there is a template element on the stack of open elements, then ignore the token. (fragment case or there is a template element on the stack)
+                if (stackOfOpenElements.Count == 1 || stackOfOpenElements[1].localName != "body" || stackOfOpenElements.Any((item) => item.localName == "template")) {
+                    // ignore token
+                } else {
+                    // Otherwise, set the frameset-ok flag to "not ok"; then, for each attribute on the token, check to see if the attribute is already present on the body element (the second element) 
+                    // on the stack of open elements, and if it is not, add the attribute and its corresponding value to that element.
+                    framesetOk = false;
+                    // todo add attributes
+                }
+
+                break;
             case StartTag { name: "frameset" }: throw new NotImplementedException();
             case EndOfFile: {
                     // If the stack of template insertion modes is not empty, then process the token using the rules for the "in template" insertion mode.
@@ -1079,44 +1253,44 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 break;
             case StartTag { name: "pre" or "listing" }: throw new NotImplementedException();
             case StartTag { name: "form" }: throw new NotImplementedException();
-            case StartTag { name: "li" } tagToken:
-                // 1. Set the frameset-ok flag to "not ok".
-                framesetOk = false;
-                // 2. Initialize node to be the current node (the bottommost node of the stack).
-                var node = currentNode;
-            // 3. Loop: If node is an li element, then run these substeps:
-            loop:
-                if (node is Element { localName: "li" }) {
-                    // 1. Generate implied end tags, except for li elements.
-                    GenerateImpliedEndTags("li");
-                    // 2. If the current node is not an li element, then this is a parse error.
-                    if (currentNode is not Element { localName: "li" }) {
-                        AddParseError("insertionMode in body: LI");
+            case StartTag { name: "li" } tagToken: {
+                    // 1. Set the frameset-ok flag to "not ok".
+                    framesetOk = false;
+                    // 2. Initialize node to be the current node (the bottommost node of the stack).
+                    var node = currentNode;
+                // 3. Loop: If node is an li element, then run these substeps:
+                loop:
+                    if (node is Element { localName: "li" }) {
+                        // 1. Generate implied end tags, except for li elements.
+                        GenerateImpliedEndTags("li");
+                        // 2. If the current node is not an li element, then this is a parse error.
+                        if (currentNode is not Element { localName: "li" }) {
+                            AddParseError("insertionMode in body: LI");
+                        }
+                        // 3. Pop elements from the stack of open elements until an li element has been popped from the stack.
+                        while (true) {
+                            if (stackOfOpenElements.Pop() is Element { localName: "li" }) break;
+                        }
+                        // 4. Jump to the step labeled done below.
+                        goto done;
                     }
-                    // 3. Pop elements from the stack of open elements until an li element has been popped from the stack.
-                    while (true) {
-                        if (stackOfOpenElements.Pop() is Element { localName: "li" }) break;
+                    // 4. If node is in the special category, but is not an address, div, or p element, then jump to the step labeled done below.
+                    if (node.localName is not "address" or "div" or "p" && specialListElements.Contains(node.localName)) {
+                        goto done;
+                    } else {
+                        // 5. Otherwise, set node to the previous entry in the stack of open elements and return to the step labeled loop.
+                        throw new NotImplementedException();
+                        goto loop;
                     }
-                    // 4. Jump to the step labeled done below.
-                    goto done;
+                // 6. Done: If the stack of open elements has a p element in button scope, then close a p element.
+                done:
+                    if (HasAElementInButtonScope("p")) {
+                        CloseAPElement();
+                    }
+                    // 7. Finally, insert an HTML element for the token.
+                    InsertAnHTMLElement(tagToken);
+                    break;
                 }
-                // 4. If node is in the special category, but is not an address, div, or p element, then jump to the step labeled done below.
-                if (node.localName is not "address" or "div" or "p" && specialListElements.Contains(node.localName)) {
-                    goto done;
-                } else {
-                    // 5. Otherwise, set node to the previous entry in the stack of open elements and return to the step labeled loop.
-                    throw new NotImplementedException();
-                    goto loop;
-                }
-            // 6. Done: If the stack of open elements has a p element in button scope, then close a p element.
-            done:
-                if (HasAElementInButtonScope("p")) {
-                    CloseAPElement();
-                }
-                // 7. Finally, insert an HTML element for the token.
-                InsertAnHTMLElement(tagToken);
-                break;
-
             case StartTag { name: "dd" or "dt" }: throw new NotImplementedException();
             case StartTag { name: "plaintext" }: throw new NotImplementedException();
             case StartTag { name: "button" } tagToken:
@@ -1164,7 +1338,41 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                     }
                     break;
                 }
-            case EndTag { name: "form" }: throw new NotImplementedException();
+            case EndTag { name: "form" }: {
+                    // If there is no template element on the stack of open elements, then run these substeps:
+                    if (!stackOfOpenElements.Any((item) => item.localName == "template")) {
+                        // 1. Let node be the element that the form element pointer is set to, or null if it is not set to an element.
+                        var node = formElementPointer;
+                        // 2. Set the form element pointer to null.
+                        formElementPointer = null;
+                        // 3. If node is null or if the stack of open elements does not have node in scope, then this is a parse error; return and ignore the token.
+                        if (node is null || !HasAElementInScope(node.localName)) {
+                            AddParseError("in-body-end-form-node-null");
+                            break;
+                        }
+                        // 4. Generate implied end tags.
+                        GenerateImpliedEndTags();
+                        // 5. If the current node is not node, then this is a parse error.
+                        if (currentNode != node) {
+                            AddParseError("in-body-end-form-not-current");
+                        }
+                        // 6. Remove node from the stack of open elements.
+                        stackOfOpenElements.Remove(node);
+                    } else {
+                        throw new NotImplementedException();
+                        // If there is a template element on the stack of open elements, then run these substeps instead:
+
+                        // 1. If the stack of open elements does not have a form element in scope, then this is a parse error; return and ignore the token.
+
+                        // 2. Generate implied end tags.
+
+                        // 3. If the current node is not a form element, then this is a parse error.
+
+                        // 4. Pop elements from the stack of open elements until a form element has been popped from the stack.
+
+                    }
+                    break;
+                }
             case EndTag { name: "p" }:
                 // If the stack of open elements does not have a p element in button scope, then this is a parse error; insert an HTML element for a "p" start tag token with no attributes.
                 if (!HasAElementInButtonScope("p")) {
@@ -1174,9 +1382,60 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // Close a p element.
                 CloseAPElement();
                 break;
-            case EndTag { name: "li" }: throw new NotImplementedException();
-            case EndTag { name: "dd" or "dt" }: throw new NotImplementedException();
-            case EndTag { name: "h1" or "h2" or "h3" or "h4" or "h5" or "h6" }: throw new NotImplementedException();
+            case EndTag { name: "li" }:
+                // If the stack of open elements does not have an li element in list item scope, then this is a parse error; ignore the token.
+                if (!HasAElementInListItemScope("li")) {
+                    AddParseError("IN BODY - </li>");
+                } else {
+                    // Otherwise, run these steps:
+                    // 1. Generate implied end tags, except for li elements.
+                    GenerateImpliedEndTags("li");
+                    // 2. If the current node is not an li element, then this is a parse error.
+                    if (currentNode.localName != "li") {
+                        AddParseError("in BODY - </li> ");
+                    }
+                    // 3. Pop elements from the stack of open elements until an li element has been popped from the stack.
+                    while (true) {
+                        if (stackOfOpenElements.Pop().localName == "li") break;
+                    }
+                }
+                break;
+            case EndTag { name: "dd" or "dt" } tagToken:
+                // If the stack of open elements does not have an element in scope that is an HTML element with the same tag name as that of the token, then this is a parse error; ignore the token.
+                if (!HasAElementInScope(tagToken.name)) {
+                    AddParseError("in-body-end-dd-dt-not-in-scope");
+                } else {
+                    // Otherwise, run these steps:
+                    // 1. Generate implied end tags, except for HTML elements with the same tag name as the token.
+                    GenerateImpliedEndTags();
+                    // 2. If the current node is not an HTML element with the same tag name as that of the token, then this is a parse error.
+                    if (currentNode.localName != tagToken.name) {
+                        AddParseError("in-body-end-dd-dt-wrong-current-node");
+                    }
+                    // 3. Pop elements from the stack of open elements until an HTML element with the same tag name as the token has been popped from the stack.
+                    while (true) {
+                        if (stackOfOpenElements.Pop().localName == tagToken.name) break;
+                    }
+                }
+                break;
+            case EndTag { name: "h1" or "h2" or "h3" or "h4" or "h5" or "h6" } tagToken:
+                // If the stack of open elements does not have an element in scope that is an HTML element and whose tag name is one of "h1", "h2", "h3", "h4", "h5", or "h6", then this is a parse error; ignore the token.
+                if (!HasAElementInScope("h1", "h2", "h3", "h4", "h5", "h6")) {
+                    AddParseError("IN BODY </hX>");
+                } else {
+                    // Otherwise, run these steps:
+                    // 1. Generate implied end tags.
+                    GenerateImpliedEndTags();
+                    // 2. If the current node is not an HTML element with the same tag name as that of the token, then this is a parse error.
+                    if (currentNode.localName != tagToken.name) {
+                        AddParseError("IN BODY <hX> 2");
+                    }
+                    // 3. Pop elements from the stack of open elements until an HTML element whose tag name is one of "h1", "h2", "h3", "h4", "h5", or "h6" has been popped from the stack.
+                    while (true) {
+                        if (stackOfOpenElements.Pop().localName is "h1" or "h2" or "h3" or "h4" or "h5" or "h6") break;
+                    }
+                }
+                break;
             case EndTag { name: "sarcasm" }: throw new NotImplementedException();
             case StartTag { name: "a" } tagToken:
                 // If the list of active formatting elements contains an a element between the end of the list and the last marker on the list (or the start of the list if there is no marker on the list), then this is a parse error; run the adoption agency algorithm for the token, then remove that element from the list of active formatting elements and the stack of open elements if the adoption agency algorithm didn't already remove it (it might not have if the element is not in table scope).
@@ -1261,7 +1520,11 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // Switch the insertion mode to "in table".
                 insertionMode = InsertionMode.InTable;
                 break;
-            case EndTag { name: "br" }: throw new NotImplementedException();
+            case EndTag { name: "br" } tagToken:
+                // Parse error. Drop the attributes from the token, and act as described in the next entry; i.e. act as if this was a "br" start tag token with no attributes, rather than the end tag token that it actually is.
+                AddParseError("in-body-end-tag-br");
+                reprocessToken = new StartTag("br"); // this is not exectly what the comment says but is easier to express here
+                break;
             case StartTag { name: "area" or "br" or "embed" or "img" or "keygen" or "wbr" } tagToken:
                 // Reconstruct the active formatting elements, if any.
                 ReconstructTheActiveFormattingElements();
@@ -1288,8 +1551,26 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // Set the frameset-ok flag to "not ok".
                 framesetOk = false;
                 break;
-            case StartTag { name: "image" }: throw new NotImplementedException();
-            case StartTag { name: "textarea" }: throw new NotImplementedException();
+            case StartTag { name: "image" } tagToken:
+                AddParseError("In body image tag");
+                tagToken.name = "img";
+                reprocessToken = token;
+                break;
+            case StartTag { name: "textarea" } tagToken:
+                // Run these steps:
+                // 1. Insert an HTML element for the token.
+                InsertAnHTMLElement(tagToken);
+                // 2. If the next token is a U+000A LINE FEED (LF) character token, then ignore that token and move on to the next one. (Newlines at the start of textarea elements are ignored as an authoring convenience.)
+                // todo
+                // 3. Switch the tokenizer to the RCDATA state.
+                tokenizer.SwitchState(State.RCDATAState);
+                // 4. Set the original insertion mode to the current insertion mode.
+                originalInsertionMode = insertionMode;
+                // 5. Set the frameset-ok flag to "not ok".
+                framesetOk = false;
+                // 6. Switch the insertion mode to "text".
+                insertionMode = InsertionMode.Text;
+                break;
             case StartTag { name: "xmp" }: throw new NotImplementedException();
             case StartTag { name: "iframe" }: throw new NotImplementedException();
             case StartTag { name: "noembed" }: throw new NotImplementedException();
@@ -1322,7 +1603,9 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
             case StartTag { name: "rp" or "rt" }: throw new NotImplementedException();
             case StartTag { name: "math" }: throw new NotImplementedException();
             case StartTag { name: "svg" }: throw new NotImplementedException();
-            case StartTag { name: "caption" or "col" or "colgroup" or "frame" or "head" or "tbody" or "td" or "tfoot" or "th" or "thead" or "tr" }: throw new NotImplementedException();
+            case StartTag { name: "caption" or "col" or "colgroup" or "frame" or "head" or "tbody" or "td" or "tfoot" or "th" or "thead" or "tr" }:
+                AddParseError("InBody - unexpected-start-tag-ignored");
+                break;
             case StartTag tagToken:
                 // Reconstruct the active formatting elements, if any.
                 ReconstructTheActiveFormattingElements();
@@ -1715,6 +1998,10 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
     //https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-scope
     private bool HasAElementInScope(params ReadOnlySpan<string> elementsName) {
         return HasAnElementInTheSpecificScope(elementsName, ElementInScopeSpecialList);
+    }
+    // https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-list-item-scope
+    private bool HasAElementInListItemScope(params ReadOnlySpan<string> elementsName) {
+        return HasAnElementInTheSpecificScope(elementsName, ["ol", "ul", .. ElementInScopeSpecialList]);
     }
     // https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-button-scope
     private bool HasAElementInButtonScope(params ReadOnlySpan<string> elementsName) {
