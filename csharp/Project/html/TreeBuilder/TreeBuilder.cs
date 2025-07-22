@@ -40,6 +40,14 @@ public abstract class Node(Document? ownerDocument) {
     public Node? parent = null;
 }
 public class Document(): Node(null) {
+
+    public enum QuirksMode {
+        noQuirks,
+        LimitedQuirks,
+        Quirks,
+    }
+
+    public QuirksMode mode = QuirksMode.noQuirks;
     public override string ToString() {
         return "#document";
     }
@@ -273,9 +281,13 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 case InsertionMode.AfterHead:
                     switch (token) {
                         case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' } cToken:
+                            // Insert the character.
                             InsertACharacter(cToken);
                             break;
-                        case Tokenizer.Comment: throw new NotImplementedException();
+                        case Tokenizer.Comment comment:
+                            // Insert a comment.
+                            InsertAComment(comment);
+                            break;
                         case DOCTYPE: throw new NotImplementedException();
                         case StartTag { name: "html" }: throw new NotImplementedException();
                         case StartTag { name: "body" } tagToken:
@@ -1392,7 +1404,18 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // Insert an HTML element for the token.
                 InsertAnHTMLElement(tagToken);
                 break;
-            case StartTag { name: "pre" or "listing" }: throw new NotImplementedException();
+            case StartTag { name: "pre" or "listing" } tagToken:
+                // If the stack of open elements has a p element in button scope, then close a p element.
+                if (HasAElementInButtonScope("p")) {
+                    CloseAPElement();
+                }
+                // Insert an HTML element for the token.
+                InsertAnHTMLElement(tagToken);
+                // If the next token is a U+000A LINE FEED (LF) character token, then ignore that token and move on to the next one. (Newlines at the start of pre blocks are ignored as an authoring convenience.)
+                // todo need peek token
+                // Set the frameset-ok flag to "not ok".
+                framesetOk = false;
+                break;
             case StartTag { name: "form" } tagToken:
                 // If the form element pointer is not null, and there is no template element on the stack of open elements, then this is a parse error; ignore the token.
                 var hasTemplateElementOnStack = stackOfOpenElements.Any((item) => item.localName == "template");
@@ -1683,7 +1706,18 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // Insert an HTML element for the token. Push onto the list of active formatting elements that element.
                 PushOntoTheListOfActiveFormattingElements(InsertAnHTMLElement(tagToken));
                 break;
-            case StartTag { name: "nobr" }: throw new NotImplementedException();
+            case StartTag { name: "nobr" } tagToken:
+                // Reconstruct the active formatting elements, if any.
+                ReconstructTheActiveFormattingElements();
+                // If the stack of open elements has a nobr element in scope, then this is a parse error; run the adoption agency algorithm for the token, then once again reconstruct the active formatting elements, if any.
+                if (HasAElementInScope("nobr")) {
+                    AddParseError("in-body-nobr-in-scope");
+                    AdoptionAgencyAlgorithm(tagToken);
+                    ReconstructTheActiveFormattingElements();
+                }
+                // Insert an HTML element for the token. Push onto the list of active formatting elements that element.
+                ListOfActiveFormattingElements.Push(InsertAnHTMLElement(tagToken));
+                break;
             case EndTag { name: "a" or "b" or "big" or "code" or "em" or "font" or "i" or "s" or "small" or "strike" or "strong" or "tt" or "u" } tagToken:
                 // Run the adoption agency algorithm for the token.
                 AdoptionAgencyAlgorithm(tagToken);
@@ -1724,7 +1758,9 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 break;
             case StartTag { name: "table" } tagToken:
                 // If the Document is not set to quirks mode, and the stack of open elements has a p element in button scope, then close a p element.
-                // todo
+                if (document.mode != Document.QuirksMode.Quirks && HasAElementInButtonScope("p")) {
+                    CloseAPElement();
+                }
                 // Insert an HTML element for the token.
                 InsertAnHTMLElement(tagToken);
                 // Set the frameset-ok flag to "not ok".
@@ -1785,7 +1821,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // 1. Insert an HTML element for the token.
                 InsertAnHTMLElement(tagToken);
                 // 2. If the next token is a U+000A LINE FEED (LF) character token, then ignore that token and move on to the next one. (Newlines at the start of textarea elements are ignored as an authoring convenience.)
-                // todo
+                // todo need peek token
                 // 3. Switch the tokenizer to the RCDATA state.
                 tokenizer.SwitchState(State.RCDATAState);
                 // 4. Set the original insertion mode to the current insertion mode.

@@ -25,6 +25,10 @@ public sealed class Html5LibTreeConstruction {
         ],[
             3, 16, 20, 21, 22, 23, 25, 28, 34, 40, 42, 58, 59, 61
         ])),
+        ("tests3.dat", ([],[
+            4, 5, 6, 7, 11, 16, 17,18, // need peek token in body <pre> & <textarea>
+            19, 21, 23 // adopting agency
+        ],[])),
     ];
 
 
