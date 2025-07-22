@@ -29,11 +29,17 @@ public sealed class Html5LibTreeConstruction {
             4, 5, 6, 7, 11, 16, 17,18, // need peek token in body <pre> & <textarea>
             19, 21, 23 // adopting agency
         ],[])),
-        // ("tests4.dat", ([],[],[])), // fragments
+        ("tests4.dat", ([],[],[])), // fragments
         ("tests5.dat", ([
             12, 13, // tokenizer not implemented
         ],[],[])),
-
+        ("tests6.dat", ([
+            2, 3, // tokenizer not implemented
+            25,
+            32, 35, // adopting
+            46, // doctype
+            47, 48, 49, 50, 51 // frameset stuff
+        ],[],[4, 5, 18, 37, 39, 40, 41, 42])),
     ];
 
 
@@ -53,6 +59,7 @@ public sealed class Html5LibTreeConstruction {
             foreach (var scriptingFlag in testCase.scripting is null ? new bool[] { true, false } : [testCase.scripting.Value]) {
                 Console.WriteLine($"{index}:{scriptingFlag}");
                 if (skipTests.Contains(index)) continue;
+                if (testCase.documentFragment.Count > 0) continue; // todo handle fragment cases
 
                 var tokenizer = new Tokenizer(string.Join('\n', testCase.data));
                 var treeBuilder = new TreeBuilder(tokenizer) { scriptingFlag = scriptingFlag };

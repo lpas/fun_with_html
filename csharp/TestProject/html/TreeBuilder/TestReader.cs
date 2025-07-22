@@ -1,6 +1,7 @@
 
 using System.Text;
 using FunWithHtml.html.TreeBuilder;
+using TestProject.html.Tokenizer;
 
 namespace TestProject.html.TreeBuilder;
 
@@ -10,6 +11,7 @@ public struct TestCase {
     public List<string> errors = [];
     public List<string> newErrors = [];
     public List<string> document = [];
+    public List<string> documentFragment = [];
     public bool? scripting = null;
 
     public TestCase() { }
@@ -35,6 +37,7 @@ enum TestState {
     Document,
     ScriptOn,
     ScriptOf,
+    DocumentFragment,
 }
 
 public class TestReader(IEnumerable<string> iter) {
@@ -83,13 +86,15 @@ public class TestReader(IEnumerable<string> iter) {
                     currentState = TestState.ScriptOf;
                     break;
                 case "#document-fragment":
-                    throw new NotImplementedException();
+                    currentState = TestState.DocumentFragment;
+                    break;
                 default:
                     notEmitted = true;
                     switch (currentState) {
                         case TestState.Data: testCase.data.Add(line); break;
                         case TestState.Errors: testCase.errors.Add(line); break;
                         case TestState.NewErrors: testCase.newErrors.Add(line); break;
+                        case TestState.DocumentFragment: testCase.documentFragment.Add(line); break;
                         case TestState.Document:
                             if (line[0] == '|') {
                                 testCase.document.Add(line);
