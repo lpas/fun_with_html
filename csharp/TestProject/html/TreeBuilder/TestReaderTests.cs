@@ -86,7 +86,90 @@ Test
         TestReader.AssertEqDocument(testCase, document);
     }
 
+    [TestMethod]
+    public void TreeWithMultipleAttributes() {
+        var testReader = TestReader.CreateFromString("""
+            #data
+            <hr foo="bar">
+            #errors
+            (1,0): expected-doctype-but-got-eof
+            #document
+            | <html>
+            |   <head>
+            |   <body>
+            |     <hr>
+            |       foo="bar"
+            |       bar="baz"
+            """);
+        var testCase = testReader.GetTestCases().First();
+        var document = new Document();
+        var html = new Element(document, "html");
+        document.childNodes.Add(html);
+        var head = new Element(document, "head");
+        var body = new Element(document, "body");
+        html.childNodes.AddRange([head, body]);
+        var hr = new Element(document, "hr");
+        hr.attributes.Add("foo", "bar");
+        hr.attributes.Add("bar", "baz");
+        body.childNodes.Add(hr);
+        TreeBuilder.PrintDebugDocumentTree(document);
+        TestReader.AssertEqDocument(testCase, document);
+    }
 
+    [TestMethod]
+    public void TreeWithMultiLine() {
+        var testReader = TestReader.CreateFromString("""
+            #data
+            test
+            test
+            #errors
+            (2,4): expected-doctype-but-got-chars
+            #document
+            | <html>
+            |   <head>
+            |   <body>
+            |     "test
+            test"
+            """);
+        var testCase = testReader.GetTestCases().First();
+        var document = new Document();
+        var html = new Element(document, "html");
+        document.childNodes.Add(html);
+        var head = new Element(document, "head");
+        var body = new Element(document, "body");
+        html.childNodes.AddRange([head, body]);
+        var text = new Text(document, "test\ntest");
+        body.childNodes.Add(text);
+        TreeBuilder.PrintDebugDocumentTree(document);
+        TestReader.AssertEqDocument(testCase, document);
+    }
+
+    [TestMethod]
+    public void TreeWithHtmlAttrs() {
+        var testReader = TestReader.CreateFromString("""
+            #data
+            <!DOCTYPE html><html><body><html id=x>
+            #errors
+            (1,38): non-html-root
+            #document
+            | <!DOCTYPE html>
+            | <html>
+            |   id="x"
+            |   <head>
+            |   <body>
+            """);
+        var testCase = testReader.GetTestCases().First();
+        var document = new Document();
+        var html = new Element(document, "html");
+        var doctype = new DocumentType(document, "html");
+        html.attributes.Add("id", "x");
+        document.childNodes.AddRange([doctype, html]);
+        var head = new Element(document, "head");
+        var body = new Element(document, "body");
+        html.childNodes.AddRange([head, body]);
+        TreeBuilder.PrintDebugDocumentTree(document);
+        TestReader.AssertEqDocument(testCase, document);
+    }
 
     [TestMethod]
     public void TreeCompare() {

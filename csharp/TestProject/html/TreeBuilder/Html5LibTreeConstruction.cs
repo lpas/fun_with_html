@@ -13,9 +13,18 @@ public sealed class Html5LibTreeConstruction {
         ("tests1.dat", ([29, 30, 57, 99, // tree building has problems infinity running tests
             70, 71, 72, 73, 74, 75,   // adoption agency index out of range
             102], // not implement it),
-            [22, 23, 31, 32, 51, 52, 53, 56, 60, 77, 78, 79, 80, 90, 95, 96, 101, 110],
-            [27, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 55] // tree is ok but parse error miss match
-        ))
+            [22, 23, 31, 32, 51, 52, 53, 56, 60, 77, 78, 79, 90, 95, 96, 101, 110],
+            [27, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 52, 55] // tree is ok but parse error miss match
+        )),
+        ("tests2.dat", ([
+            17, 24, 30, 31, // tokenizer not implemented
+            39, // infinity running
+        ],[
+            9, // adopting agency
+            10,12,14,18, 26, 27,
+        ],[
+            3, 16, 20, 21, 22, 23, 25, 28, 34, 40, 42, 58, 59, 61
+        ])),
     ];
 
 

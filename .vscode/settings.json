@@ -1,6 +1,7 @@
 {
     "dotnet.defaultSolution": "fun_with_html.slnx",
     "cSpell.words": [
-        "frameset"
+        "frameset",
+        "optgroup"
     ]
 }

@@ -789,7 +789,10 @@ public class Tokenizer(string content) {
                     } else {
                         goto default;
                     }
-                case >= 'A' and <= 'Z': throw new NotImplementedException();
+                case >= 'A' and <= 'Z':
+                    currentTag.name += (char)(byte)(c | 0x20);
+                    temporaryBuffer += c;
+                    break;
                 case >= 'a' and <= 'z':
                     currentTag.name += c;
                     temporaryBuffer += c;

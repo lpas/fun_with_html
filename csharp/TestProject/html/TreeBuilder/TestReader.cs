@@ -79,7 +79,13 @@ public class TestReader(IEnumerable<string> iter) {
                         case TestState.Data: testCase.data.Add(line); break;
                         case TestState.Errors: testCase.errors.Add(line); break;
                         case TestState.NewErrors: testCase.newErrors.Add(line); break;
-                        case TestState.Document: testCase.document.Add(line); break;
+                        case TestState.Document:
+                            if (line[0] == '|') {
+                                testCase.document.Add(line);
+                            } else {
+                                testCase.document[^1] += '\n' + line;
+                            }
+                            break;
                     }
                     break;
             }
@@ -103,13 +109,13 @@ public class TestReader(IEnumerable<string> iter) {
             if ($"{indentation}{node}" != iter.Current) {
                 Assert.Fail($"tree != testCase (diff) \n tree:     {indentation}{node} \n testCase: {iter.Current}");
             }
-            if (node is Element element && element.attributes.Count > 0) {
-                foreach (var attr in element.attributes) {
-                    stack.Push((new NodeAttr(attr.Key, attr.Value), depth + 1));
-                }
-            }
             foreach (var child in Enumerable.Reverse(node.childNodes)) {
                 stack.Push((child, depth + 1));
+            }
+            if (node is Element element && element.attributes.Count > 0) {
+                foreach (var attr in Enumerable.Reverse(element.attributes)) {
+                    stack.Push((new NodeAttr(attr.Key, attr.Value), depth + 1));
+                }
             }
         }
         if (iter.MoveNext()) {
