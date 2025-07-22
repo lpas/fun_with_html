@@ -37,7 +37,7 @@ public static class Namespaces {
 public abstract class Node(Document? ownerDocument) {
     public Document? ownerDocument { get; } = ownerDocument;
     public List<Node> childNodes = [];
-    public Node? parent = null; // todo implement not parent setting in tree building
+    public Node? parent = null;
 }
 public class Document(): Node(null) {
     public override string ToString() {
@@ -161,10 +161,15 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             InsertAComment(comment, (document, document.childNodes.Count));
                             break;
                         case DOCTYPE doctype:
+                            // If the DOCTYPE token's name is not "html", or the token's public identifier is not missing, or the token's system identifier is neither missing nor "about:legacy-compat",
+                            // then there is a parse error.                        
                             if (doctype.name is not "html" || doctype.publicId is not null || doctype.systemId is not null or "about:legacy-compat") {
                                 AddParseError("InsertionMode.Initial - doctype not html");
                             }
-                            document.childNodes.Add(new DocumentType(document, doctype.name ?? "", doctype.publicId ?? "", doctype.systemId ?? ""));
+                            // Append a DocumentType node to the Document node, with its name set to the name given in the DOCTYPE token, or the empty string if the name was missing; 
+                            // its public ID set to the public identifier given in the DOCTYPE token, or the empty string if the public identifier was missing;
+                            // and its system ID set to the system identifier given in the DOCTYPE token, or the empty string if the system identifier was missing.
+                            AppendNode(document, new DocumentType(document, doctype.name ?? "", doctype.publicId ?? "", doctype.systemId ?? ""));
                             // todo quirks mode
                             insertionMode = InsertionMode.BeforeHtml;
                             break;
@@ -192,7 +197,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                                 // Create an element for the token in the HTML namespace, with the Document as the intended parent.
                                 var element = CreateAnElementForAToken((Tag)token, Namespaces.HTML, document);
                                 // Append it to the Document object.
-                                document.childNodes.Add(element);
+                                AppendNode(document, element);
                                 // Put this element in the stack of open elements.
                                 stackOfOpenElements.Put(element);
                                 // Switch the insertion mode to "before head".
@@ -209,7 +214,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                         default: {
                                 // Create an html element whose node document is the Document object. Append it to the Document object. Put this element in the stack of open elements.
                                 var element = CreateAnElement(document, "html", Namespaces.HTML);
-                                document.childNodes.Add(element);
+                                AppendNode(document, element);
                                 stackOfOpenElements.Put(element);
                                 // Switch the insertion mode to "before head", then reprocess the token.                            
                                 insertionMode = InsertionMode.BeforeHead;
@@ -957,7 +962,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
         // Create a Comment node whose data attribute is set to data and whose node document is the same as that of the node in which the adjusted insertion location finds itself.
         var element = new Comment(adjustedInsertionLocation.elem.ownerDocument, data);
         // Insert the newly created node at the adjusted insertion location.
-        adjustedInsertionLocation.elem.childNodes.Insert(adjustedInsertionLocation.childPos, element);
+        InsertNode(adjustedInsertionLocation, element);
     }
 
     // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inhead
@@ -1013,7 +1018,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // If the parser was invoked via the document.write() or document.writeln() methods, then optionally set the script element's already started to true. (For example, the user agent might use this clause to prevent execution of cross-origin scripts inserted via document.write() under slow network conditions, or when the page has already taken a long time to load.)
                 // todo
                 // Insert the newly created element at the adjusted insertion location.
-                adjustedInsertionLocation.elem.childNodes.Insert(adjustedInsertionLocation.childPos, element);
+                InsertNode(adjustedInsertionLocation, element);
                 // Push the element onto the stack of open elements so that it is the new current node.
                 stackOfOpenElements.Push(element);
                 // Switch the tokenizer to the script data state.
@@ -1790,14 +1795,14 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
             }
             // 14. Insert whatever lastNode ended up being in the previous step at the appropriate place for inserting a node, but using commonAncestor as the override target.
             var adjustedInsertionLocation = AppropriatePlaceForInsertingANode(commonAncestor);
-            adjustedInsertionLocation.elem.childNodes.Insert(adjustedInsertionLocation.childPos, lastNode);
+            InsertNode(adjustedInsertionLocation, lastNode);
             // 15. Create an element for the token for which formattingElement was created, in the HTML namespace, with furthestBlock as the intended parent.
             var elem = CreateAnElementForAToken(new StartTag(formattingElement.localName), Namespaces.HTML, furthestBlock);
             // 16. Take all of the child nodes of furthestBlock and append them to the element created in the last step.
             elem.childNodes = [.. furthestBlock.childNodes];
             furthestBlock.childNodes.Clear();
             // 17. Append that new element to furthestBlock.
-            furthestBlock.childNodes.Add(elem);
+            AppendNode(furthestBlock, elem);
             // 18. Remove formattingElement from the list of active formatting elements, and insert the new element into the list of active formatting elements at the position of the aforementioned bookmark.
             ListOfActiveFormattingElements[bookmark] = elem;
             ListOfActiveFormattingElements.Remove(formattingElement);
@@ -2058,7 +2063,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
             lastChild.data += token.data;
         } else {
             // Otherwise, create a new Text node whose data is data and whose node document is the same as that of the element in which the adjusted insertion location finds itself, and insert the newly created node at the adjusted insertion location.                
-            adjustedInsertionLocation.elem.childNodes.Insert(adjustedInsertionLocation.childPos, new Text(adjustedInsertionLocation.elem.ownerDocument, token.data.ToString()));
+            InsertNode(adjustedInsertionLocation, new Text(adjustedInsertionLocation.elem.ownerDocument, token.data.ToString()));
         }
     }
 
@@ -2087,7 +2092,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
         // 3. If the parser was not created as part of the HTML fragment parsing algorithm, then push a new element queue onto element's relevant agent's custom element reactions stack.
 
         // 4. Insert element at the adjusted insertion location.
-        adjustedInsertionLocation.elem.childNodes.Insert(adjustedInsertionLocation.childPos, element);
+        InsertNode(adjustedInsertionLocation, element);
         // 5. If the parser was not created as part of the HTML fragment parsing algorithm, then pop the element queue from element's relevant agent's custom element reactions stack, and invoke custom element reactions in that queue.
         // NOTE: If the adjusted insertion location cannot accept more elements, e.g., because it's a Document that already has an element child, then element is dropped on the floor.
     }
@@ -2219,6 +2224,16 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
     private Element CreateAnElement(Document document, string localName, string? @namespace, string? prefix = null, string? isValue = null, bool synchronousCustomElements = false) {
         if (debugPrint) Debug.WriteLine($"createELement {localName}");
         return new Element(document, localName);
+    }
+
+    private static void InsertNode((Node target, int childPos) insertPosition, Node child) {
+        insertPosition.target.childNodes.Insert(insertPosition.childPos, child);
+        child.parent = insertPosition.target;
+    }
+
+    private static void AppendNode(Node target, Node child) {
+        target.childNodes.Add(child);
+        child.parent = target;
     }
 
     public void PrintDebugDocumentTree() {
