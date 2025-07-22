@@ -10,6 +10,7 @@ public struct TestCase {
     public List<string> errors = [];
     public List<string> newErrors = [];
     public List<string> document = [];
+    public bool? scripting = null;
 
     public TestCase() { }
 
@@ -32,6 +33,8 @@ enum TestState {
     Errors,
     NewErrors,
     Document,
+    ScriptOn,
+    ScriptOf,
 }
 
 public class TestReader(IEnumerable<string> iter) {
@@ -71,7 +74,15 @@ public class TestReader(IEnumerable<string> iter) {
                 case "#new-errors":
                     currentState = TestState.NewErrors;
                     break;
-                case "#document-fragment" or "#script-off" or "#script-on":
+                case "#script-on":
+                    testCase.scripting = true;
+                    currentState = TestState.ScriptOn;
+                    break;
+                case "#script-off":
+                    testCase.scripting = false;
+                    currentState = TestState.ScriptOf;
+                    break;
+                case "#document-fragment":
                     throw new NotImplementedException();
                 default:
                     notEmitted = true;

@@ -8,8 +8,7 @@ enum InsertionMode {
     BeforeHtml,
     BeforeHead,
     InHead,
-    BeforeInHead,
-    BeforeInHeadNoscript,
+    InHeadNoscript,
     AfterHead,
     InBody,
     Text,
@@ -129,7 +128,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
     private Element? headElementPointer = null;
     private Element? formElementPointer = null;
 
-    private bool scriptingFlag = false;
+    internal bool scriptingFlag = false;
 
     private List<Element?> ListOfActiveFormattingElements = []; // null is a marker
 
@@ -276,6 +275,32 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 case InsertionMode.InHead:
                     reprocessToken = InsertionModeInHead(reprocessToken, token);
                     break;
+
+                // 13.2.6.4.5 The "in head noscript" insertion mode
+                // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inheadnoscript
+                case InsertionMode.InHeadNoscript:
+                    switch (token) {
+                        case DOCTYPE: throw new NotImplementedException();
+                        case StartTag { name: "html" }: throw new NotImplementedException();
+                        case EndTag { name: "noscript" }:
+                            // Pop the current node (which will be a noscript element) from the stack of open elements; the new current node will be a head element.
+                            stackOfOpenElements.Pop();
+                            // Switch the insertion mode to "in head".
+                            insertionMode = InsertionMode.InHead;
+                            break;
+                        case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
+                        case Tokenizer.Comment:
+                        case StartTag { name: "basefont" or "bgsound" or "link" or "meta" or "noframes" or "style" }:
+                            reprocessToken = InsertionModeInHead(reprocessToken, token);
+                            break;
+                        case EndTag { name: "br" }: throw new NotImplementedException();
+                        case StartTag { name: "head" or "noscript" }:
+                        case EndTag:
+                            throw new NotImplementedException();
+                        default: throw new NotImplementedException();
+                    }
+                    break;
+
                 // 13.2.6.4.6 The "after head" insertion mode
                 // https://html.spec.whatwg.org/multipage/parsing.html#the-after-head-insertion-mode
                 case InsertionMode.AfterHead:
@@ -1028,7 +1053,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
 
     // 13.2.6.2 Parsing elements that contain only text
     // https://html.spec.whatwg.org/multipage/parsing.html#parsing-elements-that-contain-only-text
-    private void GenericRawTestElementParsingAlgorithm(StartTag tag) {
+    private void GenericRawTextElementParsingAlgorithm(StartTag tag) {
         GenericTextElementParsingAlgorithm(tag, State.RAWTEXTState);
     }
     private void GenericRCDATAElementParsingAlgorithm(StartTag tag) {
@@ -1077,9 +1102,13 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
     private Token? InsertionModeInHead(Token? reprocessToken, Token token) {
         switch (token) {
             case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' } cToken:
+                // Insert the character.
                 InsertACharacter(cToken);
                 break;
-            case Tokenizer.Comment: throw new NotImplementedException();
+            case Tokenizer.Comment comment:
+                // Insert a comment.
+                InsertAComment(comment);
+                break;
             case DOCTYPE: throw new NotImplementedException();
             case StartTag { name: "html" }:
                 // Process the token using the rules for the "in body" insertion mode.
@@ -1112,12 +1141,17 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 GenericRCDATAElementParsingAlgorithm(startTag);
                 break;
             case StartTag { name: "noscript" } startTag when scriptingFlag:
-                GenericRawTestElementParsingAlgorithm(startTag);
+                GenericRawTextElementParsingAlgorithm(startTag);
                 break;
             case StartTag { name: "noframes" or "style" } startTag:
-                GenericRawTestElementParsingAlgorithm(startTag);
+                GenericRawTextElementParsingAlgorithm(startTag);
                 break;
-            case StartTag { name: "noscript" } when !scriptingFlag: throw new NotImplementedException();
+            case StartTag { name: "noscript" } tagToken when !scriptingFlag:
+                // Insert an HTML element for the token.
+                InsertAnHTMLElement(tagToken);
+                // Switch the insertion mode to "in head noscript".
+                insertionMode = InsertionMode.InHeadNoscript;
+                break;
             case StartTag { name: "script" }:
                 // 1. Let the adjusted insertion location be the appropriate place for inserting a node.
                 var adjustedInsertionLocation = AppropriatePlaceForInsertingANode();
@@ -1831,8 +1865,24 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // 6. Switch the insertion mode to "text".
                 insertionMode = InsertionMode.Text;
                 break;
-            case StartTag { name: "xmp" }: throw new NotImplementedException();
-            case StartTag { name: "iframe" }: throw new NotImplementedException();
+            case StartTag { name: "xmp" } startTag:
+                // If the stack of open elements has a p element in button scope, then close a p element.
+                if (HasAElementInButtonScope("p")) {
+                    CloseAPElement();
+                }
+                // Reconstruct the active formatting elements, if any.
+                ReconstructTheActiveFormattingElements();
+                // Set the frameset-ok flag to "not ok".
+                framesetOk = false;
+                // Follow the generic raw text element parsing algorithm.
+                GenericRawTextElementParsingAlgorithm(startTag);
+                break;
+            case StartTag { name: "iframe" } startTag:
+                // Set the frameset-ok flag to "not ok".
+                framesetOk = false;
+                // Follow the generic raw text element parsing algorithm.
+                GenericRawTextElementParsingAlgorithm(startTag);
+                break;
             case StartTag { name: "noembed" }: throw new NotImplementedException();
             case StartTag { name: "noscript" } when scriptingFlag: throw new NotImplementedException();
             case StartTag { name: "select" } tagToken:

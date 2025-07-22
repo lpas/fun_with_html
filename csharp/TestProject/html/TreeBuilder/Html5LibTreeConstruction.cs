@@ -29,6 +29,11 @@ public sealed class Html5LibTreeConstruction {
             4, 5, 6, 7, 11, 16, 17,18, // need peek token in body <pre> & <textarea>
             19, 21, 23 // adopting agency
         ],[])),
+        // ("tests4.dat", ([],[],[])), // fragments
+        ("tests5.dat", ([
+            12, 13, // tokenizer not implemented
+        ],[],[])),
+
     ];
 
 
@@ -44,59 +49,61 @@ public sealed class Html5LibTreeConstruction {
     private static void RunTestsForFile(string filePath, int[] skipTests, int[] expectWrongTree, int[] expectWrongErrors) {
         var testReader = TestReader.CreateFromFile(filePath);
         foreach (var (testCase, index) in testReader.GetTestCases().Select((testCase, i) => (testCase, i))) {
-            Console.WriteLine(index);
-            if (skipTests.Contains(index)) continue;
+            // if no scripting is in testcase we run with scriptingFlag on&off otherwise with the specified value
+            foreach (var scriptingFlag in testCase.scripting is null ? new bool[] { true, false } : [testCase.scripting.Value]) {
+                Console.WriteLine($"{index}:{scriptingFlag}");
+                if (skipTests.Contains(index)) continue;
 
-            var tokenizer = new Tokenizer(string.Join('\n', testCase.data));
-            var treeBuilder = new TreeBuilder(tokenizer);
-            try {
-                treeBuilder.build();
-            } catch (Exception e) {
-                Console.WriteLine(index);
-                Console.WriteLine(e);
-                foreach (var line in testCase.data) {
-                    Console.WriteLine(line);
+                var tokenizer = new Tokenizer(string.Join('\n', testCase.data));
+                var treeBuilder = new TreeBuilder(tokenizer) { scriptingFlag = scriptingFlag };
+                try {
+                    treeBuilder.build();
+                } catch (Exception e) {
+                    Console.WriteLine(index);
+                    Console.WriteLine(e);
+                    foreach (var line in testCase.data) {
+                        Console.WriteLine(line);
+                    }
+                    throw;
                 }
-                throw;
-            }
-            try {
-                TestReader.AssertEqDocument(testCase, treeBuilder.Document);
-            } catch {
-                if (expectWrongTree.Contains(index)) continue;
-                Console.WriteLine("ERROR TREE");
-                Console.WriteLine(index);
-                Console.WriteLine(testCase);
-                treeBuilder.PrintDebugDocumentTree();
-                foreach (var error in treeBuilder.Errors) {
-                    Console.WriteLine(error);
+                try {
+                    TestReader.AssertEqDocument(testCase, treeBuilder.Document);
+                } catch {
+                    if (expectWrongTree.Contains(index)) continue;
+                    Console.WriteLine("ERROR TREE");
+                    Console.WriteLine(index);
+                    Console.WriteLine(testCase);
+                    treeBuilder.PrintDebugDocumentTree();
+                    foreach (var error in treeBuilder.Errors) {
+                        Console.WriteLine(error);
+                    }
+                    throw;
                 }
-                throw;
-            }
 
-            try {
-                TestReader.AssertEqErrors(testCase, treeBuilder.Errors);
-            } catch {
-                if (expectWrongErrors.Contains(index)) continue;
-                Console.WriteLine("ERROR ERRORS");
-                Console.WriteLine(index);
-                Console.WriteLine(testCase);
-                foreach (var error in treeBuilder.Errors) {
-                    Console.WriteLine(error);
+                try {
+                    TestReader.AssertEqErrors(testCase, treeBuilder.Errors);
+                } catch {
+                    if (expectWrongErrors.Contains(index)) continue;
+                    Console.WriteLine("ERROR ERRORS");
+                    Console.WriteLine(index);
+                    Console.WriteLine(testCase);
+                    foreach (var error in treeBuilder.Errors) {
+                        Console.WriteLine(error);
+                    }
+                    Console.WriteLine("----");
+                    foreach (var error in tokenizer.Errors) {
+                        Console.WriteLine(error);
+                    }
+                    throw;
                 }
-                Console.WriteLine("----");
-                foreach (var error in tokenizer.Errors) {
-                    Console.WriteLine(error);
+
+                if (expectWrongTree.Contains(index) || expectWrongErrors.Contains(index)) {
+                    Console.WriteLine("ERROR SHOULD ERROR");
+                    Console.WriteLine(index);
+                    Console.WriteLine(testCase);
+                    throw new Exception("TEST SHOULD ERROR");
                 }
-                throw;
             }
-
-            if (expectWrongTree.Contains(index) || expectWrongErrors.Contains(index)) {
-                Console.WriteLine("ERROR SHOULD ERROR");
-                Console.WriteLine(index);
-                Console.WriteLine(testCase);
-                throw new Exception("TEST SHOULD ERROR");
-            }
-
         }
     }
 }
