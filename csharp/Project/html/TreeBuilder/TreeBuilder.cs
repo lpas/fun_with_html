@@ -923,7 +923,21 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             }
                             break;
                         case StartTag { name: "input" or "keygen" or "textarea" }:
-                            throw new NotImplementedException();
+                            // Parse error.
+                            AddParseError("in-select-unexpected-start-tag");
+                            // If the stack of open elements does not have a select element in select scope, ignore the token. (fragment case)
+                            if (!HasAElementInSelectScope("select")) {
+                                // ignore token
+                            } else {
+                                // Otherwise:
+                                // Pop elements from the stack of open elements until a select element has been popped from the stack.
+                                while (stackOfOpenElements.Pop() is not Element { localName: "select" }) { }
+                                // Reset the insertion mode appropriately.
+                                ResetTheInsertionModeAppropriately();
+                                // Reprocess the token.
+                                reprocessToken = token;
+                            }
+                            break;
                         case StartTag { name: "script" or "template" }:
                         case EndTag { name: "template" }:
                             throw new NotImplementedException();
@@ -937,6 +951,30 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             // ignore the token;
                             break;
 
+                    }
+                    break;
+                // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inselectintable
+                case InsertionMode.InSelectInTable:
+                    switch (token) {
+                        case StartTag { name: "caption" or "table" or "tbody" or "tfoot" or "thead" or "tr" or "td" or "th" }: throw new NotImplementedException();
+                        case EndTag { name: "caption" or "table" or "tbody" or "tfoot" or "thead" or "tr" or "td" or "th" } tagToken:
+                            // Parse error.
+                            AddParseError("in-select-in-table-unexpected-end-tag");
+                            // If the stack of open elements does not have an element in table scope that is an HTML element with the same tag name as that of the token, then ignore the token.
+                            if (!HasAElementInTableScope(tagToken.name)) {
+                                break;
+                            } else {
+                                // Otherwise:
+                                // 1. Pop elements from the stack of open elements until a select element has been popped from the stack.
+                                while (stackOfOpenElements.Pop() is not Element { localName: "select" }) { }
+                                // 2. Reset the insertion mode appropriately.
+                                ResetTheInsertionModeAppropriately();
+                                // 3. Reprocess the token.
+                                reprocessToken = token;
+                            }
+                            break;
+                        default:
+                            throw new NotImplementedException();
                     }
                     break;
                 // 13.2.6.4.19 The "after body" insertion mode
@@ -1370,9 +1408,25 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 break;
             case StartTag { name: "style" or "script" or "template" }:
             case EndTag { name: "template" }:
-                throw new NotImplementedException();
-            case StartTag { name: "input" }:
-                throw new NotImplementedException();
+                // Process the token using the rules for the "in head" insertion mode.
+                reprocessToken = InsertionModeInHead(reprocessToken, token);
+                break;
+            case StartTag { name: "input" } tagToken:
+                // If the token does not have an attribute with the name "type", or if it does, but that attribute's value is not an ASCII case-insensitive match for the string "hidden", then: act as described in the "anything else" entry below.
+                if (!tagToken.Attributes.Any((item) => item.name == "type" && string.Equals(item.value, "hidden", StringComparison.OrdinalIgnoreCase))) {
+                    goto default;
+                } else {
+                    // Otherwise:
+                    // Parse error.
+                    AddParseError("in-table-input");
+                    // Insert an HTML element for the token.
+                    InsertAnHTMLElement(tagToken);
+                    // Pop that input element off the stack of open elements.
+                    stackOfOpenElements.Pop();
+                    // Acknowledge the token's self-closing flag, if it is set.
+                    // todo
+                }
+                break;
             case StartTag { name: "form" }:
                 throw new NotImplementedException();
             case null:

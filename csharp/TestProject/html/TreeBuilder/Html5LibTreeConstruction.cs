@@ -40,6 +40,11 @@ public sealed class Html5LibTreeConstruction {
             46, // doctype
             47, 48, 49, 50, 51 // frameset stuff
         ],[],[4, 5, 18, 37, 39, 40, 41, 42])),
+        ("tests7.dat", ([
+            23 // select
+        ],[
+            1, 7,8,11, 12, 15, 19, 20, 21, 22, 30, 31, 32
+        ],[29])),
     ];
 
 
