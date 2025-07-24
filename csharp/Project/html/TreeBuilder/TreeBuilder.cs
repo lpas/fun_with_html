@@ -297,7 +297,16 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                         case StartTag { name: "head" or "noscript" }:
                         case EndTag:
                             throw new NotImplementedException();
-                        default: throw new NotImplementedException();
+                        default:
+                            // Parse error.
+                            AddParseError("in-head-no-script-unexpected-token");
+                            // Pop the current node (which will be a noscript element) from the stack of open elements; the new current node will be a head element.
+                            stackOfOpenElements.Pop();
+                            // Switch the insertion mode to "in head".
+                            insertionMode = InsertionMode.InHead;
+                            // Reprocess the token.
+                            reprocessToken = token;
+                            break;
                     }
                     break;
 
@@ -1102,7 +1111,10 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // https://html.spec.whatwg.org/multipage/parsing.html#the-after-after-body-insertion-mode
                 case InsertionMode.AfterAfterBody:
                     switch (token) {
-                        case Tokenizer.Comment: throw new NotImplementedException();
+                        case Tokenizer.Comment comment:
+                            // Insert a comment as the last child of the Document object.
+                            InsertAComment(comment, (document, document.childNodes.Count));
+                            break;
                         case DOCTYPE:
                         case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
                         case StartTag { name: "html" }:
@@ -1427,10 +1439,26 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                     // todo
                 }
                 break;
-            case StartTag { name: "form" }:
-                throw new NotImplementedException();
-            case null:
-                throw new NotImplementedException();
+            case StartTag { name: "form" } tagToken:
+                // Parse error.
+                AddParseError("in-table-unexpected-tag-form");
+                // If there is a template element on the stack of open elements, or if the form element pointer is not null, ignore the token.
+                if (stackOfOpenElements.Any(item => item.localName == "template") || formElementPointer is not null) {
+                    // ignore token
+                } else {
+                    // Otherwise:
+                    // Insert an HTML element for the token, and set the form element pointer to point to the element created.
+                    formElementPointer = InsertAnHTMLElement(tagToken);
+                    // Pop that form element off the stack of open elements.
+                    stackOfOpenElements.Pop();
+                }
+                break;
+            case EndOfFile:
+                // Process the token using the rules for the "in body" insertion mode.
+                if (!InsertionModeInBody(ref reprocessToken, token)) {
+                    return true;
+                }
+                break;
             default:
                 // Parse error. Enable foster parenting, process the token using the rules for the "in body" insertion mode, and then disable foster parenting.
                 AddParseError("IN TABLE - default");
@@ -2043,8 +2071,14 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // Follow the generic raw text element parsing algorithm.
                 GenericRawTextElementParsingAlgorithm(startTag);
                 break;
-            case StartTag { name: "noembed" }: throw new NotImplementedException();
-            case StartTag { name: "noscript" } when scriptingFlag: throw new NotImplementedException();
+            case StartTag { name: "noembed" } startTag:
+                // Follow the generic raw text element parsing algorithm.
+                GenericRawTextElementParsingAlgorithm(startTag);
+                break;
+            case StartTag { name: "noscript" } startTag when scriptingFlag:
+                // Follow the generic raw text element parsing algorithm.
+                GenericRawTextElementParsingAlgorithm(startTag);
+                break;
             case StartTag { name: "select" } tagToken:
                 // Reconstruct the active formatting elements, if any.
                 ReconstructTheActiveFormattingElements();

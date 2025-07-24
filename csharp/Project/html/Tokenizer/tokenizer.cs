@@ -780,8 +780,17 @@ public class Tokenizer(string content) {
             char? c = ConsumeNextInputCharacter();
             switch (c) {
                 case '\t' or '\n' or '\f' or ' ':
-                    throw new NotImplementedException();
-                case '/': throw new NotImplementedException();
+                    if (IsAppropriateEndTagToken()) {
+                        return SetState(State.BeforeAttributeNameState);
+                    } else {
+                        goto default;
+                    }
+                case '/':
+                    if (IsAppropriateEndTagToken()) {
+                        return SetState(State.SelfClosingStartTagState);
+                    } else {
+                        goto default;
+                    }
                 case '>':
                     if (IsAppropriateEndTagToken()) {
                         SetState(State.DataState);
