@@ -141,6 +141,8 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
 
     private List<Character> pendingTableCharacterTokens = [];
 
+    private List<InsertionMode> stackOfTemplateInsertionModes = [];
+
     public void build() {
         Token? reprocessToken = null;
         Stack<string> lol = new();
@@ -643,8 +645,19 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                                 // Reprocess the current token.
                                 reprocessToken = token;
                                 break;
-                            case StartTag { name: "tbody" or "tfoot" or "thead" }:
-                                throw new NotImplementedException();
+                            case EndTag { name: "tbody" or "tfoot" or "thead" } tagToken:
+                                // If the stack of open elements does not have an element in table scope that is an HTML element with the same tag name as the token, this is a parse error; ignore the token.
+                                if (!HasAElementInTableScope(tagToken.name)) {
+                                    AddParseError("in-table-body-unexpected-end-tag");
+                                } else {
+                                    // Otherwise:
+                                    // 1. Clear the stack back to a table body context. (See below.)
+                                    ClearTheStackBackToTableContext();
+                                    // 2. Pop the current node from the stack of open elements. Switch the insertion mode to "in table".
+                                    stackOfOpenElements.Pop();
+                                    insertionMode = InsertionMode.InTable;
+                                }
+                                break;
                             case StartTag { name: "caption" or "col" or "colgroup" or "tbody" or "tfood" or "thead" }:
                             case EndTag { name: "table" }:
                                 // If the stack of open elements does not have a tbody, thead, or tfoot element in table scope, this is a parse error; ignore the token.
@@ -965,7 +978,16 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inselectintable
                 case InsertionMode.InSelectInTable:
                     switch (token) {
-                        case StartTag { name: "caption" or "table" or "tbody" or "tfoot" or "thead" or "tr" or "td" or "th" }: throw new NotImplementedException();
+                        case StartTag { name: "caption" or "table" or "tbody" or "tfoot" or "thead" or "tr" or "td" or "th" }:
+                            // Parse error.
+                            AddParseError("select-in-table-unexpected-start-tag");
+                            // Pop elements from the stack of open elements until a select element has been popped from the stack.
+                            while (stackOfOpenElements.Pop() is not Element { localName: "select" }) { }
+                            // Reset the insertion mode appropriately.
+                            ResetTheInsertionModeAppropriately();
+                            // Reprocess the token.
+                            reprocessToken = token;
+                            break;
                         case EndTag { name: "caption" or "table" or "tbody" or "tfoot" or "thead" or "tr" or "td" or "th" } tagToken:
                             // Parse error.
                             AddParseError("in-select-in-table-unexpected-end-tag");
@@ -983,6 +1005,42 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             }
                             break;
                         default:
+                            // Parse error. Ignore the token.
+                            AddParseError("in-select-unexpected-token-ignored");
+                            break;
+                    }
+                    break;
+
+                // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intemplate
+                case InsertionMode.InTemplate:
+                    switch (token) {
+                        case Character:
+                        case Tokenizer.Comment:
+                        case DOCTYPE:
+                            throw new NotImplementedException();
+                        case StartTag { name: "base" or "basefont" or "bgsound" or "link" or "meta" or "noframes" or "script" or "style" or "template" or "title" }:
+                        case EndTag { name: "template" }:
+                            throw new NotImplementedException();
+                        case StartTag { name: "caption" or "colgroup" or "tbody" or "tfoot" or "thead" }:
+                            throw new NotImplementedException();
+                        case StartTag { name: "col" }:
+                            throw new NotImplementedException();
+                        case StartTag { name: "tr" }:
+                            throw new NotImplementedException();
+                        case StartTag { name: "td" or "th" }:
+                            throw new NotImplementedException();
+                        case StartTag:
+                            // Pop the current template insertion mode off the stack of template insertion modes.
+                            stackOfTemplateInsertionModes.Pop();
+                            // Push "in body" onto the stack of template insertion modes so that it is the new current template insertion mode.
+                            stackOfTemplateInsertionModes.Push(InsertionMode.InBody);
+                            // Switch the insertion mode to "in body", and reprocess the token.
+                            insertionMode = InsertionMode.InBody;
+                            reprocessToken = token;
+                            break;
+                        case EndTag:
+                            throw new NotImplementedException();
+                        case EndOfFile:
                             throw new NotImplementedException();
                     }
                     break;
@@ -1088,7 +1146,10 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             // Insert the character.
                             InsertACharacter(cToken);
                             break;
-                        case Tokenizer.Comment: throw new NotImplementedException();
+                        case Tokenizer.Comment comment:
+                            // Insert a comment.
+                            InsertAComment(comment);
+                            break;
                         case DOCTYPE: throw new NotImplementedException();
                         case StartTag { name: "html" }: throw new NotImplementedException();
                         case EndTag { name: "html" }:
@@ -1136,7 +1197,10 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // https://html.spec.whatwg.org/multipage/parsing.html#the-after-after-frameset-insertion-mode
                 case InsertionMode.AfterAfterFrameset:
                     switch (token) {
-                        case Tokenizer.Comment: throw new NotImplementedException();
+                        case Tokenizer.Comment comment:
+                            // Insert a comment as the last child of the Document object.
+                            InsertAComment(comment, (document, document.childNodes.Count));
+                            break;
                         case DOCTYPE:
                         case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
                         case StartTag { name: "html" }:
@@ -1149,9 +1213,13 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             StopParsing();
                             return;
                         case StartTag { name: "noframes" }:
-                            throw new NotImplementedException();
+                            // Process the token using the rules for the "in head" insertion mode.
+                            reprocessToken = InsertionModeInHead(reprocessToken, token);
+                            break;
                         default:
-                            throw new NotImplementedException();
+                            // Parse error. Ignore the token.
+                            AddParseError("after-after-frameset-unexpected-token-ignored");
+                            break;
                     }
                     break;
 
@@ -1268,29 +1336,30 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // Switch the insertion mode to "in head noscript".
                 insertionMode = InsertionMode.InHeadNoscript;
                 break;
-            case StartTag { name: "script" }:
-                // 1. Let the adjusted insertion location be the appropriate place for inserting a node.
-                var adjustedInsertionLocation = AppropriatePlaceForInsertingANode();
-                // 2. Create an element for the token in the HTML namespace, with the intended parent being the element in which the adjusted insertion location finds itself.
-                var element = CreateAnElement(document, "script", Namespaces.HTML);
-                // 3. Set the element's parser document to the Document, and set the element's force async to false.
-                // todo
-                // NOTE: This ensures that, if the script is external, any document.write() calls in the script will execute in-line, instead of blowing the document away, as would happen in most other cases. It also prevents the script from executing until the end tag is seen.
-                // If the parser was created as part of the HTML fragment parsing algorithm, then set the script element's already started to true. (fragment case)
-                // todo
-                // If the parser was invoked via the document.write() or document.writeln() methods, then optionally set the script element's already started to true. (For example, the user agent might use this clause to prevent execution of cross-origin scripts inserted via document.write() under slow network conditions, or when the page has already taken a long time to load.)
-                // todo
-                // Insert the newly created element at the adjusted insertion location.
-                InsertNode(adjustedInsertionLocation, element);
-                // Push the element onto the stack of open elements so that it is the new current node.
-                stackOfOpenElements.Push(element);
-                // Switch the tokenizer to the script data state.
-                tokenizer.SwitchState(State.ScriptDataState);
-                // Set the original insertion mode to the current insertion mode.
-                originalInsertionMode = insertionMode;
-                // Switch the insertion mode to "text".
-                insertionMode = InsertionMode.Text;
-                break;
+            case StartTag { name: "script" }: {
+                    // 1. Let the adjusted insertion location be the appropriate place for inserting a node.
+                    var adjustedInsertionLocation = AppropriatePlaceForInsertingANode();
+                    // 2. Create an element for the token in the HTML namespace, with the intended parent being the element in which the adjusted insertion location finds itself.
+                    var element = CreateAnElement(document, "script", Namespaces.HTML);
+                    // 3. Set the element's parser document to the Document, and set the element's force async to false.
+                    // todo
+                    // NOTE: This ensures that, if the script is external, any document.write() calls in the script will execute in-line, instead of blowing the document away, as would happen in most other cases. It also prevents the script from executing until the end tag is seen.
+                    // If the parser was created as part of the HTML fragment parsing algorithm, then set the script element's already started to true. (fragment case)
+                    // todo
+                    // If the parser was invoked via the document.write() or document.writeln() methods, then optionally set the script element's already started to true. (For example, the user agent might use this clause to prevent execution of cross-origin scripts inserted via document.write() under slow network conditions, or when the page has already taken a long time to load.)
+                    // todo
+                    // Insert the newly created element at the adjusted insertion location.
+                    InsertNode(adjustedInsertionLocation, element);
+                    // Push the element onto the stack of open elements so that it is the new current node.
+                    stackOfOpenElements.Push(element);
+                    // Switch the tokenizer to the script data state.
+                    tokenizer.SwitchState(State.ScriptDataState);
+                    // Set the original insertion mode to the current insertion mode.
+                    originalInsertionMode = insertionMode;
+                    // Switch the insertion mode to "text".
+                    insertionMode = InsertionMode.Text;
+                    break;
+                }
             case EndTag { name: "head" }:
                 // Pop the current node (which will be the head element) off the stack of open elements.
                 stackOfOpenElements.Pop();
@@ -1300,7 +1369,77 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
             case EndTag { name: "body" or "html" or "br" }:
                 // Act as described in the "anything else" entry below.
                 goto default;
-            case StartTag { name: "template" }: throw new NotImplementedException();
+            case StartTag { name: "template" } startTag: {
+                    // Run these steps:
+                    // 1. Let templateStartTag be the start tag.
+                    var templateStartTag = startTag;
+                    // 2. Insert a marker at the end of the list of active formatting elements.
+                    ListOfActiveFormattingElements.Add(null);
+                    // 3. Set the frameset-ok flag to "not ok".
+                    framesetOk = false;
+                    // 4. Switch the insertion mode to "in template".
+                    insertionMode = InsertionMode.InTemplate;
+                    // 5. Push "in template" onto the stack of template insertion modes so that it is the new current template insertion mode.
+                    stackOfTemplateInsertionModes.Push(InsertionMode.InTemplate);
+                    // 6. Let the adjustedInsertionLocation be the appropriate place for inserting a node.
+                    var adjustedInsertionLocation = AppropriatePlaceForInsertingANode();
+                    // 7. Let intendedParent be the element in which the adjustedInsertionLocation finds itself.
+                    var intendedParent = adjustedInsertionLocation.elem;
+                    // 8. Let document be intendedParent's node document.
+                    var document = intendedParent.ownerDocument;
+                    // 9. If any of the following are false:
+                    // * templateStartTag's shadowrootmode is not in the None state;
+                    // * document's allow declarative shadow roots is true; or
+                    // * the adjusted current node is not the topmost element in the stack of open elements,
+                    // todo 
+                    if (true) {
+                        // then insert an HTML element for the token.
+                        InsertAnHTMLElement(startTag);
+                    } else {
+                        // 10. Otherwise:
+
+                        // 1. Let declarativeShadowHostElement be adjusted current node.
+
+                        // 2. Let template be the result of insert a foreign element for templateStartTag, with HTML namespace and true.
+
+                        // 3. Let mode be templateStartTag's shadowrootmode attribute's value.
+
+                        // 4. Let clonable be true if templateStartTag has a shadowrootclonable attribute; otherwise false.
+
+                        // 5. Let serializable be true if templateStartTag has a shadowrootserializable attribute; otherwise false.
+
+                        // 6. Let delegatesFocus be true if templateStartTag has a shadowrootdelegatesfocus attribute; otherwise false.
+
+                        // 7. If declarativeShadowHostElement is a shadow host, then insert an element at the adjusted insertion location with template.
+
+                        // 8. Otherwise:
+
+                        // 1. Let registry be declarativeShadowHostElement's custom element registry.
+
+                        // 2. If templateStartTag has a shadowrootcustomelementregistry attribute, then set registry to null.
+
+                        // 3. Attach a shadow root with declarativeShadowHostElement, mode, clonable, serializable, delegatesFocus, "named", and registry.
+
+                        // If an exception is thrown, then catch it and:
+
+                        // 1. Insert an element at the adjusted insertion location with template.
+
+                        // 2. The user agent may report an error to the developer console.
+
+                        // 3. Return.
+
+                        // 4. Let shadow be declarativeShadowHostElement's shadow root.
+
+                        // 5. Set shadow's declarative to true.
+
+                        // 6. Set template's template contents property to shadow.
+
+                        // 7. Set shadow's available to element internals to true.
+
+                        // 8. If templateStartTag has a shadowrootcustomelementregistry attribute, then set shadow's keep custom element registry null to true.
+                    }
+                    break;
+                }
             case EndTag { name: "template" }: throw new NotImplementedException();
             case StartTag { name: "head" }:
             case EndTag:
