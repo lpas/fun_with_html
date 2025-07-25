@@ -58,7 +58,7 @@ public class DocumentType(Document document, string name, string publicId = "", 
     public string systemId { get; } = systemId;
 
     public override string ToString() {
-        return $"<!DOCTYPE {name}>";
+        return $"<!DOCTYPE {name}{(publicId != "" || systemId != "" ? $" \"{publicId}\" \"{systemId}\"" : "")}>";
     }
 }
 
@@ -247,7 +247,10 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             // Insert a comment.
                             InsertAComment(comment);
                             break;
-                        case DOCTYPE: throw new NotImplementedException();
+                        case DOCTYPE:
+                            // Parse error. Ignore the token.
+                            AddParseError("before-head-unexpected-doctype-ignored");
+                            break;
                         case StartTag { name: "html" }: throw new NotImplementedException();
                         case StartTag { name: "head" } tagToken: {
                                 // Insert an HTML element for the token.
@@ -288,8 +291,16 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inheadnoscript
                 case InsertionMode.InHeadNoscript:
                     switch (token) {
-                        case DOCTYPE: throw new NotImplementedException();
-                        case StartTag { name: "html" }: throw new NotImplementedException();
+                        case DOCTYPE:
+                            // Parse error. Ignore the token.
+                            AddParseError("in-head-noscript-unexpected-doctype-ignored");
+                            break;
+                        case StartTag { name: "html" }:
+                            // Process the token using the rules for the "in body" insertion mode.
+                            if (InsertionModeInBody(ref reprocessToken, token)) {
+                                return;
+                            }
+                            break;
                         case EndTag { name: "noscript" }:
                             // Pop the current node (which will be a noscript element) from the stack of open elements; the new current node will be a head element.
                             stackOfOpenElements.Pop();
@@ -301,10 +312,14 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                         case StartTag { name: "basefont" or "bgsound" or "link" or "meta" or "noframes" or "style" }:
                             reprocessToken = InsertionModeInHead(reprocessToken, token);
                             break;
-                        case EndTag { name: "br" }: throw new NotImplementedException();
+                        case EndTag { name: "br" }:
+                            // Act as described in the "anything else" entry below.
+                            goto default;
                         case StartTag { name: "head" or "noscript" }:
                         case EndTag:
-                            throw new NotImplementedException();
+                            // Parse error. Ignore the token.
+                            AddParseError("in-head-noscript-unexpected-token-ignored");
+                            break;
                         default:
                             // Parse error.
                             AddParseError("in-head-no-script-unexpected-token");
@@ -330,7 +345,10 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             // Insert a comment.
                             InsertAComment(comment);
                             break;
-                        case DOCTYPE: throw new NotImplementedException();
+                        case DOCTYPE:
+                            // Parse error. Ignore the token.
+                            AddParseError("after-head-unexpected-doctype-ignored");
+                            break;
                         case StartTag { name: "html" }:
                             //Process the token using the rules for the "in body" insertion mode.
                             if (!InsertionModeInBody(ref reprocessToken, token)) {
@@ -589,10 +607,23 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-incolgroup
                 case InsertionMode.InColumnGroup:
                     switch (token) {
-                        case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }: throw new NotImplementedException();
-                        case Tokenizer.Comment: throw new NotImplementedException();
-                        case DOCTYPE: throw new NotImplementedException();
-                        case StartTag { name: "html" }: throw new NotImplementedException();
+                        case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' } cToken:
+                            InsertACharacter(cToken);
+                            break;
+                        case Tokenizer.Comment comment:
+                            // Insert a comment.
+                            InsertAComment(comment);
+                            break;
+                        case DOCTYPE:
+                            // Parse error. Ignore the token.
+                            AddParseError("in-column-group-unexpected-doctype-ignored");
+                            break;
+                        case StartTag { name: "html" }:
+                            // Process the token using the rules for the "in body" insertion mode.
+                            if (!InsertionModeInBody(ref reprocessToken, token)) {
+                                return;
+                            }
+                            break;
                         case StartTag { name: "col" } tagToken:
                             // Insert an HTML element for the token. Immediately pop the current node off the stack of open elements.
                             InsertAnHTMLElement(tagToken);
@@ -600,7 +631,16 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             // Acknowledge the token's self-closing flag, if it is set.
                             // todo
                             break;
-                        case EndTag { name: "colgroup" }: throw new NotImplementedException();
+                        case EndTag { name: "colgroup" }:
+                            // If the current node is not a colgroup element, then this is a parse error; ignore the token.
+                            if (currentNode is not Element { localName: "colgroup" }) {
+                                AddParseError("in-column-group-unexpected-end-tag-ignored");
+                            } else {
+                                // Otherwise, pop the current node from the stack of open elements. Switch the insertion mode to "in table".
+                                stackOfOpenElements.Pop();
+                                insertionMode = InsertionMode.InTable;
+                            }
+                            break;
                         case EndTag { name: "col" }:
                             // Parse error. Ignore the token.
                             AddParseError("in-column-group-unexpected-col-end-token-ignored");
@@ -874,16 +914,26 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 case InsertionMode.InSelect:
                     switch (token) {
                         case Character { data: '\0' }:
-                            throw new NotImplementedException();
+                            // Parse error. Ignore the token.
+                            AddParseError("in-select-null-character-ignored");
+                            break;
                         case Character cToken:
                             InsertACharacter(cToken);
                             break;
-                        case Tokenizer.Comment:
-                            throw new NotImplementedException();
+                        case Tokenizer.Comment comment:
+                            // Insert a comment.
+                            InsertAComment(comment);
+                            break;
                         case DOCTYPE:
-                            throw new NotImplementedException();
+                            // Parse error. Ignore the token.
+                            AddParseError("in-select-unexpected-doctype-ignored");
+                            break;
                         case StartTag { name: "html" }:
-                            throw new NotImplementedException();
+                            // Process the token using the rules for the "in body" insertion mode.
+                            if (!InsertionModeInBody(ref reprocessToken, token)) {
+                                return;
+                            }
+                            break;
                         case StartTag { name: "option" } tagToken:
                             // If the current node is an option element, pop that node from the stack of open elements.
                             if (currentNode is Element { localName: "option" }) {
@@ -1067,7 +1117,10 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             // Insert a comment as the last child of the first element in the stack of open elements (the html element).
                             InsertAComment(comment, (stackOfOpenElements[0], stackOfOpenElements[0].childNodes.Count));
                             break;
-                        case DOCTYPE: throw new NotImplementedException();
+                        case DOCTYPE:
+                            // Parse error. Ignore the token.
+                            AddParseError("after-body-unexpected-doctype-ignored");
+                            break;
                         case StartTag { name: "html" }:
                             // Process the token using the rules for the "in body" insertion mode.
                             if (!InsertionModeInBody(ref reprocessToken, token)) {
@@ -1105,7 +1158,12 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             // Parse error. Ignore the token.
                             AddParseError("in-frameset-unexpected-doctype");
                             break;
-                        case StartTag { name: "html" }: throw new NotImplementedException();
+                        case StartTag { name: "html" }:
+                            // Process the token using the rules for the "in body" insertion mode.
+                            if (!InsertionModeInBody(ref reprocessToken, token)) {
+                                return;
+                            }
+                            break;
                         case StartTag { name: "frameset" } tagToken:
                             // Insert an HTML element for the token.
                             InsertAnHTMLElement(tagToken);
@@ -1162,8 +1220,16 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             // Insert a comment.
                             InsertAComment(comment);
                             break;
-                        case DOCTYPE: throw new NotImplementedException();
-                        case StartTag { name: "html" }: throw new NotImplementedException();
+                        case DOCTYPE:
+                            // Parse error. Ignore the token.
+                            AddParseError("after-frameset-unexpected-doctype-ignored");
+                            break;
+                        case StartTag { name: "html" }:
+                            // Process the token using the rules for the "in body" insertion mode.
+                            if (!InsertionModeInBody(ref reprocessToken, token)) {
+                                return;
+                            }
+                            break;
                         case EndTag { name: "html" }:
                             // Switch the insertion mode to "after after frameset".
                             insertionMode = InsertionMode.AfterAfterFrameset;
@@ -1305,7 +1371,10 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // Insert a comment.
                 InsertAComment(comment);
                 break;
-            case DOCTYPE: throw new NotImplementedException();
+            case DOCTYPE:
+                // Parse error. Ignore the token.
+                AddParseError("in-head-unexpected-doctype-ignored");
+                break;
             case StartTag { name: "html" }:
                 // Process the token using the rules for the "in body" insertion mode.
                 if (!InsertionModeInBody(ref reprocessToken, token)) {
@@ -1494,7 +1563,9 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 InsertAComment(comment);
                 break;
             case DOCTYPE:
-                throw new NotImplementedException();
+                // Parse error. Ignore the token.
+                AddParseError("in-table-unexpeced-doctype-ignored");
+                break;
             case StartTag { name: "caption" } tagToken:
                 // Clear the stack back to a table context. (See below.)
                 ClearTheStackBackToTableContext();
@@ -1629,7 +1700,10 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
     // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inbody
     private bool InsertionModeInBody(ref Token reprocessToken, Token? token) {
         switch (token) {
-            case Character { data: '\0' }: throw new NotImplementedException();
+            case Character { data: '\0' }:
+                // Parse error. Ignore the token.
+                AddParseError("in-body-null-character-ignored");
+                break;
             case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' } cToken:
                 // Reconstruct the active formatting elements, if any.
                 ReconstructTheActiveFormattingElements();

@@ -10,6 +10,31 @@ public sealed class Html5LibTreeConstruction {
     private static string ProjectDirectory => Directory.GetParent(Environment.CurrentDirectory).Parent.Parent.Parent.Parent.FullName;
 
     private static (string, (int[] skipTests, int[] expectWrongTree, int[] expectWrongErrors))[] files = [
+        ("blocks.dat", ([],[],[])),
+        ("comments01.dat", ([],[],[1,2,3,4,6,7,9,10,11,12,13])),
+        ("doctype01.dat", ([],[],[2,3,4,7,8,9,10,11,12,16,17,18,19,20,21,23,25,30,32,33,34,35,36])),
+        ("domjs-unsafe.dat", ([
+            0,1,2, 43,44,45,46,47,48 //svg
+        ],[4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,36],[3])),
+        ("html5test-com.dat", ([6,7,8,9,10,13, // tokenizer
+        20, // adopting index
+        22, // svg
+        23, // math
+        ],[19,],[1,2,3,4,11])),
+        ("inbody01.dat", ([3,],[],[])), // not implemented
+        ("isindex.dat", ([],[1],[])), // tree compare
+        ("main-element.dat", ([2],[],[])), // svg
+        ("menuitem-element.dat", ([
+            6,19,  // not implemented
+            9, // infinity spinning
+            ],[],[])),
+        ("namespace-sensitivity.dat", ([0],[],[])), // svg
+        ("noscript01.dat", ([],[1],[])),
+        ("plain-text-unsafe.dat", ([
+            10,13,14,15,16,17,18,19,20,21,22,23, 27, // svg
+            26,28,29,30,31,32 // math
+        ],[0,1,2,4,5,24,25,],[3,6,7,8,9,11,12])),
+        ("quirks01.dat", ([],[1,2,3],[])),
         ("tests1.dat", ([29, 30, 57, 99, // tree building has problems infinity running tests
             70, 71, 72, 73, 74, 75,   // adoption agency index out of range
             102], // not implement it),
