@@ -952,8 +952,17 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             // Insert an HTML element for the token.
                             InsertAnHTMLElement(tagToken);
                             break;
-                        case StartTag { name: "hr" }:
-                            throw new NotImplementedException();
+                        case StartTag { name: "hr" } tagToken:
+                            // If the current node is an option element, pop that node from the stack of open elements.
+                            if (currentNode is Element { localName: "option" }) stackOfOpenElements.Pop();
+                            // If the current node is an optgroup element, pop that node from the stack of open elements.
+                            if (currentNode is Element { localName: "optgroup" }) stackOfOpenElements.Pop();
+                            // Insert an HTML element for the token. Immediately pop the current node off the stack of open elements.
+                            InsertAnHTMLElement(tagToken);
+                            stackOfOpenElements.Pop();
+                            // Acknowledge the token's self-closing flag, if it is set.
+                            // todo
+                            break;
                         case EndTag { name: "optgroup" }:
                             // First, if the current node is an option element, and the node immediately before it in the stack of open elements is an optgroup element, then pop the current node from the stack of open elements.
                             if (currentNode is Element { localName: "option" } && stackOfOpenElements[^2] is Element { localName: "optgroup" }) stackOfOpenElements.Pop();
@@ -1211,7 +1220,10 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             // Insert the character.
                             InsertACharacter(cToken);
                             break;
-                        case Tokenizer.Comment: throw new NotImplementedException();
+                        case Tokenizer.Comment comment:
+                            // Insert a comment.
+                            InsertAComment(comment);
+                            break;
                         case DOCTYPE:
                             // Parse error. Ignore the token.
                             AddParseError("in-frameset-unexpected-doctype");
@@ -2005,25 +2017,29 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // 3. Loop: If node is a dd element, then run these substeps:
                 loop:
                     if (node is Element { localName: "dd" }) {
-                        throw new NotImplementedException();
                         // 1. Generate implied end tags, except for dd elements.
-
+                        GenerateImpliedEndTags("dd");
                         // 2. If the current node is not a dd element, then this is a parse error.
-
+                        if (currentNode is not Element { localName: "dd" }) {
+                            AddParseError("in-body-dd-unexpected-current-node");
+                        }
                         // 3. Pop elements from the stack of open elements until a dd element has been popped from the stack.
-
+                        while (stackOfOpenElements.Pop() is not Element { localName: "dd" }) { }
                         // 4. Jump to the step labeled done below.
+                        goto done;
                     }
                     // 4. If node is a dt element, then run these substeps:
                     if (node is Element { localName: "dt" }) {
-                        throw new NotImplementedException();
                         // 1. Generate implied end tags, except for dt elements.
-
+                        GenerateImpliedEndTags("dt");
                         // 2. If the current node is not a dt element, then this is a parse error.
-
+                        if (currentNode is not Element { localName: "dt" }) {
+                            AddParseError("in-body-dd-unexpected-current-node");
+                        }
                         // 3. Pop elements from the stack of open elements until a dt element has been popped from the stack.
-
+                        while (stackOfOpenElements.Pop() is not Element { localName: "dt" }) { }
                         // 4. Jump to the step labeled done below.
+                        goto done;
                     }
                     // 5. If node is in the special category, but is not an address, div, or p element, then jump to the step labeled done below.
                     if (node.localName is not "address" or "div" or "p" && specialListElements.Contains(node.localName)) {
@@ -2194,7 +2210,10 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                     }
                 }
                 break;
-            case EndTag { name: "sarcasm" }: throw new NotImplementedException();
+            case EndTag { name: "sarcasm" } tagToken:
+                // Take a deep breath, then act as described in the "any other end tag" entry below.
+                InsertionModeInBodyAnyOtherEndTag(tagToken);
+                break;
             case StartTag { name: "a" } tagToken:
                 // If the list of active formatting elements contains an a element between the end of the list and the last marker on the list (or the start of the list if there is no marker on the list), then this is a parse error; run the adoption agency algorithm for the token, then remove that element from the list of active formatting elements and the stack of open elements if the adoption agency algorithm didn't already remove it (it might not have if the element is not in table scope).
                 var ttr1 = (string localName) => { // todo rename/move

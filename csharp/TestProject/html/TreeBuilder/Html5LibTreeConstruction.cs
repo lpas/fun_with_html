@@ -140,8 +140,18 @@ public sealed class Html5LibTreeConstruction {
         12,13,18,19 //math
         ],[2,9],[1,5,6,7,8,14])),
         // tricky01
-        // webkit01
-        // webkit02
+        ("webkit01.dat", ([
+            15, // tokenizer
+            38, // not implemented
+            41, 42, 43, 46,47,48, // svg
+            49 //math
+        ],[13,26,36,37,39,40,50,],[3,9,10,14,17,19,44,45])),
+        ("webkit02.dat", ([
+                12,13, //index out of bounds
+                19, 20, 22, //svg
+                23, 24, //math
+                30, 31, 32, 33, 34, //infinity spinning
+        ],[5,6,7,8,10,14,15],[2,4])),
     ];
 
 
