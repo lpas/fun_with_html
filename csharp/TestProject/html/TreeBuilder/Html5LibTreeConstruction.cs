@@ -54,7 +54,7 @@ public sealed class Html5LibTreeConstruction {
             21,22,90,100, // infinity spinning
             91, // index out of bounds
             98,99, // svg
-        ],[1,2,3,4,10,11,12, 20, 28,37,40,41,44, 64,65,66,67,68,76,79,80,81,82,83,84,85,86,87,88,89,92,93,94,95,96,97,101,107,109,110,111],
+        ],[1,2,3,4,10,11,12, 20,37,40,41,44,64,65,66,67,68,76,79,80,81,82,83,84,85,86,87,88,89,92,93,94,95,96,97,101,107,109,110,111],
         [25,26,27,29,30,31,32,33,35,38,45,57, 106])),        
         // tests_innerHTML_1
         ("tests1.dat", ([29, 30, 57, 99, // tree building has problems infinity running tests
@@ -145,13 +145,13 @@ public sealed class Html5LibTreeConstruction {
             38, // not implemented
             41, 42, 43, 46,47,48, // svg
             49 //math
-        ],[13,26,36,37,39,40,50,],[3,9,10,14,17,19,44,45])),
+        ],[13,36,37,39,40,50,],[3,9,10,14,17,19,44,45])),
         ("webkit02.dat", ([
                 12,13, //index out of bounds
                 19, 20, 22, //svg
                 23, 24, //math
                 30, 31, 32, 33, 34, //infinity spinning
-        ],[5,6,7,8,10,14,15],[2,4])),
+        ],[5,10,14,15],[2,4])),
     ];
 
 
@@ -169,7 +169,7 @@ public sealed class Html5LibTreeConstruction {
         foreach (var (testCase, index) in testReader.GetTestCases().Select((testCase, i) => (testCase, i))) {
             // if no scripting is in testcase we run with scriptingFlag on&off otherwise with the specified value
             foreach (var scriptingFlag in testCase.scripting is null ? new bool[] { true, false } : [testCase.scripting.Value]) {
-                Console.WriteLine($"{index}:{scriptingFlag}");
+                // Console.WriteLine($"{index}:{scriptingFlag}");
                 if (skipTests.Contains(index)) continue;
                 if (testCase.documentFragment.Count > 0) continue; // todo handle fragment cases
 

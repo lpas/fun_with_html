@@ -896,12 +896,15 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             // Parse error. Ignore the token.
                             AddParseError("in-cell-unexpected-end-token-ignored");
                             break;
-                        case EndTag { name: "table" or "tbody" or "tfoot" or "thead" or "tr" }:
+                        case EndTag { name: "table" or "tbody" or "tfoot" or "thead" or "tr" } tagToken:
                             // If the stack of open elements does not have an element in table scope that is an HTML element with the same tag name as that of the token, then this is a parse error; ignore the token.
-                            // todo parse error
-                            // Otherwise, close the cell (see below) and reprocess the token.
-                            CloseTheCell();
-                            reprocessToken = token;
+                            if (!HasAElementInTableScope(tagToken.name)) {
+                                AddParseError("in-cell-unexpected-end-tag-ignored");
+                            } else {
+                                // Otherwise, close the cell (see below) and reprocess the token.
+                                CloseTheCell();
+                                reprocessToken = token;
+                            }
                             break;
                         default:
                             if (!InsertionModeInBody(ref reprocessToken, token)) {
@@ -1178,7 +1181,10 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 case InsertionMode.AfterBody:
                     switch (token) {
                         case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
-                            // todo
+                            // Process the token using the rules for the "in body" insertion mode.
+                            if (!InsertionModeInBody(ref reprocessToken, token)) {
+                                return;
+                            }
                             break;
                         case Tokenizer.Comment comment:
                             // Insert a comment as the last child of the first element in the stack of open elements (the html element).
