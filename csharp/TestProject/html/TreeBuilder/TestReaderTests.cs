@@ -51,7 +51,6 @@ Test
             |   <body>
             """);
         var testCase = testReader.GetTestCases().First();
-        Console.WriteLine(testCase);
         Assert.AreEqual(1, testCase.data.Count);
         Assert.AreEqual(1, testCase.errors.Count);
         Assert.AreEqual(3, testCase.document.Count);
@@ -82,7 +81,6 @@ Test
         var hr = new Element(document, "hr");
         hr.attributes.Add("foo", "bar");
         body.childNodes.Add(hr);
-        TreeBuilder.PrintDebugDocumentTree(document);
         TestReader.AssertEqDocument(testCase, document);
     }
 
@@ -112,7 +110,6 @@ Test
         hr.attributes.Add("foo", "bar");
         hr.attributes.Add("bar", "baz");
         body.childNodes.Add(hr);
-        TreeBuilder.PrintDebugDocumentTree(document);
         TestReader.AssertEqDocument(testCase, document);
     }
 
@@ -140,7 +137,6 @@ Test
         html.childNodes.AddRange([head, body]);
         var text = new Text(document, "test\ntest");
         body.childNodes.Add(text);
-        TreeBuilder.PrintDebugDocumentTree(document);
         TestReader.AssertEqDocument(testCase, document);
     }
 
@@ -167,9 +163,38 @@ Test
         var head = new Element(document, "head");
         var body = new Element(document, "body");
         html.childNodes.AddRange([head, body]);
-        TreeBuilder.PrintDebugDocumentTree(document);
         TestReader.AssertEqDocument(testCase, document);
     }
+
+    [TestMethod]
+    public void TreeWithTemplate() {
+        var testReader = TestReader.CreateFromString("""
+            #data
+            <body><template>Hello</template>
+            #errors
+            no doctype
+            #document
+            | <html>
+            |   <head>
+            |   <body>
+            |     <template>
+            |       content
+            |         "Hello"
+            """);
+        var testCase = testReader.GetTestCases().First();
+        var document = new Document();
+        var html = new Element(document, "html");
+        document.childNodes.Add(html);
+        var head = new Element(document, "head");
+        var body = new Element(document, "body");
+        html.childNodes.AddRange([head, body]);
+        var template = new Element(document, "template");
+        body.childNodes.Add(template);
+        var text = new Text(document, "Hello");
+        template.childNodes.Add(text);
+        TestReader.AssertEqDocument(testCase, document);
+    }
+
 
     [TestMethod]
     public void TreeCompare() {
@@ -183,8 +208,6 @@ Test
         html.childNodes.AddRange([head, body]);
         var text = new Text(document, "Test");
         body.childNodes.Add(text);
-
-        TreeBuilder.PrintDebugDocumentTree(document);
         TestReader.AssertEqDocument(testCase, document);
     }
 

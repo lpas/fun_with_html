@@ -647,7 +647,9 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             break;
                         case StartTag { name: "template" }:
                         case EndTag { name: "template" }:
-                            throw new NotImplementedException();
+                            // Process the token using the rules for the "in head" insertion mode.
+                            reprocessToken = InsertionModeInHead(reprocessToken, token);
+                            break;
                         case EndOfFile:
                             // Process the token using the rules for the "in body" insertion mode.
                             if (!InsertionModeInBody(ref reprocessToken, token)) {
@@ -1024,7 +1026,9 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             break;
                         case StartTag { name: "script" or "template" }:
                         case EndTag { name: "template" }:
-                            throw new NotImplementedException();
+                            // Process the token using the rules for the "in head" insertion mode.
+                            token = InsertionModeInHead(reprocessToken, token);
+                            break;
                         case EndOfFile:
                             if (!InsertionModeInBody(ref reprocessToken, token)) {
                                 return;
@@ -1079,18 +1083,52 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                         case Character:
                         case Tokenizer.Comment:
                         case DOCTYPE:
-                            throw new NotImplementedException();
+                            // Process the token using the rules for the "in body" insertion mode.
+                            if (!InsertionModeInBody(ref reprocessToken, token)) {
+                                return;
+                            }
+                            break;
                         case StartTag { name: "base" or "basefont" or "bgsound" or "link" or "meta" or "noframes" or "script" or "style" or "template" or "title" }:
                         case EndTag { name: "template" }:
-                            throw new NotImplementedException();
+                            // Process the token using the rules for the "in head" insertion mode.
+                            reprocessToken = InsertionModeInHead(reprocessToken, token);
+                            break;
                         case StartTag { name: "caption" or "colgroup" or "tbody" or "tfoot" or "thead" }:
-                            throw new NotImplementedException();
+                            // Pop the current template insertion mode off the stack of template insertion modes.
+                            stackOfTemplateInsertionModes.Pop();
+                            // Push "in table" onto the stack of template insertion modes so that it is the new current template insertion mode.
+                            stackOfTemplateInsertionModes.Push(InsertionMode.InTable);
+                            // Switch the insertion mode to "in table", and reprocess the token.   
+                            insertionMode = InsertionMode.InTable;
+                            reprocessToken = token;
+                            break;
                         case StartTag { name: "col" }:
-                            throw new NotImplementedException();
+                            // Pop the current template insertion mode off the stack of template insertion modes.
+                            stackOfTemplateInsertionModes.Pop();
+                            // Push "in column group" onto the stack of template insertion modes so that it is the new current template insertion mode.
+                            stackOfTemplateInsertionModes.Push(InsertionMode.InColumnGroup);
+                            // Switch the insertion mode to "in column group", and reprocess the token. 
+                            insertionMode = InsertionMode.InColumnGroup;
+                            reprocessToken = token;
+                            break;
                         case StartTag { name: "tr" }:
-                            throw new NotImplementedException();
+                            // Pop the current template insertion mode off the stack of template insertion modes.
+                            stackOfTemplateInsertionModes.Pop();
+                            // Push "in table body" onto the stack of template insertion modes so that it is the new current template insertion mode.
+                            stackOfTemplateInsertionModes.Push(InsertionMode.InTableBody);
+                            // Switch the insertion mode to "in table body", and reprocess the token.
+                            insertionMode = InsertionMode.InTableBody;
+                            reprocessToken = token;
+                            break;
                         case StartTag { name: "td" or "th" }:
-                            throw new NotImplementedException();
+                            // Pop the current template insertion mode off the stack of template insertion modes.
+                            stackOfTemplateInsertionModes.Pop();
+                            // Push "in row" onto the stack of template insertion modes so that it is the new current template insertion mode.
+                            stackOfTemplateInsertionModes.Push(InsertionMode.InRow);
+                            // Switch the insertion mode to "in row", and reprocess the token.
+                            insertionMode = InsertionMode.InRow;
+                            reprocessToken = token;
+                            break;
                         case StartTag:
                             // Pop the current template insertion mode off the stack of template insertion modes.
                             stackOfTemplateInsertionModes.Pop();
@@ -1101,9 +1139,29 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             reprocessToken = token;
                             break;
                         case EndTag:
-                            throw new NotImplementedException();
+                            // Parse error. Ignore the token.
+                            AddParseError("in-template-unexpected-end-tag-ignored");
+                            break;
                         case EndOfFile:
-                            throw new NotImplementedException();
+                            // If there is no template element on the stack of open elements, then stop parsing. (fragment case)
+                            if (!stackOfOpenElements.Any(item => item.localName == "template")) {
+                                StopParsing();
+                                return;
+                            } else {
+                                // Otherwise, this is a parse error.
+                                AddParseError("in-template-eof");
+                                // Pop elements from the stack of open elements until a template element has been popped from the stack.
+                                while (stackOfOpenElements.Pop() is not Element { localName: "template" }) { }
+                                // Clear the list of active formatting elements up to the last marker.
+                                ClearTheListOfACtiveFormattingElementsUpToTheLastMarker();
+                                // Pop the current template insertion mode off the stack of template insertion modes.
+                                stackOfTemplateInsertionModes.Pop();
+                                // Reset the insertion mode appropriately.
+                                ResetTheInsertionModeAppropriately();
+                                // Reprocess the token.
+                                reprocessToken = token;
+                            }
+                            break;
                     }
                     break;
                 // 13.2.6.4.19 The "after body" insertion mode
@@ -1521,7 +1579,28 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                     }
                     break;
                 }
-            case EndTag { name: "template" }: throw new NotImplementedException();
+            case EndTag { name: "template" }:
+                // If there is no template element on the stack of open elements, then this is a parse error; ignore the token.
+                if (!stackOfOpenElements.Any(item => item.localName == "template")) {
+                    AddParseError("in-head-unexpected-end-template-tag-ignored");
+                } else {
+                    // Otherwise, run these steps:
+                    // 1. Generate all implied end tags thoroughly.
+                    GenerateImpliedEndTags();
+                    // 2. If the current node is not a template element, then this is a parse error.
+                    if (currentNode is not Element { localName: "template" }) {
+                        AddParseError("in-head-expected-template-as-current-node");
+                    }
+                    // 3. Pop elements from the stack of open elements until a template element has been popped from the stack.
+                    while (stackOfOpenElements.Pop() is not Element { localName: "template" }) { }
+                    // 4. Clear the list of active formatting elements up to the last marker.
+                    ClearTheListOfACtiveFormattingElementsUpToTheLastMarker();
+                    // 5. Pop the current template insertion mode off the stack of template insertion modes.
+                    stackOfTemplateInsertionModes.Pop();
+                    // 6. Reset the insertion mode appropriately.            
+                    ResetTheInsertionModeAppropriately();
+                }
+                break;
             case StartTag { name: "head" }:
             case EndTag:
                 AddParseError("InsertionMode.InHead: EndTag");
@@ -2612,7 +2691,8 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                     return;
                 // 11. If node is a template element, then switch the insertion mode to the current template insertion mode and return.
                 case Element { localName: "template" }:
-                    throw new NotImplementedException();
+                    insertionMode = stackOfTemplateInsertionModes[^1];
+                    break;
                 // 12. If node is a head element and last is false, then switch the insertion mode to "in head" and return.
                 case Element { localName: "head" } when last is false:
                     insertionMode = InsertionMode.InColumnGroup;
@@ -2627,8 +2707,14 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // 15. If node is an html element, run these substeps:
                 case Element { localName: "html" }:
                     // 1. If the head element pointer is null, switch the insertion mode to "before head" and return. (fragment case)
-                    // 2. Otherwise, the head element pointer is not null, switch the insertion mode to "after head" and return.
-                    throw new NotImplementedException();
+                    if (headElementPointer is null) {
+                        insertionMode = InsertionMode.BeforeHead;
+                        return;
+                    } else {
+                        // 2. Otherwise, the head element pointer is not null, switch the insertion mode to "after head" and return.
+                        insertionMode = InsertionMode.AfterHead;
+                        return;
+                    }
             }
             // 16. If last is true, then switch the insertion mode to "in body" and return. (fragment case)
             if (last) {

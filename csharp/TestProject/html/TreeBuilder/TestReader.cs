@@ -125,8 +125,15 @@ public class TestReader(IEnumerable<string> iter) {
             if ($"{indentation}{node}" != iter.Current) {
                 Assert.Fail($"tree != testCase (diff) \n tree:     {indentation}{node} \n testCase: {iter.Current}");
             }
-            foreach (var child in Enumerable.Reverse(node.childNodes)) {
-                stack.Push((child, depth + 1));
+            if (node is Element { localName: "template" }) {
+                var templateContent = new TemplateContent {
+                    childNodes = node.childNodes
+                };
+                stack.Push((templateContent, depth + 1));
+            } else {
+                foreach (var child in Enumerable.Reverse(node.childNodes)) {
+                    stack.Push((child, depth + 1));
+                }
             }
             if (node is Element element && element.attributes.Count > 0) {
                 foreach (var attr in Enumerable.Reverse(element.attributes)) {
@@ -162,3 +169,8 @@ public class TestReader(IEnumerable<string> iter) {
 
 
 
+public class TemplateContent(): Node(null) {
+    public override string ToString() {
+        return "content";
+    }
+}

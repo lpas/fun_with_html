@@ -10,12 +10,17 @@ public sealed class Html5LibTreeConstruction {
     private static string ProjectDirectory => Directory.GetParent(Environment.CurrentDirectory).Parent.Parent.Parent.Parent.FullName;
 
     private static (string, (int[] skipTests, int[] expectWrongTree, int[] expectWrongErrors))[] files = [
+        // adoption01
+        // adoption02
         ("blocks.dat", ([],[],[])),
         ("comments01.dat", ([],[],[1,2,3,4,6,7,9,10,11,12,13])),
         ("doctype01.dat", ([],[],[2,3,4,7,8,9,10,11,12,16,17,18,19,20,21,23,25,30,32,33,34,35,36])),
         ("domjs-unsafe.dat", ([
             0,1,2, 43,44,45,46,47,48 //svg
         ],[4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,36],[3])),
+        // entities01
+        // entities02
+        // foreign-fragment
         ("html5test-com.dat", ([6,7,8,9,10,13, // tokenizer
         20, // adopting index
         22, // svg
@@ -24,17 +29,34 @@ public sealed class Html5LibTreeConstruction {
         ("inbody01.dat", ([3,],[],[])), // not implemented
         ("isindex.dat", ([],[1],[])), // tree compare
         ("main-element.dat", ([2],[],[])), // svg
+        // math
         ("menuitem-element.dat", ([
             6,19,  // not implemented
             9, // infinity spinning
             ],[],[])),
         ("namespace-sensitivity.dat", ([0],[],[])), // svg
         ("noscript01.dat", ([],[1],[])),
+        // pending-spec-changes-plain-text-unsafe
+        // pending-spec-changes
         ("plain-text-unsafe.dat", ([
             10,13,14,15,16,17,18,19,20,21,22,23, 27, // svg
             26,28,29,30,31,32 // math
         ],[0,1,2,4,5,24,25,],[3,6,7,8,9,11,12])),
         ("quirks01.dat", ([],[1,2,3],[])),
+        // ruby.dat 
+         ("scriptdata01.dat", ([],[5,15,16,17,19,20,21,22,23,24,25,],[3,4,6])),
+         ("search-element.dat", ([2,],[],[])), // svg        
+        // svg
+        ("tables01.dat", ([
+            16, 17, // svg
+        ],[3,6,7,8,9,18],[])),
+        ("template.dat", ([
+            21,22,90,100, // infinity spinning
+            91, // index out of bounds
+            98,99, // svg
+        ],[1,2,3,4,10,11,12, 20, 28,37,40,41,44, 64,65,66,67,68,76,79,80,81,82,83,84,85,86,87,88,89,92,93,94,95,96,97,101,107,109,110,111],
+        [25,26,27,29,30,31,32,33,35,38,45,57, 106])),        
+        // tests_innerHTML_1
         ("tests1.dat", ([29, 30, 57, 99, // tree building has problems infinity running tests
             70, 71, 72, 73, 74, 75,   // adoption agency index out of range
             102], // not implement it),
@@ -117,6 +139,9 @@ public sealed class Html5LibTreeConstruction {
         10,11,16,17, // svg
         12,13,18,19 //math
         ],[2,9],[1,5,6,7,8,14])),
+        // tricky01
+        // webkit01
+        // webkit02
     ];
 
 
