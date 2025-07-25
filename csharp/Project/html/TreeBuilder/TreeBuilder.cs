@@ -243,7 +243,10 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                     switch (token) {
                         case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
                             break; // ignore the token
-                        case Tokenizer.Comment: throw new NotImplementedException();
+                        case Tokenizer.Comment comment:
+                            // Insert a comment.
+                            InsertAComment(comment);
+                            break;
                         case DOCTYPE: throw new NotImplementedException();
                         case StartTag { name: "html" }: throw new NotImplementedException();
                         case StartTag { name: "head" } tagToken: {
@@ -258,7 +261,10 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                         case EndTag { name: "head" or "body" or "html" or "br" }:
                             // Act as described in the "anything else" entry below.
                             goto default;
-                        case EndTag: throw new NotImplementedException();
+                        case EndTag:
+                            // Parse error. Ignore the token.
+                            AddParseError("before-head-unexpected-end-tag");
+                            break;
                         default: {
                                 // Insert an HTML element for a "head" start tag token with no attributes.
                                 var element = InsertAnHTMLElement(new StartTag("head"));
@@ -325,7 +331,13 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             InsertAComment(comment);
                             break;
                         case DOCTYPE: throw new NotImplementedException();
-                        case StartTag { name: "html" }: throw new NotImplementedException();
+                        case StartTag { name: "html" }:
+                            //Process the token using the rules for the "in body" insertion mode.
+                            if (!InsertionModeInBody(ref reprocessToken, token)) {
+                                return;
+                            }
+                            break;
+
                         case StartTag { name: "body" } tagToken:
                             // Insert an HTML element for the token.
                             InsertAnHTMLElement(tagToken);
@@ -1635,7 +1647,10 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
             case Tokenizer.Comment comment:
                 InsertAComment(comment);
                 break;
-            case DOCTYPE: throw new NotImplementedException();
+            case DOCTYPE:
+                // Parse error. Ignore the token.
+                AddParseError("in-body-unexpected-doctype-ignored");
+                break;
             case StartTag { name: "html" } tagToken:
 
                 // Parse error.
@@ -2242,8 +2257,28 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // Insert an HTML element for the token.
                 InsertAnHTMLElement(tagToken);
                 break;
-            case StartTag { name: "rb" or "rtc" }: throw new NotImplementedException();
-            case StartTag { name: "rp" or "rt" }: throw new NotImplementedException();
+            case StartTag { name: "rb" or "rtc" } tagToken:
+                // If the stack of open elements has a ruby element in scope, then generate implied end tags. If the current node is not now a ruby element, this is a parse error.
+                if (HasAElementInScope("ruby")) {
+                    GenerateImpliedEndTags();
+                    if (currentNode is not Element { localName: "ruby" }) {
+                        AddParseError("in-body-rb-rtc-unexpected-current-node");
+                    }
+                }
+                // Insert an HTML element for the token.
+                InsertAnHTMLElement(tagToken);
+                break;
+            case StartTag { name: "rp" or "rt" } tagToken:
+                // If the stack of open elements has a ruby element in scope, then generate implied end tags, except for rtc elements. If the current node is not now a rtc element or a ruby element, this is a parse error.
+                if (HasAElementInScope("ruby")) {
+                    GenerateImpliedEndTags("rtc");
+                    if (currentNode is not Element { localName: "rtc" or "ruby" }) {
+                        AddParseError("in-body-rp-rt-unexpected-current-node");
+                    }
+                }
+                // Insert an HTML element for the token.
+                InsertAnHTMLElement(tagToken);
+                break;
             case StartTag { name: "math" }: throw new NotImplementedException();
             case StartTag { name: "svg" }: throw new NotImplementedException();
             case StartTag { name: "caption" or "col" or "colgroup" or "frame" or "head" or "tbody" or "td" or "tfoot" or "th" or "thead" or "tr" }:

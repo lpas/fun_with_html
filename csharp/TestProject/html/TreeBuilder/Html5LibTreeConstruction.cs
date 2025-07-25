@@ -67,6 +67,18 @@ public sealed class Html5LibTreeConstruction {
             21,22, 35, // svg
             28, 29, //  infinity running
         ],[7,8,9,12,15,23,24,],[])),
+        ("tests19.dat", ([
+            0, 18, 30, 31, 32, 33, 34, 73, 81, 82, 83, // math
+            19, 72, 74, 75, 76, // svg
+            14, 15, 16, 17, 97, 98, // infinity running
+            29, // not implemented
+            90, 91, 92, // adopting index out of bounds
+            93,94 // adopting
+        ],[
+            24, 25, 26,
+            36, 37, 85,// tree compare
+            45, 47, 79, 89, 101, 102,
+        ],[])),
     ];
 
 
