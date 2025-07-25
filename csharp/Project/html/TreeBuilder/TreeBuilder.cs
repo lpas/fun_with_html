@@ -1660,7 +1660,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 originalInsertionMode = insertionMode;
                 // Switch the insertion mode to "in table text" and reprocess the token.
                 insertionMode = InsertionMode.InTableText;
-                // todo !ReprocessTheToken();
+                ReprocessTheToken();
                 break;
             case Tokenizer.Comment comment:
                 // Insert a comment.
