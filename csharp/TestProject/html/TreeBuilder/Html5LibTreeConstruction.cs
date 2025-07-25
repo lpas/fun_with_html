@@ -79,6 +79,19 @@ public sealed class Html5LibTreeConstruction {
             36, 37, 85,// tree compare
             45, 47, 79, 89, 101, 102,
         ],[])),
+        ("tests20.dat", ([
+            42,48,49, // svg
+            52, 53, 54,55,56,57,58,59,60,61,62,63, //math
+        ],[41],[])),
+        // tests21 svg
+        ("tests22.dat", ([4],[0,1,2,3],[])), // adopting
+        ("tests23.dat", ([],[0,1,2,3,4],[])), // adopting
+        ("tests24.dat", ([0,1,2,3,4,5,6,7],[],[])), // tokenizer
+        ("tests25.dat", ([],[],[])),
+        ("tests26.dat", ([0,3, 4, // infinity running
+        10,11,16,17, // svg
+        12,13,18,19 //math
+        ],[2,9],[1,5,6,7,8,14])),
     ];
 
 
