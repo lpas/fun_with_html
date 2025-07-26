@@ -1168,9 +1168,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 var elem = ttr1("a");
                 if (elem is not null) {
                     AddParseError("IN BODY a");
-                    if (AdoptionAgencyAlgorithm(tagToken)) {
-                        InsertionModeInBodyAnyOtherEndTag(tagToken);
-                    }
+                    AdoptionAgencyAlgorithm(tagToken);
                     ListOfActiveFormattingElements.Remove(elem);
                     stackOfOpenElements.Remove(elem);
                 }
@@ -1452,21 +1450,21 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
         }
 
         // https://html.spec.whatwg.org/multipage/parsing.html#adoption-agency-algorithm
-        bool AdoptionAgencyAlgorithm(Tag tagToken) {
+        void AdoptionAgencyAlgorithm(Tag tagToken) {
             // 1. Let subject be token's tag name.
             var subject = tagToken.name;
             // 2. If the current node is an HTML element whose tag name is subject, and the current node is not in the list of active formatting elements, then pop the current node off the stack of open elements and return.
             if (currentNode is Element e)
                 if (e.localName == subject && !ListOfActiveFormattingElements.Contains(currentNode)) {
                     stackOfOpenElements.Pop();
-                    return false;
+                    return;
                 }
             // 3. Let outerLoopCounter be 0.
             var outerLoopCounter = 0;
             // 4. While true:
             while (true) {
                 // 1. If outerLoopCounter is greater than or equal to 8, then return.
-                if (outerLoopCounter >= 8) return false;
+                if (outerLoopCounter >= 8) return;
                 // 2. Increment outerLoopCounter by 1.
                 outerLoopCounter++;
                 // 3. Let formattingElement be the last element in the list of active formatting elements that:
@@ -1486,18 +1484,18 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // If there is no such element, then return and instead act as described in the "any other end tag" entry above.
                 if (formattingElement == null) {
                     InsertionModeInBodyAnyOtherEndTag(tagToken);
-                    return true;
+                    return;
                 }
                 // 4. If formattingElement is not in the stack of open elements, then this is a parse error; remove the element from the list, and return.
                 if (!stackOfOpenElements.Contains(formattingElement)) {
                     AddParseError("AdoptionAgencyAlgorithm: 4.4");
                     ListOfActiveFormattingElements.Remove(formattingElement);
-                    return false;
+                    return;
                 }
                 // 5. If formattingElement is in the stack of open elements, but the element is not in scope, then this is a parse error; return.
                 if (!HasAElementInScope(formattingElement.localName)) {
                     AddParseError("AdoptionAgencyAlgorithm: HasAElementInScope");
-                    return false;
+                    return;
                 }
                 // 6. If formattingElement is not the current node, this is a parse error. (But do not return.)
                 if (formattingElement != currentNode) {
@@ -1523,7 +1521,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                         }
                     }
                     ListOfActiveFormattingElements.Remove(formattingElement);
-                    return false;
+                    return;
                 }
                 // 9. Let commonAncestor be the element immediately above formattingElement in the stack of open elements.            
                 Element commonAncestor = stackOfOpenElements[furthestBlockPos - 1];
@@ -1585,8 +1583,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 stackOfOpenElements.Remove(formattingElement);
                 var indexA = stackOfOpenElements.IndexOf(furthestBlock);
                 stackOfOpenElements.Insert(indexA + 1, elem);
-                return false;
-
+                return;
             }
         }
     }
