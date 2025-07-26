@@ -1178,7 +1178,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // Reconstruct the active formatting elements, if any.
                 ReconstructTheActiveFormattingElements();
                 // Insert an HTML element for the token. Push onto the list of active formatting elements that element.
-                InsertAnHTMLElement(tagToken);
+                ListOfActiveFormattingElements.Push(InsertAnHTMLElement(tagToken));
                 break;
 
             case StartTag { name: "b" or "big" or "code" or "em" or "font" or "i" or "s" or "small" or "strike" or "strong" or "tt" or "u" } tagToken:

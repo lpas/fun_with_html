@@ -60,7 +60,7 @@ public sealed class Html5LibTreeConstruction {
         ("tests1.dat", ([29, 30, 57, 99, // tree building has problems infinity running tests
             70, 71, 72, 73, 74, 75,   // adoption agency index out of range
             102], // not implement it),
-            [22, 23, 31, 32, 51, 56, 60, 77, 78, 79, 90, 95, 96, 101, 110],
+            [22, 23, 32, 51, 56, 60, 77, 78, 79, 90, 95, 96, 101, 110],
             [27, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48] // tree is ok but parse error miss match
         )),
         ("tests2.dat", ([
@@ -124,14 +124,14 @@ public sealed class Html5LibTreeConstruction {
         ],[
             24, 25, 26,
             36, 37, 85,// tree compare
-            45, 47, 79, 89, 101, 102,
+            45, 47, 79, 89,
         ],[])),
         ("tests20.dat", ([
             42,48,49, // svg
             52, 53, 54,55,56,57,58,59,60,61,62,63, //math
         ],[41],[])),
         // tests21 svg
-        ("tests22.dat", ([4],[0,1,2,3],[])), // adopting
+        ("tests22.dat", ([0,1,2,3,4],[],[])), // adopting
         ("tests23.dat", ([],[0,1,2,3,4],[])), // adopting
         ("tests24.dat", ([0,1,2,3,4,5,6,7],[],[])), // tokenizer
         ("tests25.dat", ([],[],[])),
