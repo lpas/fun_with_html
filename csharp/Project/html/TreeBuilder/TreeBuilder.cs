@@ -1404,38 +1404,194 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 InsertionModeInBodyAnyOtherEndTag(tagToken);
                 break;
         }
-    }
 
-    private void InsertionModeInBodyAnyOtherEndTag(Tag tagToken) {
-        // 1. Initialize node to be the current node (the bottommost node of the stack).
-        var node = currentNode;
-        // 2. Loop: If node is an HTML element with the same tag name as the token, then:
-        while (true) {
-            if (node.localName == tagToken.name) {
-                // 1. Generate implied end tags, except for HTML elements with the same tag name as the token.
-                GenerateImpliedEndTags(tagToken.name);
-                // 2. If node is not the current node, then this is a parse error.
-                if (currentNode != node) {
-                    AddParseError("IN BODY: currentNode != node");
-                }
-                // 3. Pop all the nodes from the current node up to node, including node, then stop these steps.
-                while (true) {
-                    if (node == stackOfOpenElements.Pop()) {
+        void InsertionModeInBodyAnyOtherEndTag(Tag tagToken) {
+            // 1. Initialize node to be the current node (the bottommost node of the stack).
+            var node = currentNode;
+            // 2. Loop: If node is an HTML element with the same tag name as the token, then:
+            while (true) {
+                if (node.localName == tagToken.name) {
+                    // 1. Generate implied end tags, except for HTML elements with the same tag name as the token.
+                    GenerateImpliedEndTags(tagToken.name);
+                    // 2. If node is not the current node, then this is a parse error.
+                    if (currentNode != node) {
+                        AddParseError("IN BODY: currentNode != node");
+                    }
+                    // 3. Pop all the nodes from the current node up to node, including node, then stop these steps.
+                    while (true) {
+                        if (node == stackOfOpenElements.Pop()) {
+                            return;
+                        }
+                    }
+                } else {
+                    // 3. Otherwise, if node is in the special category, then this is a parse error; ignore the token, and return.    
+                    if (specialListElements.Contains(node.localName)) {
+                        AddParseError("unexpected-end-tag");
                         return;
                     }
                 }
-            } else {
-                // 3. Otherwise, if node is in the special category, then this is a parse error; ignore the token, and return.    
-                if (specialListElements.Contains(node.localName)) {
-                    AddParseError("unexpected-end-tag");
-                    return;
-                }
+                // 4. Set node to the previous entry in the stack of open elements.
+                node = currentNode;
+                // 5. Return to the step labeled loop.
             }
-            // 4. Set node to the previous entry in the stack of open elements.
-            node = currentNode;
-            // 5. Return to the step labeled loop.
+        }
+
+        // https://html.spec.whatwg.org/multipage/parsing.html#close-a-p-element
+        void CloseAPElement() {
+            // Generate implied end tags, except for p elements.
+            GenerateImpliedEndTags("p");
+            // If the current node is not a p element, then this is a parse error.
+            if (currentNode is not Element { localName: "p" }) {
+                AddParseError("CLOSEAPELEMENT not p");
+            }
+            // Pop elements from the stack of open elements until a p element has been popped from the stack.
+            while (true) {
+                var element = stackOfOpenElements.Pop();
+                if (element.localName == "p") return;
+            }
+        }
+
+        // https://html.spec.whatwg.org/multipage/parsing.html#adoption-agency-algorithm
+        bool AdoptionAgencyAlgorithm(Tag tagToken) {
+            // 1. Let subject be token's tag name.
+            var subject = tagToken.name;
+            // 2. If the current node is an HTML element whose tag name is subject, and the current node is not in the list of active formatting elements, then pop the current node off the stack of open elements and return.
+            if (currentNode is Element e)
+                if (e.localName == subject && !ListOfActiveFormattingElements.Contains(currentNode)) {
+                    stackOfOpenElements.Pop();
+                    return false;
+                }
+            // 3. Let outerLoopCounter be 0.
+            var outerLoopCounter = 0;
+            // 4. While true:
+            while (true) {
+                // 1. If outerLoopCounter is greater than or equal to 8, then return.
+                if (outerLoopCounter >= 8) return false;
+                // 2. Increment outerLoopCounter by 1.
+                outerLoopCounter++;
+                // 3. Let formattingElement be the last element in the list of active formatting elements that:
+                Element? formattingElement = null;
+                // * is between the end of the list and the last marker in the list, if any, or the start of the list otherwise, and
+                // * has the tag name subject.
+                var formattingElementPos = 0;
+                for (var i = ListOfActiveFormattingElements.Count - 1; i >= 0; i--) {
+                    var element = ListOfActiveFormattingElements[i];
+                    if (element is null) break;
+                    if (element.localName == subject) {
+                        formattingElement = element;
+                        formattingElementPos = i;
+                        break;
+                    }
+                }
+                // If there is no such element, then return and instead act as described in the "any other end tag" entry above.
+                if (formattingElement == null) {
+                    InsertionModeInBodyAnyOtherEndTag(tagToken);
+                    return true;
+                }
+                // 4. If formattingElement is not in the stack of open elements, then this is a parse error; remove the element from the list, and return.
+                if (!stackOfOpenElements.Contains(formattingElement)) {
+                    AddParseError("AdoptionAgencyAlgorithm: 4.4");
+                    ListOfActiveFormattingElements.Remove(formattingElement);
+                    return false;
+                }
+                // 5. If formattingElement is in the stack of open elements, but the element is not in scope, then this is a parse error; return.
+                if (!HasAElementInScope(formattingElement.localName)) {
+                    AddParseError("AdoptionAgencyAlgorithm: HasAElementInScope");
+                    return false;
+                }
+                // 6. If formattingElement is not the current node, this is a parse error. (But do not return.)
+                if (formattingElement != currentNode) {
+                    AddParseError("adoption-agency-1.3");
+                }
+                // 7. Let furthestBlock be the topmost node in the stack of open elements that is lower in the stack than formattingElement, and is an element in the special category. There might not be one.
+                Element? furthestBlock = null;
+                var furthestBlockPos = 0;
+                for (var i = stackOfOpenElements.Count - 1; i >= 0; i--) {
+                    var element = stackOfOpenElements[i];
+                    if (element == formattingElement) break;
+                    if (specialListElements.Contains(element.localName)) {
+                        furthestBlock = element;
+                        furthestBlockPos = i;
+                    }
+                }
+                // 8. If there is no furthestBlock, then the UA must first pop all the nodes from the bottom of the stack of open elements, from the current node up to and including formattingElement, then remove formattingElement from the list of active formatting elements, and finally return.
+                if (furthestBlock == null) {
+                    while (true) {
+                        var element = stackOfOpenElements.Pop();
+                        if (element == formattingElement) {
+                            break;
+                        }
+                    }
+                    ListOfActiveFormattingElements.Remove(formattingElement);
+                    return false;
+                }
+                // 9. Let commonAncestor be the element immediately above formattingElement in the stack of open elements.            
+                Element commonAncestor = stackOfOpenElements[furthestBlockPos - 1];
+                // 10. Let a bookmark note the position of formattingElement in the list of active formatting elements relative to the elements on either side of it in the list.
+                var bookmark = formattingElementPos;
+                // 11. Let node and lastNode be furthestBlock.
+                var node = furthestBlock;
+                var nodePos = furthestBlockPos;
+                var lastNode = furthestBlock;
+                // 12. Let innerLoopCounter be 0.
+                var innerLoopCounter = 0;
+                // 13. While true:
+                while (true) {
+                    // 1. Increment innerLoopCounter by 1.
+                    innerLoopCounter++;
+                    // 2. Let node be the element immediately above node in the stack of open elements, or if node is no longer in the stack of open elements (e.g. because it got removed by this algorithm), the element that was immediately above node in the stack of open elements before node was removed.
+                    node = stackOfOpenElements[--nodePos];
+                    // 3. If node is formattingElement, then break.
+                    if (node == formattingElement) break;
+                    // 4. If innerLoopCounter is greater than 3 and node is in the list of active formatting elements, then remove node from the list of active formatting elements.
+                    if (innerLoopCounter > 3 && ListOfActiveFormattingElements.Contains(node)) {
+                        ListOfActiveFormattingElements.Remove(node);
+                    }
+                    // 5. If node is not in the list of active formatting elements, then remove node from the stack of open elements and continue.
+                    if (!ListOfActiveFormattingElements.Contains(node)) {
+                        stackOfOpenElements.Remove(node);
+                        continue;
+                    }
+                    // 6. Create an element for the token for which the element node was created, in the HTML namespace, with commonAncestor as the intended parent; replace the entry for node in the list of active formatting elements with an entry for the new element, replace the entry for node in the stack of open elements with an entry for the new element, and let node be the new element.
+                    var element = CreateAnElementForAToken(new StartTag(node.localName), Namespaces.HTML, commonAncestor); // todo this is hacky we need the real token;
+                    var index = ListOfActiveFormattingElements.IndexOf(node);
+                    ListOfActiveFormattingElements[index] = element;
+                    stackOfOpenElements[nodePos] = element;
+                    node = element;
+                    // 7. If lastNode is furthestBlock, then move the aforementioned bookmark to be immediately after the new node in the list of active formatting elements.
+                    if (lastNode == furthestBlock) {
+                        bookmark = index + 1;
+                    }
+                    // 8. Append lastNode to node.
+                    node.childNodes.Append(lastNode);
+                    // 9. Set lastNode to node.
+                    lastNode = node;
+
+                }
+                // 14. Insert whatever lastNode ended up being in the previous step at the appropriate place for inserting a node, but using commonAncestor as the override target.
+                var adjustedInsertionLocation = AppropriatePlaceForInsertingANode(commonAncestor);
+                InsertNode(adjustedInsertionLocation, lastNode);
+                // 15. Create an element for the token for which formattingElement was created, in the HTML namespace, with furthestBlock as the intended parent.
+                var elem = CreateAnElementForAToken(new StartTag(formattingElement.localName), Namespaces.HTML, furthestBlock);
+                // 16. Take all of the child nodes of furthestBlock and append them to the element created in the last step.
+                elem.childNodes = [.. furthestBlock.childNodes];
+                furthestBlock.childNodes.Clear();
+                // 17. Append that new element to furthestBlock.
+                AppendNode(furthestBlock, elem);
+                // 18. Remove formattingElement from the list of active formatting elements, and insert the new element into the list of active formatting elements at the position of the aforementioned bookmark.
+                ListOfActiveFormattingElements[bookmark] = elem;
+                ListOfActiveFormattingElements.Remove(formattingElement);
+                // 19. Remove formattingElement from the stack of open elements, and insert the new element into the stack of open elements immediately below the position of furthestBlock in that stack.
+                stackOfOpenElements.Remove(formattingElement);
+                var indexA = stackOfOpenElements.IndexOf(furthestBlock);
+                stackOfOpenElements.Insert(indexA + 1, elem);
+                return false;
+
+            }
         }
     }
+
+
 
     // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-incdata
     private void InsertionModeText() {
@@ -2525,146 +2681,6 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
           "param", "plaintext", "pre", "script", "search", "section", "select", "source", "style", "summary", "table", "tbody", "td", "template", "textarea", "tfoot", "th", "thead", "title", "tr",
         "track", "ul", "wbr", "xmp"]; // todo MathML mi, MathML mo, MathML mn, MathML ms, MathML mtext, and MathML annotation-xml; and SVG foreignObject, SVG desc, and SVG title.];
 
-    // 13.2.6.4.7 
-    // https://html.spec.whatwg.org/multipage/parsing.html#adoption-agency-algorithm
-    private bool AdoptionAgencyAlgorithm(Tag tagToken) {
-        // 1. Let subject be token's tag name.
-        var subject = tagToken.name;
-        // 2. If the current node is an HTML element whose tag name is subject, and the current node is not in the list of active formatting elements, then pop the current node off the stack of open elements and return.
-        if (currentNode is Element e)
-            if (e.localName == subject && !ListOfActiveFormattingElements.Contains(currentNode)) {
-                stackOfOpenElements.Pop();
-                return false;
-            }
-        // 3. Let outerLoopCounter be 0.
-        var outerLoopCounter = 0;
-        // 4. While true:
-        while (true) {
-            // 1. If outerLoopCounter is greater than or equal to 8, then return.
-            if (outerLoopCounter >= 8) return false;
-            // 2. Increment outerLoopCounter by 1.
-            outerLoopCounter++;
-            // 3. Let formattingElement be the last element in the list of active formatting elements that:
-            Element? formattingElement = null;
-            // * is between the end of the list and the last marker in the list, if any, or the start of the list otherwise, and
-            // * has the tag name subject.
-            var formattingElementPos = 0;
-            for (var i = ListOfActiveFormattingElements.Count - 1; i >= 0; i--) {
-                var element = ListOfActiveFormattingElements[i];
-                if (element is null) break;
-                if (element.localName == subject) {
-                    formattingElement = element;
-                    formattingElementPos = i;
-                    break;
-                }
-            }
-            // If there is no such element, then return and instead act as described in the "any other end tag" entry above.
-            if (formattingElement == null) {
-                InsertionModeInBodyAnyOtherEndTag(tagToken);
-                return true;
-            }
-            // 4. If formattingElement is not in the stack of open elements, then this is a parse error; remove the element from the list, and return.
-            if (!stackOfOpenElements.Contains(formattingElement)) {
-                AddParseError("AdoptionAgencyAlgorithm: 4.4");
-                ListOfActiveFormattingElements.Remove(formattingElement);
-                return false;
-            }
-            // 5. If formattingElement is in the stack of open elements, but the element is not in scope, then this is a parse error; return.
-            if (!HasAElementInScope(formattingElement.localName)) {
-                AddParseError("AdoptionAgencyAlgorithm: HasAElementInScope");
-                return false;
-            }
-            // 6. If formattingElement is not the current node, this is a parse error. (But do not return.)
-            if (formattingElement != currentNode) {
-                AddParseError("adoption-agency-1.3");
-            }
-            // 7. Let furthestBlock be the topmost node in the stack of open elements that is lower in the stack than formattingElement, and is an element in the special category. There might not be one.
-            Element? furthestBlock = null;
-            var furthestBlockPos = 0;
-            for (var i = stackOfOpenElements.Count - 1; i >= 0; i--) {
-                var element = stackOfOpenElements[i];
-                if (element == formattingElement) break;
-                if (specialListElements.Contains(element.localName)) {
-                    furthestBlock = element;
-                    furthestBlockPos = i;
-                }
-            }
-            // 8. If there is no furthestBlock, then the UA must first pop all the nodes from the bottom of the stack of open elements, from the current node up to and including formattingElement, then remove formattingElement from the list of active formatting elements, and finally return.
-            if (furthestBlock == null) {
-                while (true) {
-                    var element = stackOfOpenElements.Pop();
-                    if (element == formattingElement) {
-                        break;
-                    }
-                }
-                ListOfActiveFormattingElements.Remove(formattingElement);
-                return false;
-            }
-            // 9. Let commonAncestor be the element immediately above formattingElement in the stack of open elements.            
-            Element commonAncestor = stackOfOpenElements[furthestBlockPos - 1];
-            // 10. Let a bookmark note the position of formattingElement in the list of active formatting elements relative to the elements on either side of it in the list.
-            var bookmark = formattingElementPos;
-            // 11. Let node and lastNode be furthestBlock.
-            var node = furthestBlock;
-            var nodePos = furthestBlockPos;
-            var lastNode = furthestBlock;
-            // 12. Let innerLoopCounter be 0.
-            var innerLoopCounter = 0;
-            // 13. While true:
-            while (true) {
-                // 1. Increment innerLoopCounter by 1.
-                innerLoopCounter++;
-                // 2. Let node be the element immediately above node in the stack of open elements, or if node is no longer in the stack of open elements (e.g. because it got removed by this algorithm), the element that was immediately above node in the stack of open elements before node was removed.
-                node = stackOfOpenElements[--nodePos];
-                // 3. If node is formattingElement, then break.
-                if (node == formattingElement) break;
-                // 4. If innerLoopCounter is greater than 3 and node is in the list of active formatting elements, then remove node from the list of active formatting elements.
-                if (innerLoopCounter > 3 && ListOfActiveFormattingElements.Contains(node)) {
-                    ListOfActiveFormattingElements.Remove(node);
-                }
-                // 5. If node is not in the list of active formatting elements, then remove node from the stack of open elements and continue.
-                if (!ListOfActiveFormattingElements.Contains(node)) {
-                    stackOfOpenElements.Remove(node);
-                    continue;
-                }
-                // 6. Create an element for the token for which the element node was created, in the HTML namespace, with commonAncestor as the intended parent; replace the entry for node in the list of active formatting elements with an entry for the new element, replace the entry for node in the stack of open elements with an entry for the new element, and let node be the new element.
-                var element = CreateAnElementForAToken(new StartTag(node.localName), Namespaces.HTML, commonAncestor); // todo this is hacky we need the real token;
-                var index = ListOfActiveFormattingElements.IndexOf(node);
-                ListOfActiveFormattingElements[index] = element;
-                stackOfOpenElements[nodePos] = element;
-                node = element;
-                // 7. If lastNode is furthestBlock, then move the aforementioned bookmark to be immediately after the new node in the list of active formatting elements.
-                if (lastNode == furthestBlock) {
-                    bookmark = index + 1;
-                }
-                // 8. Append lastNode to node.
-                node.childNodes.Append(lastNode);
-                // 9. Set lastNode to node.
-                lastNode = node;
-
-            }
-            // 14. Insert whatever lastNode ended up being in the previous step at the appropriate place for inserting a node, but using commonAncestor as the override target.
-            var adjustedInsertionLocation = AppropriatePlaceForInsertingANode(commonAncestor);
-            InsertNode(adjustedInsertionLocation, lastNode);
-            // 15. Create an element for the token for which formattingElement was created, in the HTML namespace, with furthestBlock as the intended parent.
-            var elem = CreateAnElementForAToken(new StartTag(formattingElement.localName), Namespaces.HTML, furthestBlock);
-            // 16. Take all of the child nodes of furthestBlock and append them to the element created in the last step.
-            elem.childNodes = [.. furthestBlock.childNodes];
-            furthestBlock.childNodes.Clear();
-            // 17. Append that new element to furthestBlock.
-            AppendNode(furthestBlock, elem);
-            // 18. Remove formattingElement from the list of active formatting elements, and insert the new element into the list of active formatting elements at the position of the aforementioned bookmark.
-            ListOfActiveFormattingElements[bookmark] = elem;
-            ListOfActiveFormattingElements.Remove(formattingElement);
-            // 19. Remove formattingElement from the stack of open elements, and insert the new element into the stack of open elements immediately below the position of furthestBlock in that stack.
-            stackOfOpenElements.Remove(formattingElement);
-            var indexA = stackOfOpenElements.IndexOf(furthestBlock);
-            stackOfOpenElements.Insert(indexA + 1, elem);
-            return false;
-
-        }
-    }
-
     // 13.2.4.1 The insertion mode
     // https://html.spec.whatwg.org/multipage/parsing.html#reset-the-insertion-mode-appropriately
     private void ResetTheInsertionModeAppropriately() {
@@ -2827,21 +2843,6 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
     private void StopParsing() {
         finishedParsing = true;
         //todo     
-    }
-
-    // https://html.spec.whatwg.org/multipage/parsing.html#close-a-p-element
-    private void CloseAPElement() {
-        // Generate implied end tags, except for p elements.
-        GenerateImpliedEndTags("p");
-        // If the current node is not a p element, then this is a parse error.
-        if (currentNode is not Element { localName: "p" }) {
-            AddParseError("CLOSEAPELEMENT not p");
-        }
-        // Pop elements from the stack of open elements until a p element has been popped from the stack.
-        while (true) {
-            var element = stackOfOpenElements.Pop();
-            if (element.localName == "p") return;
-        }
     }
 
 
