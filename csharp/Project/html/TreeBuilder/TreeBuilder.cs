@@ -1286,7 +1286,10 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             // Process the token using the rules for the "in head" insertion mode.
                             InsertionModeInHead();
                             break;
-                        case EndOfFile: return;
+                        case EndOfFile:
+                            // Stop parsing.
+                            StopParsing();
+                            break;
                         default:
                             // Parse error. Ignore the token.
                             AddParseError("after-frameset-unexpected-token");
