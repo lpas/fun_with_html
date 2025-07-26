@@ -168,1184 +168,74 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
 
 
             switch (insertionMode) {
-                // 13.2.6.4.1 The "initial" insertion mode
-                // https://html.spec.whatwg.org/multipage/parsing.html#the-initial-insertion-mode
                 case InsertionMode.Initial:
-                    switch (token) {
-                        case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
-                            break; // ignore the token
-                        case Tokenizer.Comment comment:
-                            // Insert a comment as the last child of the Document object.
-                            InsertAComment(comment, (document, document.childNodes.Count));
-                            break;
-                        case DOCTYPE doctype:
-                            // If the DOCTYPE token's name is not "html", or the token's public identifier is not missing, or the token's system identifier is neither missing nor "about:legacy-compat",
-                            // then there is a parse error.                        
-                            if (doctype.name is not "html" || doctype.publicId is not null || doctype.systemId is not null or "about:legacy-compat") {
-                                AddParseError("InsertionMode.Initial - doctype not html");
-                            }
-                            // Append a DocumentType node to the Document node, with its name set to the name given in the DOCTYPE token, or the empty string if the name was missing; 
-                            // its public ID set to the public identifier given in the DOCTYPE token, or the empty string if the public identifier was missing;
-                            // and its system ID set to the system identifier given in the DOCTYPE token, or the empty string if the system identifier was missing.
-                            AppendNode(document, new DocumentType(document, doctype.name ?? "", doctype.publicId ?? "", doctype.systemId ?? ""));
-                            // todo quirks mode
-                            insertionMode = InsertionMode.BeforeHtml;
-                            break;
-                        default:
-                            // todo If the document is not an iframe srcdoc document, then this is a parse error; if the parser cannot change the mode flag is false, set the Document to quirks mode.
-                            AddParseError("expected-doctype");
-                            // In any case, switch the insertion mode to "before html",                            
-                            insertionMode = InsertionMode.BeforeHtml;
-                            // then reprocess the token.
-                            ReprocessTheToken();
-                            break;
-                    }
+                    InsertionModeInitial();
                     break;
-                // 13.2.6.4.2 The "before html" insertion mode
-                // https://html.spec.whatwg.org/multipage/parsing.html#the-before-html-insertion-mode
                 case InsertionMode.BeforeHtml:
-                    switch (token) {
-                        case DOCTYPE:
-                            // Parse error. Ignore the token.
-                            AddParseError("before-html-unexpected-doctype");
-                            break;
-                        case Tokenizer.Comment comment:
-                            // Insert a comment as the last child of the Document object.
-                            InsertAComment(comment, (document, document.childNodes.Count));
-                            break;
-                        case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
-                            break; // ignore the token
-                        case StartTag { name: "html" }: {
-                                // Create an element for the token in the HTML namespace, with the Document as the intended parent.
-                                var element = CreateAnElementForAToken((Tag)token, Namespaces.HTML, document);
-                                // Append it to the Document object.
-                                AppendNode(document, element);
-                                // Put this element in the stack of open elements.
-                                stackOfOpenElements.Put(element);
-                                // Switch the insertion mode to "before head".
-                                insertionMode = InsertionMode.BeforeHead;
-                                break;
-                            }
-                        case EndTag { name: "head" or "body" or "html" or "br" }:
-                            // Act as described in the "anything else" entry below.
-                            goto default;
-                        case EndTag:
-                            // Parse error. Ignore the token.
-                            AddParseError("unexpected-end-tag-before-html");
-                            break;
-                        default: {
-                                // Create an html element whose node document is the Document object. Append it to the Document object. Put this element in the stack of open elements.
-                                var element = CreateAnElement(document, "html", Namespaces.HTML);
-                                AppendNode(document, element);
-                                stackOfOpenElements.Put(element);
-                                // Switch the insertion mode to "before head", then reprocess the token.                            
-                                insertionMode = InsertionMode.BeforeHead;
-                                ReprocessTheToken();
-                                break;
-                            }
-
-                    }
+                    InsertionModeBeforeHtml();
                     break;
-                // 13.2.6.4.3 The "before head" insertion mode
-                // https://html.spec.whatwg.org/multipage/parsing.html#the-before-head-insertion-mode
                 case InsertionMode.BeforeHead:
-                    switch (token) {
-                        case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
-                            break; // ignore the token
-                        case Tokenizer.Comment comment:
-                            // Insert a comment.
-                            InsertAComment(comment);
-                            break;
-                        case DOCTYPE:
-                            // Parse error. Ignore the token.
-                            AddParseError("before-head-unexpected-doctype-ignored");
-                            break;
-                        case StartTag { name: "html" }: throw new NotImplementedException();
-                        case StartTag { name: "head" } tagToken: {
-                                // Insert an HTML element for the token.
-                                var element = InsertAnHTMLElement(tagToken);
-                                //Set the head element pointer to the newly created head element.
-                                headElementPointer = element;
-                                //Switch the insertion mode to "in head".
-                                insertionMode = InsertionMode.InHead;
-                            }
-                            break;
-                        case EndTag { name: "head" or "body" or "html" or "br" }:
-                            // Act as described in the "anything else" entry below.
-                            goto default;
-                        case EndTag:
-                            // Parse error. Ignore the token.
-                            AddParseError("before-head-unexpected-end-tag");
-                            break;
-                        default: {
-                                // Insert an HTML element for a "head" start tag token with no attributes.
-                                var element = InsertAnHTMLElement(new StartTag("head"));
-                                // Set the head element pointer to the newly created head element.
-                                headElementPointer = element;
-                                // Switch the insertion mode to "in head".
-                                insertionMode = InsertionMode.InHead;
-                                // Reprocess the current token.
-                                ReprocessTheToken();
-                                break;
-                            }
-                    }
+                    InsertionModeBeforeHead();
                     break;
-                // 13.2.6.4.4 The "in head" insertion mode
-                // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inhead
                 case InsertionMode.InHead:
                     InsertionModeInHead();
                     break;
-
-                // 13.2.6.4.5 The "in head noscript" insertion mode
-                // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inheadnoscript
                 case InsertionMode.InHeadNoscript:
-                    switch (token) {
-                        case DOCTYPE:
-                            // Parse error. Ignore the token.
-                            AddParseError("in-head-noscript-unexpected-doctype-ignored");
-                            break;
-                        case StartTag { name: "html" }:
-                            // Process the token using the rules for the "in body" insertion mode.
-                            InsertionModeInBody();
-                            break;
-                        case EndTag { name: "noscript" }:
-                            // Pop the current node (which will be a noscript element) from the stack of open elements; the new current node will be a head element.
-                            stackOfOpenElements.Pop();
-                            // Switch the insertion mode to "in head".
-                            insertionMode = InsertionMode.InHead;
-                            break;
-                        case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
-                        case Tokenizer.Comment:
-                        case StartTag { name: "basefont" or "bgsound" or "link" or "meta" or "noframes" or "style" }:
-                            InsertionModeInHead();
-                            break;
-                        case EndTag { name: "br" }:
-                            // Act as described in the "anything else" entry below.
-                            goto default;
-                        case StartTag { name: "head" or "noscript" }:
-                        case EndTag:
-                            // Parse error. Ignore the token.
-                            AddParseError("in-head-noscript-unexpected-token-ignored");
-                            break;
-                        default:
-                            // Parse error.
-                            AddParseError("in-head-no-script-unexpected-token");
-                            // Pop the current node (which will be a noscript element) from the stack of open elements; the new current node will be a head element.
-                            stackOfOpenElements.Pop();
-                            // Switch the insertion mode to "in head".
-                            insertionMode = InsertionMode.InHead;
-                            // Reprocess the token.
-                            ReprocessTheToken();
-                            break;
-                    }
+                    InsertionModeInHeadNoscript();
                     break;
-
-                // 13.2.6.4.6 The "after head" insertion mode
-                // https://html.spec.whatwg.org/multipage/parsing.html#the-after-head-insertion-mode
                 case InsertionMode.AfterHead:
-                    switch (token) {
-                        case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' } cToken:
-                            // Insert the character.
-                            InsertACharacter(cToken);
-                            break;
-                        case Tokenizer.Comment comment:
-                            // Insert a comment.
-                            InsertAComment(comment);
-                            break;
-                        case DOCTYPE:
-                            // Parse error. Ignore the token.
-                            AddParseError("after-head-unexpected-doctype-ignored");
-                            break;
-                        case StartTag { name: "html" }:
-                            //Process the token using the rules for the "in body" insertion mode.
-                            InsertionModeInBody();
-                            break;
-                        case StartTag { name: "body" } tagToken:
-                            // Insert an HTML element for the token.
-                            InsertAnHTMLElement(tagToken);
-                            // Set the frameset-ok flag to "not ok".
-                            framesetOk = false;
-                            // Switch the insertion mode to "in body".
-                            insertionMode = InsertionMode.InBody;
-                            break;
-                        case StartTag { name: "frameset" } tagToken:
-                            // Insert an HTML element for the token.
-                            InsertAnHTMLElement(tagToken);
-                            // Switch the insertion mode to "in frameset".
-                            insertionMode = InsertionMode.InFrameset;
-                            break;
-                        case StartTag { name: "base" or "basefont" or "bgsound" or "link" or "meta" or "noframes" or "script" or "style" or "template" or "title" }:
-                            // Parse error.
-                            AddParseError("AfterHead -  parse error");
-                            // Push the node pointed to by the head element pointer onto the stack of open elements.
-                            stackOfOpenElements.Add(headElementPointer!);
-                            // Process the token using the rules for the "in head" insertion mode.
-                            InsertionModeInHead();
-                            // Remove the node pointed to by the head element pointer from the stack of open elements. (It might not be the current node at this point.)
-                            for (var i = stackOfOpenElements.Count - 1; i > 0; i--) {
-                                if (stackOfOpenElements[i] == headElementPointer) {
-                                    stackOfOpenElements.RemoveAt(i);
-                                }
-                            }
-                            // Note: The head element pointer cannot be null at this point.
-                            break;
-                        case EndTag { name: "template" }: throw new NotImplementedException();
-                        case EndTag { name: "body" or "html" or "br" }:
-                            // Act as described in the "anything else" entry below.
-                            goto default;
-                        case StartTag { name: "head" }:
-                        case EndTag:
-                            // Parse error. Ignore the token.
-                            AddParseError("in-head-unexpected-tag");
-                            break;
-                        default:
-                            // Insert an HTML element for a "body" start tag token with no attributes.
-                            InsertAnHTMLElement(new StartTag("body"));
-                            // Switch the insertion mode to "in body".
-                            insertionMode = InsertionMode.InBody;
-                            // Reprocess the current token.
-                            ReprocessTheToken();
-                            break;
-                    }
+                    InsertionModeAfterHead();
                     break;
-                // 13.2.6.4.7 The "in body" insertion mode
-                // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inbody
                 case InsertionMode.InBody:
                     InsertionModeInBody();
                     break;
-                // 13.2.6.4.8 The "text" insertion mode
-                // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-incdata    
                 case InsertionMode.Text:
-                    switch (token) {
-                        case Character cToken:
-                            InsertACharacter(cToken);
-                            break;
-                        case EndOfFile:
-                            // Parse error.
-                            AddParseError("Text mode EOF");
-                            // If the current node is a script element, then set its already started to true.
-                            if (currentNode is Element { localName: "script" }) {
-                                // todo set already started
-                            }
-                            // Pop the current node off the stack of open elements.
-                            stackOfOpenElements.Pop();
-                            // Switch the insertion mode to the original insertion mode and reprocess the token.
-                            insertionMode = originalInsertionMode;
-                            ReprocessTheToken();
-                            break;
-                        case EndTag { name: "script" }:
-                            // If the active speculative HTML parser is null and the JavaScript execution context stack is empty, then perform a microtask checkpoint.
-                            // todo
-                            // Let script be the current node (which will be a script element).
-                            var script = currentNode;
-                            // Pop the current node off the stack of open elements.
-                            stackOfOpenElements.Pop();
-                            // Switch the insertion mode to the original insertion mode.
-                            insertionMode = originalInsertionMode;
-                            // Let the old insertion point have the same value as the current insertion point. Let the insertion point be just before the next input character.
-                            // todo
-                            // Increment the parser's script nesting level by one.
-                            // todo
-                            // If the active speculative HTML parser is null, then prepare the script element script. This might cause some script to execute, which might cause new characters to be inserted into the tokenizer, and might cause the tokenizer to output more tokens, resulting in a reentrant invocation of the parser.
-                            // todo
-                            // Decrement the parser's script nesting level by one. If the parser's script nesting level is zero, then set the parser pause flag to false.
-                            // todo
-                            // Let the insertion point have the value of the old insertion point. (In other words, restore the insertion point to its previous value. This value might be the "undefined" value.)
-                            // todo
-                            // At this stage, if the pending parsing-blocking script is not null, then:
-                            // todo
-                            // If the script nesting level is not zero:
-                            // Set the parser pause flag to true, and abort the processing of any nested invocations of the tokenizer, yielding control back to the caller. (Tokenization will resume when the caller returns to the "outer" tree construction stage.)
-                            // todo
-                            // NOTE: The tree construction stage of this particular parser is being called reentrantly, say from a call to document.write().
-
-                            // Otherwise:
-                            // While the pending parsing-blocking script is not null:
-
-                            // 1. Let the script be the pending parsing-blocking script.
-                            // todo
-                            // 2. Set the pending parsing-blocking script to null.
-                            // todo
-                            // 3. Start the speculative HTML parser for this instance of the HTML parser.
-                            // todo
-                            // 4. Block the tokenizer for this instance of the HTML parser, such that the event loop will not run tasks that invoke the tokenizer.
-                            // todo
-                            // 5. If the parser's Document has a style sheet that is blocking scripts or the script's ready to be parser-executed is false: spin the event loop until the parser's Document has no style sheet that is blocking scripts and the script's ready to be parser-executed becomes true.
-                            // todo
-                            // 6. If this parser has been aborted in the meantime, return.
-                            // todo
-                            // NOTE: This could happen if, e.g., while the spin the event loop algorithm is running, the Document gets destroyed, or the document.open() method gets invoked on the Document.
-
-                            // 7. Stop the speculative HTML parser for this instance of the HTML parser.
-                            // todo
-                            // 8. Unblock the tokenizer for this instance of the HTML parser, such that tasks that invoke the tokenizer can again be run.
-                            // todo
-                            // 9. Let the insertion point be just before the next input character.
-                            // todo
-                            // 10. Increment the parser's script nesting level by one (it should be zero before this step, so this sets it to one).
-                            // todo
-                            // 11. Execute the script element the script.
-                            // todo
-                            // 12. Decrement the parser's script nesting level by one. If the parser's script nesting level is zero (which it always should be at this point), then set the parser pause flag to false.
-                            // todo
-                            // 13. Let the insertion point be undefined again.
-                            break;
-
-                        case EndTag:
-                            // Pop the current node off the stack of open elements.
-                            stackOfOpenElements.Pop();
-                            // Switch the insertion mode to the original insertion mode.                        
-                            insertionMode = originalInsertionMode;
-                            break;
-                    }
-
+                    InsertionModeText();
                     break;
-                // 13.2.6.4.9 The "in table" insertion mode
-                // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intable
-                case InsertionMode.InTable: {
-                        InsertionModeInTable();
-                        break;
-                    }
-                // 13.2.6.4.10 The "in table text" insertion mode
-                // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intabletext
-                case InsertionMode.InTableText: {
-                        switch (token) {
-                            case Character { data: '\0' }: throw new NotImplementedException();
-                            case Character cToken:
-                                // Append the character token to the pending table character tokens list.
-                                pendingTableCharacterTokens.Add(cToken);
-                                break;
-                            default:
-                                // If any of the tokens in the pending table character tokens list are character tokens that are not ASCII whitespace,
-                                // then this is a parse error: reprocess the character tokens in the pending table character tokens list using
-                                // the rules given in the "anything else" entry in the "in table" insertion mode.
-                                if (pendingTableCharacterTokens.Any((item) => item.data is not '\u0009' or '\u000A' or '\u000C' or '\u000D' or '\u0020')) {
-                                    AddParseError("InTableText");
-                                    // todo copied code
-                                    var currentToken = token;
-                                    fosterParenting = true;
-                                    pendingTableCharacterTokens.ForEach((token) => {
-                                        this.token = token;
-                                        InsertionModeInBody();
-                                    });
-                                    token = currentToken;
-                                    fosterParenting = false;
-                                } else {
-                                    // Otherwise, insert the characters given by the pending table character tokens list.
-                                    pendingTableCharacterTokens.ForEach(InsertACharacter);
-                                }
-                                // Switch the insertion mode to the original insertion mode and reprocess the token.
-                                insertionMode = originalInsertionMode;
-                                ReprocessTheToken();
-                                break;
-                        }
-                        break;
-                    }
-
-                // 13.2.6.4.11 The "in caption" insertion mode
-                // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-incaption
+                case InsertionMode.InTable:
+                    InsertionModeInTable();
+                    break;
+                case InsertionMode.InTableText:
+                    InSertionModeInTableText();
+                    break;
                 case InsertionMode.InCaption:
-                    switch (token) {
-                        case EndTag { name: "caption" }:
-                            // If the stack of open elements does not have a caption element in table scope, this is a parse error; ignore the token. (fragment case)
-                            if (!HasAElementInTableScope("caption")) {
-                                AddParseError("in-caption-table-scope");
-                            } else {
-                                // Otherwise:
-                                // Generate implied end tags.
-                                GenerateImpliedEndTags();
-                                // Now, if the current node is not a caption element, then this is a parse error.
-                                if (currentNode is not Element { localName: "caption" }) {
-                                    AddParseError("in-caption-is-not-caption");
-                                }
-                                // Pop elements from this stack until a caption element has been popped from the stack.
-                                while (true) {
-                                    if (stackOfOpenElements.Pop() is Element { localName: "caption" }) break;
-                                }
-                                // Clear the list of active formatting elements up to the last marker.
-                                ClearTheListOfACtiveFormattingElementsUpToTheLastMarker();
-                                // Switch the insertion mode to "in table".
-                                insertionMode = InsertionMode.InTable;
-                            }
-                            break;
-                        case StartTag { name: "caption" or "col" or "colgroup" or "tbody" or "td" or "tfoot" or "th" or "thead" or "tr" }:
-                        case EndTag { name: "table" }:
-                            //  If the stack of open elements does not have a caption element in table scope, this is a parse error; ignore the token. (fragment case)
-                            if (!HasAElementInTableScope("caption")) {
-                                AddParseError("in-caption-no-caption-in-scope");
-                            } else {
-                                // Otherwise:
-                                // Generate implied end tags.
-                                GenerateImpliedEndTags();
-                                // Now, if the current node is not a caption element, then this is a parse error.
-                                if (currentNode is not Element { localName: "caption" }) {
-                                    AddParseError("in-caption-current-node-not-caption");
-                                }
-                                // Pop elements from this stack until a caption element has been popped from the stack.
-                                while (stackOfOpenElements.Pop() is not Element { localName: "caption" }) { }
-                                // Clear the list of active formatting elements up to the last marker.
-                                ClearTheListOfACtiveFormattingElementsUpToTheLastMarker();
-                                // Switch the insertion mode to "in table".
-                                insertionMode = InsertionMode.InTable;
-                                // Reprocess the token.
-                                ReprocessTheToken();
-                            }
-                            break;
-                        case EndTag { name: "body" or "col" or "colgroup" or "html" or "tbody" or "td" or "td" or "tfoot" or "th" or "thead" or "tr" }:
-                            // Parse error. Ignore the token.
-                            AddParseError("in-caption-unexpected-end-token-ignored");
-                            break;
-                        default:
-                            // Process the token using the rules for the "in body" insertion mode.
-                            InsertionModeInBody();
-                            break;
-                    }
+                    InsertionModeInCaption();
                     break;
-                // 13.2.6.4.12 The "in column group" insertion mode
-                // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-incolgroup
                 case InsertionMode.InColumnGroup:
-                    switch (token) {
-                        case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' } cToken:
-                            InsertACharacter(cToken);
-                            break;
-                        case Tokenizer.Comment comment:
-                            // Insert a comment.
-                            InsertAComment(comment);
-                            break;
-                        case DOCTYPE:
-                            // Parse error. Ignore the token.
-                            AddParseError("in-column-group-unexpected-doctype-ignored");
-                            break;
-                        case StartTag { name: "html" }:
-                            // Process the token using the rules for the "in body" insertion mode.
-                            InsertionModeInBody();
-                            break;
-                        case StartTag { name: "col" } tagToken:
-                            // Insert an HTML element for the token. Immediately pop the current node off the stack of open elements.
-                            InsertAnHTMLElement(tagToken);
-                            stackOfOpenElements.Pop();
-                            // Acknowledge the token's self-closing flag, if it is set.
-                            // todo
-                            break;
-                        case EndTag { name: "colgroup" }:
-                            // If the current node is not a colgroup element, then this is a parse error; ignore the token.
-                            if (currentNode is not Element { localName: "colgroup" }) {
-                                AddParseError("in-column-group-unexpected-end-tag-ignored");
-                            } else {
-                                // Otherwise, pop the current node from the stack of open elements. Switch the insertion mode to "in table".
-                                stackOfOpenElements.Pop();
-                                insertionMode = InsertionMode.InTable;
-                            }
-                            break;
-                        case EndTag { name: "col" }:
-                            // Parse error. Ignore the token.
-                            AddParseError("in-column-group-unexpected-col-end-token-ignored");
-                            break;
-                        case StartTag { name: "template" }:
-                        case EndTag { name: "template" }:
-                            // Process the token using the rules for the "in head" insertion mode.
-                            InsertionModeInHead();
-                            break;
-                        case EndOfFile:
-                            // Process the token using the rules for the "in body" insertion mode.
-                            InsertionModeInBody();
-                            break;
-                        default:
-                            // If the current node is not a colgroup element, then this is a parse error; ignore the token.
-                            if (currentNode is not Element { localName: "colgroup" }) {
-                                AddParseError("InColumnGroup - default");
-                            } else {
-                                // Otherwise, pop the current node from the stack of open elements.
-                                stackOfOpenElements.Pop();
-                                // Switch the insertion mode to "in table".
-                                insertionMode = InsertionMode.InTable;
-                                // Reprocess the token.
-                                ReprocessTheToken();
-                            }
-                            break;
-                    }
+                    InsertionModeInColumnGroup();
                     break;
-                // 13.2.6.4.13 The "in table body" insertion mode
-                // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intbody
-                case InsertionMode.InTableBody: {
-                        // https://html.spec.whatwg.org/multipage/parsing.html#clear-the-stack-back-to-a-table-body-context
-                        var ClearTheStackBackToTableContext = () => {
-                            while (!((ReadOnlySpan<string>)["tbody", "tfoot", "thead", "template", "html"]).Contains(stackOfOpenElements.Peek().localName)) {
-                                stackOfOpenElements.Pop();
-                            }
-                        };
-
-                        switch (token) {
-                            case StartTag { name: "tr" } tagToken:
-                                // Clear the stack back to a table body context. (See below.)
-                                ClearTheStackBackToTableContext();
-                                // Insert an HTML element for the token, then switch the insertion mode to "in row".
-                                InsertAnHTMLElement(tagToken);
-                                insertionMode = InsertionMode.InRow;
-                                break;
-                            case StartTag { name: "th" or "td" }:
-                                AddParseError("unexpected-cell-in-table-body");
-                                // Clear the stack back to a table body context. (See below.)
-                                ClearTheStackBackToTableContext();
-                                // Insert an HTML element for a "tr" start tag token with no attributes, then switch the insertion mode to "in row".
-                                InsertAnHTMLElement(new StartTag("tr"));
-                                insertionMode = InsertionMode.InRow;
-                                // Reprocess the current token.
-                                ReprocessTheToken();
-                                break;
-                            case EndTag { name: "tbody" or "tfoot" or "thead" } tagToken:
-                                // If the stack of open elements does not have an element in table scope that is an HTML element with the same tag name as the token, this is a parse error; ignore the token.
-                                if (!HasAElementInTableScope(tagToken.name)) {
-                                    AddParseError("in-table-body-unexpected-end-tag");
-                                } else {
-                                    // Otherwise:
-                                    // 1. Clear the stack back to a table body context. (See below.)
-                                    ClearTheStackBackToTableContext();
-                                    // 2. Pop the current node from the stack of open elements. Switch the insertion mode to "in table".
-                                    stackOfOpenElements.Pop();
-                                    insertionMode = InsertionMode.InTable;
-                                }
-                                break;
-                            case StartTag { name: "caption" or "col" or "colgroup" or "tbody" or "tfood" or "thead" }:
-                            case EndTag { name: "table" }:
-                                // If the stack of open elements does not have a tbody, thead, or tfoot element in table scope, this is a parse error; ignore the token.
-                                if (!HasAElementInTableScope("tbody", "thead", "tfoot")) {
-                                    AddParseError("TBODY, THEAD, TFoot");
-                                } else {
-                                    // Otherwise:
-                                    // 1. Clear the stack back to a table body context. (See below.)
-                                    ClearTheStackBackToTableContext();
-                                    // 2. Pop the current node from the stack of open elements. Switch the insertion mode to "in table".
-                                    stackOfOpenElements.Pop();
-                                    insertionMode = InsertionMode.InTable;
-                                    // 3. Reprocess the token.
-                                    ReprocessTheToken();
-                                }
-                                break;
-                            case EndTag { name: "body" or "caption" or "col" or "colgroup" or "html" or "td" or "th" or "tr" }:
-                                // Parse error. Ignore the token.
-                                AddParseError("in-table-body-unexpected-end-tag-ignored");
-                                break;
-                            default:
-                                // Process the token using the rules for the "in table" insertion mode.
-                                InsertionModeInTable();
-                                break;
-                        }
-
-                        break;
-                    }
-
-                // 13.2.6.4.14 The "in row" insertion mode
-                // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intr
-                case InsertionMode.InRow: {
-                        var ClearTheStackBackToTableRowContext = () => {
-                            while (!((ReadOnlySpan<string>)["tr", "template", "html"]).Contains(stackOfOpenElements.Peek().localName)) {
-                                stackOfOpenElements.Pop();
-                            }
-                        };
-                        switch (token) {
-                            case StartTag { name: "th" or "td" } tagToken:
-                                // Clear the stack back to a table row context. (See below.)
-                                ClearTheStackBackToTableRowContext();
-                                // Insert an HTML element for the token, then switch the insertion mode to "in cell".
-                                InsertAnHTMLElement(tagToken);
-                                insertionMode = InsertionMode.InCell;
-                                // Insert a marker at the end of the list of active formatting elements.
-                                ListOfActiveFormattingElements.Add(null);
-                                break;
-                            case EndTag { name: "tr" }:
-                                // If the stack of open elements does not have a tr element in table scope, this is a parse error; ignore the token.
-                                if (!HasAElementInTableScope("tr")) {
-                                    AddParseError("IN ROW - TR - table scope");
-                                    break;
-                                }
-                                // Otherwise:
-
-                                // 1. Clear the stack back to a table row context. (See below.)
-                                ClearTheStackBackToTableRowContext();
-                                // 2. Pop the current node (which will be a tr element) from the stack of open elements. Switch the insertion mode to "in table body".
-                                stackOfOpenElements.Pop();
-                                insertionMode = InsertionMode.InTableBody;
-                                break;
-                            case StartTag { name: "caption" or "col" or "colgroup" or "tbody" or "tfoot" or "thead" or "tr" }:
-                            case EndTag { name: "table" }:
-                                // If the stack of open elements does not have a tr element in table scope, this is a parse error; ignore the token.
-                                if (!HasAElementInTableScope("tr")) {
-                                    AddParseError("TR");
-                                } else {
-                                    // Otherwise:
-                                    // 1. Clear the stack back to a table row context. (See below.)
-                                    ClearTheStackBackToTableRowContext();
-                                    // 2. Pop the current node (which will be a tr element) from the stack of open elements. Switch the insertion mode to "in table body".
-                                    stackOfOpenElements.Pop();
-                                    insertionMode = InsertionMode.InTableBody;
-                                    // 3. Reprocess the token.
-                                    ReprocessTheToken();
-                                }
-                                break;
-                            case EndTag { name: "tbody" or "tfoot" or "thead" } tagToken:
-                                // If the stack of open elements does not have an element in table scope that is an HTML element with the same tag name as the token, this is a parse error; ignore the token.
-                                if (!HasAElementInTableScope(tagToken.name)) {
-                                    AddParseError("in-row-tbody-not-in-table-scope");
-                                    break;
-                                }
-                                // If the stack of open elements does not have a tr element in table scope, ignore the token.
-                                if (!HasAElementInTableScope("tr")) {
-                                    AddParseError("in-row-tr-missing");
-                                    break;
-                                }
-                                // Otherwise:
-                                // Clear the stack back to a table row context. (See below.)
-                                ClearTheStackBackToTableRowContext();
-                                // Pop the current node (which will be a tr element) from the stack of open elements. Switch the insertion mode to "in table body".
-                                stackOfOpenElements.Pop();
-                                insertionMode = InsertionMode.InTableBody;
-                                // Reprocess the token.
-                                ReprocessTheToken();
-                                break;
-                            case EndTag { name: "body" or "caption" or "col" or "colgroup" or "html" or "td" or "th" } tagToken:
-                                // If the stack of open elements does not have an element in table scope that is an HTML element with the same tag name as the token, this is a parse error; ignore the token.
-                                if (!HasAElementInTableScope(tagToken.name)) {
-                                    AddParseError("in-row-end-tag-body");
-                                    break; // ignore token
-                                }
-                                // If the stack of open elements does not have a tr element in table scope, ignore the token.
-                                if (!HasAElementInTableScope("tr")) {
-                                    break; // ignore token
-                                }
-                                // Otherwise:
-                                // 1. Clear the stack back to a table row context. (See below.)
-                                ClearTheStackBackToTableRowContext();
-                                // 2. Pop the current node (which will be a tr element) from the stack of open elements. Switch the insertion mode to "in table body".
-                                stackOfOpenElements.Pop();
-                                insertionMode = InsertionMode.InTableBody;
-                                // 3. Reprocess the token.
-                                ReprocessTheToken();
-                                break;
-                            default:
-                                InsertionModeInTable();
-                                break;
-
-                        }
-                        break;
-                    }
-                // 13.2.6.4.15 The "in cell" insertion mode
-                // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intd
+                case InsertionMode.InTableBody:
+                    InsertionModeInTableBody();
+                    break;
+                case InsertionMode.InRow:
+                    InsertionModeInRow();
+                    break;
                 case InsertionMode.InCell:
-                    var CloseTheCell = () => {
-
-                        // Generate implied end tags.
-                        GenerateImpliedEndTags();
-                        // If the current node is not now a td element or a th element, then this is a parse error.
-                        if (currentNode is not Element { localName: "td" or "th" }) {
-                            AddParseError("unexpected-cell-end-tag");
-                        }
-                        // Pop elements from the stack of open elements until a td element or a th element has been popped from the stack.
-                        while (true) {
-                            var element = stackOfOpenElements.Pop();
-                            if (element.localName is "td" or "th") break;
-                        }
-                        // Clear the list of active formatting elements up to the last marker.
-                        ClearTheListOfACtiveFormattingElementsUpToTheLastMarker();
-                        // Switch the insertion mode to "in row".
-                        insertionMode = InsertionMode.InRow;
-                    };
-                    switch (token) {
-                        case EndTag { name: "td" or "th" } tagToken:
-                            // If the stack of open elements does not have an element in table scope that is an HTML element with the same tag name as that of the token, then this is a parse error; ignore the token.
-                            if (!HasAElementInTableScope(tagToken.name)) {
-                                AddParseError("IN CELL - not in table scope");
-                            } else {
-                                // Otherwise:
-                                // 1. Generate implied end tags.
-                                GenerateImpliedEndTags();
-                                // 2. Now, if the current node is not an HTML element with the same tag name as the token, then this is a parse error.
-                                if (currentNode.localName != tagToken.name) {
-                                    AddParseError("IN CELL - Otherwise not same");
-                                }
-                                // 3. Pop elements from the stack of open elements until an HTML element with the same tag name as the token has been popped from the stack.
-                                while (true) {
-                                    if (stackOfOpenElements.Pop().localName == tagToken.name) break;
-                                }
-                                // 4. Clear the list of active formatting elements up to the last marker.
-                                ClearTheListOfACtiveFormattingElementsUpToTheLastMarker();
-                                // 5. Switch the insertion mode to "in row".
-                                insertionMode = InsertionMode.InRow;
-                            }
-                            break;
-                        case StartTag { name: "caption" or "col" or "colgroup" or "tbody" or "td" or "tfoot" or "th" or "thead" or "tr" }:
-                            // Assert: The stack of open elements has a td or th element in table scope.
-                            // todo
-                            // Close the cell (see below) and reprocess the token.
-                            CloseTheCell();
-                            ReprocessTheToken();
-                            break;
-                        case EndTag { name: "body" or "caption" or "col" or "colgroup" or "html" }:
-                            // Parse error. Ignore the token.
-                            AddParseError("in-cell-unexpected-end-token-ignored");
-                            break;
-                        case EndTag { name: "table" or "tbody" or "tfoot" or "thead" or "tr" } tagToken:
-                            // If the stack of open elements does not have an element in table scope that is an HTML element with the same tag name as that of the token, then this is a parse error; ignore the token.
-                            if (!HasAElementInTableScope(tagToken.name)) {
-                                AddParseError("in-cell-unexpected-end-tag-ignored");
-                            } else {
-                                // Otherwise, close the cell (see below) and reprocess the token.
-                                CloseTheCell();
-                                ReprocessTheToken();
-                            }
-                            break;
-                        default:
-                            InsertionModeInBody();
-                            break;
-                    }
+                    InsertionModeInCell();
                     break;
-
-                //13.2.6.4.16 The "in select" insertion mode
-                // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inselect
                 case InsertionMode.InSelect:
-                    switch (token) {
-                        case Character { data: '\0' }:
-                            // Parse error. Ignore the token.
-                            AddParseError("in-select-null-character-ignored");
-                            break;
-                        case Character cToken:
-                            InsertACharacter(cToken);
-                            break;
-                        case Tokenizer.Comment comment:
-                            // Insert a comment.
-                            InsertAComment(comment);
-                            break;
-                        case DOCTYPE:
-                            // Parse error. Ignore the token.
-                            AddParseError("in-select-unexpected-doctype-ignored");
-                            break;
-                        case StartTag { name: "html" }:
-                            // Process the token using the rules for the "in body" insertion mode.
-                            InsertionModeInBody();
-                            break;
-                        case StartTag { name: "option" } tagToken:
-                            // If the current node is an option element, pop that node from the stack of open elements.
-                            if (currentNode is Element { localName: "option" }) {
-                                stackOfOpenElements.Pop();
-                            }
-                            // Insert an HTML element for the token.
-                            InsertAnHTMLElement(tagToken);
-                            break;
-                        case StartTag { name: "optgroup" } tagToken:
-                            // If the current node is an option element, pop that node from the stack of open elements.
-                            if (currentNode is Element { localName: "option" }) stackOfOpenElements.Pop();
-                            // If the current node is an optgroup element, pop that node from the stack of open elements.
-                            if (currentNode is Element { localName: "optgroup" }) stackOfOpenElements.Pop();
-                            // Insert an HTML element for the token.
-                            InsertAnHTMLElement(tagToken);
-                            break;
-                        case StartTag { name: "hr" } tagToken:
-                            // If the current node is an option element, pop that node from the stack of open elements.
-                            if (currentNode is Element { localName: "option" }) stackOfOpenElements.Pop();
-                            // If the current node is an optgroup element, pop that node from the stack of open elements.
-                            if (currentNode is Element { localName: "optgroup" }) stackOfOpenElements.Pop();
-                            // Insert an HTML element for the token. Immediately pop the current node off the stack of open elements.
-                            InsertAnHTMLElement(tagToken);
-                            stackOfOpenElements.Pop();
-                            // Acknowledge the token's self-closing flag, if it is set.
-                            // todo
-                            break;
-                        case EndTag { name: "optgroup" }:
-                            // First, if the current node is an option element, and the node immediately before it in the stack of open elements is an optgroup element, then pop the current node from the stack of open elements.
-                            if (currentNode is Element { localName: "option" } && stackOfOpenElements[^2] is Element { localName: "optgroup" }) stackOfOpenElements.Pop();
-                            // If the current node is an optgroup element, then pop that node from the stack of open elements. Otherwise, this is a parse error; ignore the token.
-                            if (currentNode is Element { localName: "optgroup" }) {
-                                stackOfOpenElements.Pop();
-                            } else {
-                                AddParseError("in-select-unexpected-optgroup-endtag");
-                            }
-                            break;
-                        case EndTag { name: "option" }:
-                            // If the current node is an option element, then pop that node from the stack of open elements. Otherwise, this is a parse error; ignore the token.
-                            if (currentNode is Element { localName: "option" }) {
-                                stackOfOpenElements.Pop();
-                            } else {
-                                AddParseError("IN SELECT - END OPTION");
-                            }
-                            break;
-                        case EndTag { name: "select" }:
-                            // If the stack of open elements does not have a select element in select scope, this is a parse error; ignore the token. (fragment case)
-                            if (!HasAElementInSelectScope("select")) {
-                                AddParseError("IN SELECT: no select in scope");
-                            } else {
-                                // Otherwise:
-                                // Pop elements from the stack of open elements until a select element has been popped from the stack.
-                                while (true) {
-                                    if (stackOfOpenElements.Pop() is Element { localName: "select" }) {
-                                        break;
-                                    }
-                                }
-                                // Reset the insertion mode appropriately.
-                                ResetTheInsertionModeAppropriately();
-                            }
-                            break;
-
-                        case StartTag { name: "select" }:
-                            // Parse error.
-                            AddParseError("IN SELECT: select in select");
-                            // If the stack of open elements does not have a select element in select scope, ignore the token. (fragment case)
-                            if (!HasAElementInSelectScope("select")) {
-
-                            } else {
-                                // Otherwise:
-                                // 1. Pop elements from the stack of open elements until a select element has been popped from the stack.
-                                while (true) {
-                                    if (stackOfOpenElements.Pop() is Element { localName: "select" }) {
-                                        break;
-                                    }
-                                }
-                                // 2. Reset the insertion mode appropriately.
-                                ResetTheInsertionModeAppropriately();
-                                // 3. NOTE: It just gets treated like an end tag.
-                            }
-                            break;
-                        case StartTag { name: "input" or "keygen" or "textarea" }:
-                            // Parse error.
-                            AddParseError("in-select-unexpected-start-tag");
-                            // If the stack of open elements does not have a select element in select scope, ignore the token. (fragment case)
-                            if (!HasAElementInSelectScope("select")) {
-                                // ignore token
-                            } else {
-                                // Otherwise:
-                                // Pop elements from the stack of open elements until a select element has been popped from the stack.
-                                while (stackOfOpenElements.Pop() is not Element { localName: "select" }) { }
-                                // Reset the insertion mode appropriately.
-                                ResetTheInsertionModeAppropriately();
-                                // Reprocess the token.
-                                ReprocessTheToken();
-                            }
-                            break;
-                        case StartTag { name: "script" or "template" }:
-                        case EndTag { name: "template" }:
-                            // Process the token using the rules for the "in head" insertion mode.
-                            InsertionModeInHead();
-                            break;
-                        case EndOfFile:
-                            InsertionModeInBody();
-                            break;
-                        default:
-                            AddParseError("IN SELECT: default");
-                            // ignore the token;
-                            break;
-
-                    }
+                    InsertionModeInSelect();
                     break;
-                // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inselectintable
                 case InsertionMode.InSelectInTable:
-                    switch (token) {
-                        case StartTag { name: "caption" or "table" or "tbody" or "tfoot" or "thead" or "tr" or "td" or "th" }:
-                            // Parse error.
-                            AddParseError("select-in-table-unexpected-start-tag");
-                            // Pop elements from the stack of open elements until a select element has been popped from the stack.
-                            while (stackOfOpenElements.Pop() is not Element { localName: "select" }) { }
-                            // Reset the insertion mode appropriately.
-                            ResetTheInsertionModeAppropriately();
-                            // Reprocess the token.
-                            ReprocessTheToken();
-                            break;
-                        case EndTag { name: "caption" or "table" or "tbody" or "tfoot" or "thead" or "tr" or "td" or "th" } tagToken:
-                            // Parse error.
-                            AddParseError("in-select-in-table-unexpected-end-tag");
-                            // If the stack of open elements does not have an element in table scope that is an HTML element with the same tag name as that of the token, then ignore the token.
-                            if (!HasAElementInTableScope(tagToken.name)) {
-                                break;
-                            } else {
-                                // Otherwise:
-                                // 1. Pop elements from the stack of open elements until a select element has been popped from the stack.
-                                while (stackOfOpenElements.Pop() is not Element { localName: "select" }) { }
-                                // 2. Reset the insertion mode appropriately.
-                                ResetTheInsertionModeAppropriately();
-                                // 3. Reprocess the token.
-                                ReprocessTheToken();
-                            }
-                            break;
-                        default:
-                            // Parse error. Ignore the token.
-                            AddParseError("in-select-unexpected-token-ignored");
-                            break;
-                    }
+                    InsertionModeInSelectInTable();
                     break;
-
-                // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intemplate
                 case InsertionMode.InTemplate:
-                    switch (token) {
-                        case Character:
-                        case Tokenizer.Comment:
-                        case DOCTYPE:
-                            // Process the token using the rules for the "in body" insertion mode.
-                            InsertionModeInBody();
-                            break;
-                        case StartTag { name: "base" or "basefont" or "bgsound" or "link" or "meta" or "noframes" or "script" or "style" or "template" or "title" }:
-                        case EndTag { name: "template" }:
-                            // Process the token using the rules for the "in head" insertion mode.
-                            InsertionModeInHead();
-                            break;
-                        case StartTag { name: "caption" or "colgroup" or "tbody" or "tfoot" or "thead" }:
-                            // Pop the current template insertion mode off the stack of template insertion modes.
-                            stackOfTemplateInsertionModes.Pop();
-                            // Push "in table" onto the stack of template insertion modes so that it is the new current template insertion mode.
-                            stackOfTemplateInsertionModes.Push(InsertionMode.InTable);
-                            // Switch the insertion mode to "in table", and reprocess the token.   
-                            insertionMode = InsertionMode.InTable;
-                            ReprocessTheToken();
-                            break;
-                        case StartTag { name: "col" }:
-                            // Pop the current template insertion mode off the stack of template insertion modes.
-                            stackOfTemplateInsertionModes.Pop();
-                            // Push "in column group" onto the stack of template insertion modes so that it is the new current template insertion mode.
-                            stackOfTemplateInsertionModes.Push(InsertionMode.InColumnGroup);
-                            // Switch the insertion mode to "in column group", and reprocess the token. 
-                            insertionMode = InsertionMode.InColumnGroup;
-                            ReprocessTheToken();
-                            break;
-                        case StartTag { name: "tr" }:
-                            // Pop the current template insertion mode off the stack of template insertion modes.
-                            stackOfTemplateInsertionModes.Pop();
-                            // Push "in table body" onto the stack of template insertion modes so that it is the new current template insertion mode.
-                            stackOfTemplateInsertionModes.Push(InsertionMode.InTableBody);
-                            // Switch the insertion mode to "in table body", and reprocess the token.
-                            insertionMode = InsertionMode.InTableBody;
-                            ReprocessTheToken();
-                            break;
-                        case StartTag { name: "td" or "th" }:
-                            // Pop the current template insertion mode off the stack of template insertion modes.
-                            stackOfTemplateInsertionModes.Pop();
-                            // Push "in row" onto the stack of template insertion modes so that it is the new current template insertion mode.
-                            stackOfTemplateInsertionModes.Push(InsertionMode.InRow);
-                            // Switch the insertion mode to "in row", and reprocess the token.
-                            insertionMode = InsertionMode.InRow;
-                            ReprocessTheToken();
-                            break;
-                        case StartTag:
-                            // Pop the current template insertion mode off the stack of template insertion modes.
-                            stackOfTemplateInsertionModes.Pop();
-                            // Push "in body" onto the stack of template insertion modes so that it is the new current template insertion mode.
-                            stackOfTemplateInsertionModes.Push(InsertionMode.InBody);
-                            // Switch the insertion mode to "in body", and reprocess the token.
-                            insertionMode = InsertionMode.InBody;
-                            ReprocessTheToken();
-                            break;
-                        case EndTag:
-                            // Parse error. Ignore the token.
-                            AddParseError("in-template-unexpected-end-tag-ignored");
-                            break;
-                        case EndOfFile:
-                            // If there is no template element on the stack of open elements, then stop parsing. (fragment case)
-                            if (!stackOfOpenElements.Any(item => item.localName == "template")) {
-                                StopParsing();
-                                break;
-                            } else {
-                                // Otherwise, this is a parse error.
-                                AddParseError("in-template-eof");
-                                // Pop elements from the stack of open elements until a template element has been popped from the stack.
-                                while (stackOfOpenElements.Pop() is not Element { localName: "template" }) { }
-                                // Clear the list of active formatting elements up to the last marker.
-                                ClearTheListOfACtiveFormattingElementsUpToTheLastMarker();
-                                // Pop the current template insertion mode off the stack of template insertion modes.
-                                stackOfTemplateInsertionModes.Pop();
-                                // Reset the insertion mode appropriately.
-                                ResetTheInsertionModeAppropriately();
-                                // Reprocess the token.
-                                ReprocessTheToken();
-                            }
-                            break;
-                    }
+                    InsertionModeInTemplate();
                     break;
-                // 13.2.6.4.19 The "after body" insertion mode
-                // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-afterbody
                 case InsertionMode.AfterBody:
-                    switch (token) {
-                        case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
-                            // Process the token using the rules for the "in body" insertion mode.
-                            InsertionModeInBody();
-                            break;
-                        case Tokenizer.Comment comment:
-                            // Insert a comment as the last child of the first element in the stack of open elements (the html element).
-                            InsertAComment(comment, (stackOfOpenElements[0], stackOfOpenElements[0].childNodes.Count));
-                            break;
-                        case DOCTYPE:
-                            // Parse error. Ignore the token.
-                            AddParseError("after-body-unexpected-doctype-ignored");
-                            break;
-                        case StartTag { name: "html" }:
-                            // Process the token using the rules for the "in body" insertion mode.
-                            InsertionModeInBody();
-                            break;
-                        case EndTag { name: "html" }:
-                            // If the parser was created as part of the HTML fragment parsing algorithm, this is a parse error; ignore the token. (fragment case)
-                            // todo parse error
-                            // Otherwise, switch the insertion mode to "after after body".
-                            insertionMode = InsertionMode.AfterAfterBody;
-                            break;
-                        case EndOfFile:
-                            StopParsing();
-                            break;
-                        default:
-                            // Parse error. Switch the insertion mode to "in body" and reprocess the token.
-                            AddParseError("After Body - unexpected tag");
-                            insertionMode = InsertionMode.InBody;
-                            ReprocessTheToken();
-                            break;
-                    }
+                    InsertionModeAfterBody();
                     break;
-
-                // 13.2.6.4.20 The "in frameset" insertion mode
-                // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inframeset
                 case InsertionMode.InFrameset:
-                    switch (token) {
-                        case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' } cToken:
-                            // Insert the character.
-                            InsertACharacter(cToken);
-                            break;
-                        case Tokenizer.Comment comment:
-                            // Insert a comment.
-                            InsertAComment(comment);
-                            break;
-                        case DOCTYPE:
-                            // Parse error. Ignore the token.
-                            AddParseError("in-frameset-unexpected-doctype");
-                            break;
-                        case StartTag { name: "html" }:
-                            // Process the token using the rules for the "in body" insertion mode.
-                            InsertionModeInBody();
-                            break;
-                        case StartTag { name: "frameset" } tagToken:
-                            // Insert an HTML element for the token.
-                            InsertAnHTMLElement(tagToken);
-                            break;
-                        case EndTag { name: "frameset" }:
-                            // If the current node is the root html element, then this is a parse error; ignore the token. (fragment case)
-                            if (currentNode.localName == "html") {
-                                AddParseError("In frameset root html");
-                            } else {
-                                // Otherwise, pop the current node from the stack of open elements.
-                                stackOfOpenElements.Pop();
-                            }
-                            // If the parser was not created as part of the HTML fragment parsing algorithm (fragment case), and the current node is no longer a frameset element, then switch the insertion mode to "after frameset".
-                            if (currentNode.localName != "frameset") {
-                                // todo add fragment case 
-                                insertionMode = InsertionMode.AfterFrameset;
-                            }
-                            break;
-                        case StartTag { name: "frame" } tagToken:
-                            // Insert an HTML element for the token. Immediately pop the current node off the stack of open elements.
-                            InsertAnHTMLElement(tagToken);
-                            stackOfOpenElements.Pop();
-                            // Acknowledge the token's self-closing flag, if it is set.
-                            // todo
-                            break;
-                        case StartTag { name: "noframes" }:
-                            // Process the token using the rules for the "in head" insertion mode.
-                            InsertionModeInHead();
-                            break;
-                        case EndOfFile:
-                            // If the current node is not the root html element, then this is a parse error.
-                            if (currentNode.localName != "html") {
-                                AddParseError("in-frameset-eof-not-html");
-                            }
-                            // Note: The current node can only be the root html element in the fragment case.
-                            // Stop parsing.
-                            StopParsing();
-                            break;
-                        default:
-                            // Parse error. Ignore the token.
-                            AddParseError("in-frameset-unexpected-token");
-                            break;
-                    }
+                    InsertionModeInFrameset();
                     break;
-                // 13.2.6.4.21 The "after frameset" insertion mode
-                // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-afterframeset
                 case InsertionMode.AfterFrameset:
-                    switch (token) {
-                        case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' } cToken:
-                            // Insert the character.
-                            InsertACharacter(cToken);
-                            break;
-                        case Tokenizer.Comment comment:
-                            // Insert a comment.
-                            InsertAComment(comment);
-                            break;
-                        case DOCTYPE:
-                            // Parse error. Ignore the token.
-                            AddParseError("after-frameset-unexpected-doctype-ignored");
-                            break;
-                        case StartTag { name: "html" }:
-                            // Process the token using the rules for the "in body" insertion mode.
-                            InsertionModeInBody();
-                            break;
-                        case EndTag { name: "html" }:
-                            // Switch the insertion mode to "after after frameset".
-                            insertionMode = InsertionMode.AfterAfterFrameset;
-                            break;
-                        case StartTag { name: "noframes" }:
-                            // Process the token using the rules for the "in head" insertion mode.
-                            InsertionModeInHead();
-                            break;
-                        case EndOfFile:
-                            // Stop parsing.
-                            StopParsing();
-                            break;
-                        default:
-                            // Parse error. Ignore the token.
-                            AddParseError("after-frameset-unexpected-token");
-                            break;
-                    }
+                    InsertionModeAfterFrameset();
                     break;
-
-                // 13.2.6.4.22 The "after after body" insertion mode
-                // https://html.spec.whatwg.org/multipage/parsing.html#the-after-after-body-insertion-mode
                 case InsertionMode.AfterAfterBody:
-                    switch (token) {
-                        case Tokenizer.Comment comment:
-                            // Insert a comment as the last child of the Document object.
-                            InsertAComment(comment, (document, document.childNodes.Count));
-                            break;
-                        case DOCTYPE:
-                        case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
-                        case StartTag { name: "html" }:
-                            InsertionModeInBody();
-                            break;
-                        case EndOfFile:
-                            StopParsing();
-                            break;
-                        default:
-                            //Parse error. Switch the insertion mode to "in body" and reprocess the token.
-                            AddParseError("expected-eof-but-got-start-tag");
-                            insertionMode = InsertionMode.InBody;
-                            ReprocessTheToken();
-                            break;
-                    }
+                    InsertionModeAfterAfterBody();
                     break;
-                // https://html.spec.whatwg.org/multipage/parsing.html#the-after-after-frameset-insertion-mode
                 case InsertionMode.AfterAfterFrameset:
-                    switch (token) {
-                        case Tokenizer.Comment comment:
-                            // Insert a comment as the last child of the Document object.
-                            InsertAComment(comment, (document, document.childNodes.Count));
-                            break;
-                        case DOCTYPE:
-                        case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
-                        case StartTag { name: "html" }:
-                            // Process the token using the rules for the "in body" insertion mode.
-                            InsertionModeInBody();
-                            break;
-                        case EndOfFile:
-                            StopParsing();
-                            break;
-                        case StartTag { name: "noframes" }:
-                            // Process the token using the rules for the "in head" insertion mode.
-                            InsertionModeInHead();
-                            break;
-                        default:
-                            // Parse error. Ignore the token.
-                            AddParseError("after-after-frameset-unexpected-token-ignored");
-                            break;
-                    }
+                    InsertionModeAfterAfterFrameset();
                     break;
 
                 default:
@@ -1406,6 +296,129 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
         // Insert the newly created node at the adjusted insertion location.
         InsertNode(adjustedInsertionLocation, element);
     }
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#the-initial-insertion-mode
+    private void InsertionModeInitial() {
+        switch (token) {
+            case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
+                break; // ignore the token
+            case Tokenizer.Comment comment:
+                // Insert a comment as the last child of the Document object.
+                InsertAComment(comment, (document, document.childNodes.Count));
+                break;
+            case DOCTYPE doctype:
+                // If the DOCTYPE token's name is not "html", or the token's public identifier is not missing, or the token's system identifier is neither missing nor "about:legacy-compat",
+                // then there is a parse error.                        
+                if (doctype.name is not "html" || doctype.publicId is not null || doctype.systemId is not null or "about:legacy-compat") {
+                    AddParseError("InsertionMode.Initial - doctype not html");
+                }
+                // Append a DocumentType node to the Document node, with its name set to the name given in the DOCTYPE token, or the empty string if the name was missing; 
+                // its public ID set to the public identifier given in the DOCTYPE token, or the empty string if the public identifier was missing;
+                // and its system ID set to the system identifier given in the DOCTYPE token, or the empty string if the system identifier was missing.
+                AppendNode(document, new DocumentType(document, doctype.name ?? "", doctype.publicId ?? "", doctype.systemId ?? ""));
+                // todo quirks mode
+                insertionMode = InsertionMode.BeforeHtml;
+                break;
+            default:
+                // todo If the document is not an iframe srcdoc document, then this is a parse error; if the parser cannot change the mode flag is false, set the Document to quirks mode.
+                AddParseError("expected-doctype");
+                // In any case, switch the insertion mode to "before html",                            
+                insertionMode = InsertionMode.BeforeHtml;
+                // then reprocess the token.
+                ReprocessTheToken();
+                break;
+        }
+    }
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#the-before-html-insertion-mode
+    private void InsertionModeBeforeHtml() {
+        switch (token) {
+            case DOCTYPE:
+                // Parse error. Ignore the token.
+                AddParseError("before-html-unexpected-doctype");
+                break;
+            case Tokenizer.Comment comment:
+                // Insert a comment as the last child of the Document object.
+                InsertAComment(comment, (document, document.childNodes.Count));
+                break;
+            case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
+                break; // ignore the token
+            case StartTag { name: "html" }: {
+                    // Create an element for the token in the HTML namespace, with the Document as the intended parent.
+                    var element = CreateAnElementForAToken((Tag)token, Namespaces.HTML, document);
+                    // Append it to the Document object.
+                    AppendNode(document, element);
+                    // Put this element in the stack of open elements.
+                    stackOfOpenElements.Put(element);
+                    // Switch the insertion mode to "before head".
+                    insertionMode = InsertionMode.BeforeHead;
+                    break;
+                }
+            case EndTag { name: "head" or "body" or "html" or "br" }:
+                // Act as described in the "anything else" entry below.
+                goto default;
+            case EndTag:
+                // Parse error. Ignore the token.
+                AddParseError("unexpected-end-tag-before-html");
+                break;
+            default: {
+                    // Create an html element whose node document is the Document object. Append it to the Document object. Put this element in the stack of open elements.
+                    var element = CreateAnElement(document, "html", Namespaces.HTML);
+                    AppendNode(document, element);
+                    stackOfOpenElements.Put(element);
+                    // Switch the insertion mode to "before head", then reprocess the token.                            
+                    insertionMode = InsertionMode.BeforeHead;
+                    ReprocessTheToken();
+                    break;
+                }
+
+        }
+    }
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#the-before-head-insertion-mode
+    private void InsertionModeBeforeHead() {
+        switch (token) {
+            case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
+                break; // ignore the token
+            case Tokenizer.Comment comment:
+                // Insert a comment.
+                InsertAComment(comment);
+                break;
+            case DOCTYPE:
+                // Parse error. Ignore the token.
+                AddParseError("before-head-unexpected-doctype-ignored");
+                break;
+            case StartTag { name: "html" }: throw new NotImplementedException();
+            case StartTag { name: "head" } tagToken: {
+                    // Insert an HTML element for the token.
+                    var element = InsertAnHTMLElement(tagToken);
+                    //Set the head element pointer to the newly created head element.
+                    headElementPointer = element;
+                    //Switch the insertion mode to "in head".
+                    insertionMode = InsertionMode.InHead;
+                }
+                break;
+            case EndTag { name: "head" or "body" or "html" or "br" }:
+                // Act as described in the "anything else" entry below.
+                goto default;
+            case EndTag:
+                // Parse error. Ignore the token.
+                AddParseError("before-head-unexpected-end-tag");
+                break;
+            default: {
+                    // Insert an HTML element for a "head" start tag token with no attributes.
+                    var element = InsertAnHTMLElement(new StartTag("head"));
+                    // Set the head element pointer to the newly created head element.
+                    headElementPointer = element;
+                    // Switch the insertion mode to "in head".
+                    insertionMode = InsertionMode.InHead;
+                    // Reprocess the current token.
+                    ReprocessTheToken();
+                    break;
+                }
+        }
+    }
+
 
     // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inhead
     private void InsertionModeInHead() {
@@ -1603,25 +616,55 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
         }
     }
 
-
-    // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intable
-    private void InsertionModeInTable() {
-        // https://html.spec.whatwg.org/multipage/parsing.html#clear-the-stack-back-to-a-table-context
-        var ClearTheStackBackToTableContext = () => {
-            while (!((ReadOnlySpan<string>)["table", "template", "html"]).Contains(stackOfOpenElements.Peek().localName)) {
-                stackOfOpenElements.Pop();
-            }
-        };
-
+    // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inheadnoscript
+    private void InsertionModeInHeadNoscript() {
         switch (token) {
-            case Character when currentNode is Element { localName: "table" or "tbody" or "tempalte" or "tfoot" or "thead" or "tr" }:
-                // Let the pending table character tokens be an empty list of tokens.
-                pendingTableCharacterTokens = [];
-                // Set the original insertion mode to the current insertion mode.
-                originalInsertionMode = insertionMode;
-                // Switch the insertion mode to "in table text" and reprocess the token.
-                insertionMode = InsertionMode.InTableText;
+            case DOCTYPE:
+                // Parse error. Ignore the token.
+                AddParseError("in-head-noscript-unexpected-doctype-ignored");
+                break;
+            case StartTag { name: "html" }:
+                // Process the token using the rules for the "in body" insertion mode.
+                InsertionModeInBody();
+                break;
+            case EndTag { name: "noscript" }:
+                // Pop the current node (which will be a noscript element) from the stack of open elements; the new current node will be a head element.
+                stackOfOpenElements.Pop();
+                // Switch the insertion mode to "in head".
+                insertionMode = InsertionMode.InHead;
+                break;
+            case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
+            case Tokenizer.Comment:
+            case StartTag { name: "basefont" or "bgsound" or "link" or "meta" or "noframes" or "style" }:
+                InsertionModeInHead();
+                break;
+            case EndTag { name: "br" }:
+                // Act as described in the "anything else" entry below.
+                goto default;
+            case StartTag { name: "head" or "noscript" }:
+            case EndTag:
+                // Parse error. Ignore the token.
+                AddParseError("in-head-noscript-unexpected-token-ignored");
+                break;
+            default:
+                // Parse error.
+                AddParseError("in-head-no-script-unexpected-token");
+                // Pop the current node (which will be a noscript element) from the stack of open elements; the new current node will be a head element.
+                stackOfOpenElements.Pop();
+                // Switch the insertion mode to "in head".
+                insertionMode = InsertionMode.InHead;
+                // Reprocess the token.
                 ReprocessTheToken();
+                break;
+        }
+    }
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#the-after-head-insertion-mode
+    private void InsertionModeAfterHead() {
+        switch (token) {
+            case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' } cToken:
+                // Insert the character.
+                InsertACharacter(cToken);
                 break;
             case Tokenizer.Comment comment:
                 // Insert a comment.
@@ -1629,133 +672,61 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 break;
             case DOCTYPE:
                 // Parse error. Ignore the token.
-                AddParseError("in-table-unexpeced-doctype-ignored");
+                AddParseError("after-head-unexpected-doctype-ignored");
                 break;
-            case StartTag { name: "caption" } tagToken:
-                // Clear the stack back to a table context. (See below.)
-                ClearTheStackBackToTableContext();
-                // Insert a marker at the end of the list of active formatting elements.
-                ListOfActiveFormattingElements.Add(null);
-                // Insert an HTML element for the token, then switch the insertion mode to "in caption".
+            case StartTag { name: "html" }:
+                //Process the token using the rules for the "in body" insertion mode.
+                InsertionModeInBody();
+                break;
+            case StartTag { name: "body" } tagToken:
+                // Insert an HTML element for the token.
                 InsertAnHTMLElement(tagToken);
-                insertionMode = InsertionMode.InCaption;
+                // Set the frameset-ok flag to "not ok".
+                framesetOk = false;
+                // Switch the insertion mode to "in body".
+                insertionMode = InsertionMode.InBody;
                 break;
-            case StartTag { name: "colgroup" } tagToken:
-                // Clear the stack back to a table context. (See below.)
-                ClearTheStackBackToTableContext();
-                // Insert an HTML element for the token, then switch the insertion mode to "in column group".
+            case StartTag { name: "frameset" } tagToken:
+                // Insert an HTML element for the token.
                 InsertAnHTMLElement(tagToken);
-                insertionMode = InsertionMode.InColumnGroup;
+                // Switch the insertion mode to "in frameset".
+                insertionMode = InsertionMode.InFrameset;
                 break;
-            case StartTag { name: "col" }:
-                // Clear the stack back to a table context. (See below.)
-                ClearTheStackBackToTableContext();
-                // Insert an HTML element for a "colgroup" start tag token with no attributes, then switch the insertion mode to "in column group".
-                InsertAnHTMLElement(new StartTag("colgroup"));
-                insertionMode = InsertionMode.InColumnGroup;
-                // Reprocess the current token.
-                ReprocessTheToken();
-                break;
-            case StartTag { name: "tbody" or "tfoot" or "thead" } tagToken:
-                ClearTheStackBackToTableContext();
-                InsertAnHTMLElement(tagToken);
-                insertionMode = InsertionMode.InTableBody;
-                break;
-            case StartTag { name: "td" or "th" or "tr" }:
-                // Clear the stack back to a table context. (See below.)
-                ClearTheStackBackToTableContext();
-                // Insert an HTML element for a "tbody" start tag token with no attributes, then switch the insertion mode to "in table body".
-                InsertAnHTMLElement(new StartTag("tbody"));
-                insertionMode = InsertionMode.InTableBody;
-                // Reprocess the current token.
-                ReprocessTheToken();
-                break;
-            case StartTag { name: "table" }:
+            case StartTag { name: "base" or "basefont" or "bgsound" or "link" or "meta" or "noframes" or "script" or "style" or "template" or "title" }:
                 // Parse error.
-                AddParseError("in-table-unexpected-table-start-tag");
-                // If the stack of open elements does not have a table element in table scope, ignore the token.
-                if (!HasAElementInTableScope("table")) {
-                    // ignore token
-                } else {
-                    // Otherwise:
-                    // Pop elements from this stack until a table element has been popped from the stack.
-                    while (stackOfOpenElements.Pop() is not Element { localName: "table" }) ;
-                    // Reset the insertion mode appropriately.
-                    ResetTheInsertionModeAppropriately();
-                    // Reprocess the token.
-                    ReprocessTheToken();
-                }
-                break;
-            case EndTag { name: "table" }:
-                // If the stack of open elements does not have a table element in table scope, this is a parse error; ignore the token.
-                if (!HasAElementInTableScope("table")) {
-                    AddParseError("InsertionModeInTable ENDTag: table");
-                } else {
-                    // Otherwise:
-                    // 1. Pop elements from this stack until a table element has been popped from the stack.
-                    while (true) {
-                        var element = stackOfOpenElements.Pop();
-                        if (element.localName == "table") break;
-                    }
-                    // 2. Reset the insertion mode appropriately.
-                    ResetTheInsertionModeAppropriately();
-                }
-                break;
-            case EndTag { name: "body" or "caption" or "col" or "colgroup" or "html" or "tbody" or "td" or "tfoot" or "th" or "thead" or "tr" }:
-                // Parse error. Ignore the token.
-                AddParseError("in-table-wrong-close-tag");
-                break;
-            case StartTag { name: "style" or "script" or "template" }:
-            case EndTag { name: "template" }:
+                AddParseError("AfterHead -  parse error");
+                // Push the node pointed to by the head element pointer onto the stack of open elements.
+                stackOfOpenElements.Add(headElementPointer!);
                 // Process the token using the rules for the "in head" insertion mode.
                 InsertionModeInHead();
-                break;
-            case StartTag { name: "input" } tagToken:
-                // If the token does not have an attribute with the name "type", or if it does, but that attribute's value is not an ASCII case-insensitive match for the string "hidden", then: act as described in the "anything else" entry below.
-                if (!tagToken.Attributes.Any((item) => item.name == "type" && string.Equals(item.value, "hidden", StringComparison.OrdinalIgnoreCase))) {
-                    goto default;
-                } else {
-                    // Otherwise:
-                    // Parse error.
-                    AddParseError("in-table-input");
-                    // Insert an HTML element for the token.
-                    InsertAnHTMLElement(tagToken);
-                    // Pop that input element off the stack of open elements.
-                    stackOfOpenElements.Pop();
-                    // Acknowledge the token's self-closing flag, if it is set.
-                    // todo
+                // Remove the node pointed to by the head element pointer from the stack of open elements. (It might not be the current node at this point.)
+                for (var i = stackOfOpenElements.Count - 1; i > 0; i--) {
+                    if (stackOfOpenElements[i] == headElementPointer) {
+                        stackOfOpenElements.RemoveAt(i);
+                    }
                 }
+                // Note: The head element pointer cannot be null at this point.
                 break;
-            case StartTag { name: "form" } tagToken:
-                // Parse error.
-                AddParseError("in-table-unexpected-tag-form");
-                // If there is a template element on the stack of open elements, or if the form element pointer is not null, ignore the token.
-                if (stackOfOpenElements.Any(item => item.localName == "template") || formElementPointer is not null) {
-                    // ignore token
-                } else {
-                    // Otherwise:
-                    // Insert an HTML element for the token, and set the form element pointer to point to the element created.
-                    formElementPointer = InsertAnHTMLElement(tagToken);
-                    // Pop that form element off the stack of open elements.
-                    stackOfOpenElements.Pop();
-                }
-                break;
-            case EndOfFile:
-                // Process the token using the rules for the "in body" insertion mode.
-                InsertionModeInBody();
+            case EndTag { name: "template" }: throw new NotImplementedException();
+            case EndTag { name: "body" or "html" or "br" }:
+                // Act as described in the "anything else" entry below.
+                goto default;
+            case StartTag { name: "head" }:
+            case EndTag:
+                // Parse error. Ignore the token.
+                AddParseError("in-head-unexpected-tag");
                 break;
             default:
-                // Parse error. Enable foster parenting, process the token using the rules for the "in body" insertion mode, and then disable foster parenting.
-                AddParseError("IN TABLE - default");
-                fosterParenting = true;
-                InsertionModeInBody();
-                fosterParenting = false;
+                // Insert an HTML element for a "body" start tag token with no attributes.
+                InsertAnHTMLElement(new StartTag("body"));
+                // Switch the insertion mode to "in body".
+                insertionMode = InsertionMode.InBody;
+                // Reprocess the current token.
+                ReprocessTheToken();
                 break;
         }
     }
 
-
-    // 13.2.6.4.7 The "in body" insertion mode
     // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inbody
     private void InsertionModeInBody() {
         switch (token) {
@@ -2469,6 +1440,1086 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
         }
     }
 
+    // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-incdata
+    private void InsertionModeText() {
+        switch (token) {
+            case Character cToken:
+                InsertACharacter(cToken);
+                break;
+            case EndOfFile:
+                // Parse error.
+                AddParseError("Text mode EOF");
+                // If the current node is a script element, then set its already started to true.
+                if (currentNode is Element { localName: "script" }) {
+                    // todo set already started
+                }
+                // Pop the current node off the stack of open elements.
+                stackOfOpenElements.Pop();
+                // Switch the insertion mode to the original insertion mode and reprocess the token.
+                insertionMode = originalInsertionMode;
+                ReprocessTheToken();
+                break;
+            case EndTag { name: "script" }:
+                // If the active speculative HTML parser is null and the JavaScript execution context stack is empty, then perform a microtask checkpoint.
+                // todo
+                // Let script be the current node (which will be a script element).
+                var script = currentNode;
+                // Pop the current node off the stack of open elements.
+                stackOfOpenElements.Pop();
+                // Switch the insertion mode to the original insertion mode.
+                insertionMode = originalInsertionMode;
+                // Let the old insertion point have the same value as the current insertion point. Let the insertion point be just before the next input character.
+                // todo
+                // Increment the parser's script nesting level by one.
+                // todo
+                // If the active speculative HTML parser is null, then prepare the script element script. This might cause some script to execute, which might cause new characters to be inserted into the tokenizer, and might cause the tokenizer to output more tokens, resulting in a reentrant invocation of the parser.
+                // todo
+                // Decrement the parser's script nesting level by one. If the parser's script nesting level is zero, then set the parser pause flag to false.
+                // todo
+                // Let the insertion point have the value of the old insertion point. (In other words, restore the insertion point to its previous value. This value might be the "undefined" value.)
+                // todo
+                // At this stage, if the pending parsing-blocking script is not null, then:
+                // todo
+                // If the script nesting level is not zero:
+                // Set the parser pause flag to true, and abort the processing of any nested invocations of the tokenizer, yielding control back to the caller. (Tokenization will resume when the caller returns to the "outer" tree construction stage.)
+                // todo
+                // NOTE: The tree construction stage of this particular parser is being called reentrantly, say from a call to document.write().
+
+                // Otherwise:
+                // While the pending parsing-blocking script is not null:
+
+                // 1. Let the script be the pending parsing-blocking script.
+                // todo
+                // 2. Set the pending parsing-blocking script to null.
+                // todo
+                // 3. Start the speculative HTML parser for this instance of the HTML parser.
+                // todo
+                // 4. Block the tokenizer for this instance of the HTML parser, such that the event loop will not run tasks that invoke the tokenizer.
+                // todo
+                // 5. If the parser's Document has a style sheet that is blocking scripts or the script's ready to be parser-executed is false: spin the event loop until the parser's Document has no style sheet that is blocking scripts and the script's ready to be parser-executed becomes true.
+                // todo
+                // 6. If this parser has been aborted in the meantime, return.
+                // todo
+                // NOTE: This could happen if, e.g., while the spin the event loop algorithm is running, the Document gets destroyed, or the document.open() method gets invoked on the Document.
+
+                // 7. Stop the speculative HTML parser for this instance of the HTML parser.
+                // todo
+                // 8. Unblock the tokenizer for this instance of the HTML parser, such that tasks that invoke the tokenizer can again be run.
+                // todo
+                // 9. Let the insertion point be just before the next input character.
+                // todo
+                // 10. Increment the parser's script nesting level by one (it should be zero before this step, so this sets it to one).
+                // todo
+                // 11. Execute the script element the script.
+                // todo
+                // 12. Decrement the parser's script nesting level by one. If the parser's script nesting level is zero (which it always should be at this point), then set the parser pause flag to false.
+                // todo
+                // 13. Let the insertion point be undefined again.
+                break;
+
+            case EndTag:
+                // Pop the current node off the stack of open elements.
+                stackOfOpenElements.Pop();
+                // Switch the insertion mode to the original insertion mode.                        
+                insertionMode = originalInsertionMode;
+                break;
+        }
+    }
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intable
+    private void InsertionModeInTable() {
+        // https://html.spec.whatwg.org/multipage/parsing.html#clear-the-stack-back-to-a-table-context
+        var ClearTheStackBackToTableContext = () => {
+            while (!((ReadOnlySpan<string>)["table", "template", "html"]).Contains(stackOfOpenElements.Peek().localName)) {
+                stackOfOpenElements.Pop();
+            }
+        };
+
+        switch (token) {
+            case Character when currentNode is Element { localName: "table" or "tbody" or "tempalte" or "tfoot" or "thead" or "tr" }:
+                // Let the pending table character tokens be an empty list of tokens.
+                pendingTableCharacterTokens = [];
+                // Set the original insertion mode to the current insertion mode.
+                originalInsertionMode = insertionMode;
+                // Switch the insertion mode to "in table text" and reprocess the token.
+                insertionMode = InsertionMode.InTableText;
+                ReprocessTheToken();
+                break;
+            case Tokenizer.Comment comment:
+                // Insert a comment.
+                InsertAComment(comment);
+                break;
+            case DOCTYPE:
+                // Parse error. Ignore the token.
+                AddParseError("in-table-unexpeced-doctype-ignored");
+                break;
+            case StartTag { name: "caption" } tagToken:
+                // Clear the stack back to a table context. (See below.)
+                ClearTheStackBackToTableContext();
+                // Insert a marker at the end of the list of active formatting elements.
+                ListOfActiveFormattingElements.Add(null);
+                // Insert an HTML element for the token, then switch the insertion mode to "in caption".
+                InsertAnHTMLElement(tagToken);
+                insertionMode = InsertionMode.InCaption;
+                break;
+            case StartTag { name: "colgroup" } tagToken:
+                // Clear the stack back to a table context. (See below.)
+                ClearTheStackBackToTableContext();
+                // Insert an HTML element for the token, then switch the insertion mode to "in column group".
+                InsertAnHTMLElement(tagToken);
+                insertionMode = InsertionMode.InColumnGroup;
+                break;
+            case StartTag { name: "col" }:
+                // Clear the stack back to a table context. (See below.)
+                ClearTheStackBackToTableContext();
+                // Insert an HTML element for a "colgroup" start tag token with no attributes, then switch the insertion mode to "in column group".
+                InsertAnHTMLElement(new StartTag("colgroup"));
+                insertionMode = InsertionMode.InColumnGroup;
+                // Reprocess the current token.
+                ReprocessTheToken();
+                break;
+            case StartTag { name: "tbody" or "tfoot" or "thead" } tagToken:
+                ClearTheStackBackToTableContext();
+                InsertAnHTMLElement(tagToken);
+                insertionMode = InsertionMode.InTableBody;
+                break;
+            case StartTag { name: "td" or "th" or "tr" }:
+                // Clear the stack back to a table context. (See below.)
+                ClearTheStackBackToTableContext();
+                // Insert an HTML element for a "tbody" start tag token with no attributes, then switch the insertion mode to "in table body".
+                InsertAnHTMLElement(new StartTag("tbody"));
+                insertionMode = InsertionMode.InTableBody;
+                // Reprocess the current token.
+                ReprocessTheToken();
+                break;
+            case StartTag { name: "table" }:
+                // Parse error.
+                AddParseError("in-table-unexpected-table-start-tag");
+                // If the stack of open elements does not have a table element in table scope, ignore the token.
+                if (!HasAElementInTableScope("table")) {
+                    // ignore token
+                } else {
+                    // Otherwise:
+                    // Pop elements from this stack until a table element has been popped from the stack.
+                    while (stackOfOpenElements.Pop() is not Element { localName: "table" }) ;
+                    // Reset the insertion mode appropriately.
+                    ResetTheInsertionModeAppropriately();
+                    // Reprocess the token.
+                    ReprocessTheToken();
+                }
+                break;
+            case EndTag { name: "table" }:
+                // If the stack of open elements does not have a table element in table scope, this is a parse error; ignore the token.
+                if (!HasAElementInTableScope("table")) {
+                    AddParseError("InsertionModeInTable ENDTag: table");
+                } else {
+                    // Otherwise:
+                    // 1. Pop elements from this stack until a table element has been popped from the stack.
+                    while (true) {
+                        var element = stackOfOpenElements.Pop();
+                        if (element.localName == "table") break;
+                    }
+                    // 2. Reset the insertion mode appropriately.
+                    ResetTheInsertionModeAppropriately();
+                }
+                break;
+            case EndTag { name: "body" or "caption" or "col" or "colgroup" or "html" or "tbody" or "td" or "tfoot" or "th" or "thead" or "tr" }:
+                // Parse error. Ignore the token.
+                AddParseError("in-table-wrong-close-tag");
+                break;
+            case StartTag { name: "style" or "script" or "template" }:
+            case EndTag { name: "template" }:
+                // Process the token using the rules for the "in head" insertion mode.
+                InsertionModeInHead();
+                break;
+            case StartTag { name: "input" } tagToken:
+                // If the token does not have an attribute with the name "type", or if it does, but that attribute's value is not an ASCII case-insensitive match for the string "hidden", then: act as described in the "anything else" entry below.
+                if (!tagToken.Attributes.Any((item) => item.name == "type" && string.Equals(item.value, "hidden", StringComparison.OrdinalIgnoreCase))) {
+                    goto default;
+                } else {
+                    // Otherwise:
+                    // Parse error.
+                    AddParseError("in-table-input");
+                    // Insert an HTML element for the token.
+                    InsertAnHTMLElement(tagToken);
+                    // Pop that input element off the stack of open elements.
+                    stackOfOpenElements.Pop();
+                    // Acknowledge the token's self-closing flag, if it is set.
+                    // todo
+                }
+                break;
+            case StartTag { name: "form" } tagToken:
+                // Parse error.
+                AddParseError("in-table-unexpected-tag-form");
+                // If there is a template element on the stack of open elements, or if the form element pointer is not null, ignore the token.
+                if (stackOfOpenElements.Any(item => item.localName == "template") || formElementPointer is not null) {
+                    // ignore token
+                } else {
+                    // Otherwise:
+                    // Insert an HTML element for the token, and set the form element pointer to point to the element created.
+                    formElementPointer = InsertAnHTMLElement(tagToken);
+                    // Pop that form element off the stack of open elements.
+                    stackOfOpenElements.Pop();
+                }
+                break;
+            case EndOfFile:
+                // Process the token using the rules for the "in body" insertion mode.
+                InsertionModeInBody();
+                break;
+            default:
+                // Parse error. Enable foster parenting, process the token using the rules for the "in body" insertion mode, and then disable foster parenting.
+                AddParseError("IN TABLE - default");
+                fosterParenting = true;
+                InsertionModeInBody();
+                fosterParenting = false;
+                break;
+        }
+    }
+
+
+
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intabletext
+    private void InSertionModeInTableText() {
+        switch (token) {
+            case Character { data: '\0' }: throw new NotImplementedException();
+            case Character cToken:
+                // Append the character token to the pending table character tokens list.
+                pendingTableCharacterTokens.Add(cToken);
+                break;
+            default:
+                // If any of the tokens in the pending table character tokens list are character tokens that are not ASCII whitespace,
+                // then this is a parse error: reprocess the character tokens in the pending table character tokens list using
+                // the rules given in the "anything else" entry in the "in table" insertion mode.
+                if (pendingTableCharacterTokens.Any((item) => item.data is not '\u0009' or '\u000A' or '\u000C' or '\u000D' or '\u0020')) {
+                    AddParseError("InTableText");
+                    // todo copied code
+                    var currentToken = token;
+                    fosterParenting = true;
+                    pendingTableCharacterTokens.ForEach((token) => {
+                        this.token = token;
+                        InsertionModeInBody();
+                    });
+                    token = currentToken;
+                    fosterParenting = false;
+                } else {
+                    // Otherwise, insert the characters given by the pending table character tokens list.
+                    pendingTableCharacterTokens.ForEach(InsertACharacter);
+                }
+                // Switch the insertion mode to the original insertion mode and reprocess the token.
+                insertionMode = originalInsertionMode;
+                ReprocessTheToken();
+                break;
+        }
+    }
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-incaption
+    private void InsertionModeInCaption() {
+        switch (token) {
+            case EndTag { name: "caption" }:
+                // If the stack of open elements does not have a caption element in table scope, this is a parse error; ignore the token. (fragment case)
+                if (!HasAElementInTableScope("caption")) {
+                    AddParseError("in-caption-table-scope");
+                } else {
+                    // Otherwise:
+                    // Generate implied end tags.
+                    GenerateImpliedEndTags();
+                    // Now, if the current node is not a caption element, then this is a parse error.
+                    if (currentNode is not Element { localName: "caption" }) {
+                        AddParseError("in-caption-is-not-caption");
+                    }
+                    // Pop elements from this stack until a caption element has been popped from the stack.
+                    while (true) {
+                        if (stackOfOpenElements.Pop() is Element { localName: "caption" }) break;
+                    }
+                    // Clear the list of active formatting elements up to the last marker.
+                    ClearTheListOfACtiveFormattingElementsUpToTheLastMarker();
+                    // Switch the insertion mode to "in table".
+                    insertionMode = InsertionMode.InTable;
+                }
+                break;
+            case StartTag { name: "caption" or "col" or "colgroup" or "tbody" or "td" or "tfoot" or "th" or "thead" or "tr" }:
+            case EndTag { name: "table" }:
+                //  If the stack of open elements does not have a caption element in table scope, this is a parse error; ignore the token. (fragment case)
+                if (!HasAElementInTableScope("caption")) {
+                    AddParseError("in-caption-no-caption-in-scope");
+                } else {
+                    // Otherwise:
+                    // Generate implied end tags.
+                    GenerateImpliedEndTags();
+                    // Now, if the current node is not a caption element, then this is a parse error.
+                    if (currentNode is not Element { localName: "caption" }) {
+                        AddParseError("in-caption-current-node-not-caption");
+                    }
+                    // Pop elements from this stack until a caption element has been popped from the stack.
+                    while (stackOfOpenElements.Pop() is not Element { localName: "caption" }) { }
+                    // Clear the list of active formatting elements up to the last marker.
+                    ClearTheListOfACtiveFormattingElementsUpToTheLastMarker();
+                    // Switch the insertion mode to "in table".
+                    insertionMode = InsertionMode.InTable;
+                    // Reprocess the token.
+                    ReprocessTheToken();
+                }
+                break;
+            case EndTag { name: "body" or "col" or "colgroup" or "html" or "tbody" or "td" or "td" or "tfoot" or "th" or "thead" or "tr" }:
+                // Parse error. Ignore the token.
+                AddParseError("in-caption-unexpected-end-token-ignored");
+                break;
+            default:
+                // Process the token using the rules for the "in body" insertion mode.
+                InsertionModeInBody();
+                break;
+        }
+    }
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-incolgroup
+
+    private void InsertionModeInColumnGroup() {
+        switch (token) {
+            case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' } cToken:
+                InsertACharacter(cToken);
+                break;
+            case Tokenizer.Comment comment:
+                // Insert a comment.
+                InsertAComment(comment);
+                break;
+            case DOCTYPE:
+                // Parse error. Ignore the token.
+                AddParseError("in-column-group-unexpected-doctype-ignored");
+                break;
+            case StartTag { name: "html" }:
+                // Process the token using the rules for the "in body" insertion mode.
+                InsertionModeInBody();
+                break;
+            case StartTag { name: "col" } tagToken:
+                // Insert an HTML element for the token. Immediately pop the current node off the stack of open elements.
+                InsertAnHTMLElement(tagToken);
+                stackOfOpenElements.Pop();
+                // Acknowledge the token's self-closing flag, if it is set.
+                // todo
+                break;
+            case EndTag { name: "colgroup" }:
+                // If the current node is not a colgroup element, then this is a parse error; ignore the token.
+                if (currentNode is not Element { localName: "colgroup" }) {
+                    AddParseError("in-column-group-unexpected-end-tag-ignored");
+                } else {
+                    // Otherwise, pop the current node from the stack of open elements. Switch the insertion mode to "in table".
+                    stackOfOpenElements.Pop();
+                    insertionMode = InsertionMode.InTable;
+                }
+                break;
+            case EndTag { name: "col" }:
+                // Parse error. Ignore the token.
+                AddParseError("in-column-group-unexpected-col-end-token-ignored");
+                break;
+            case StartTag { name: "template" }:
+            case EndTag { name: "template" }:
+                // Process the token using the rules for the "in head" insertion mode.
+                InsertionModeInHead();
+                break;
+            case EndOfFile:
+                // Process the token using the rules for the "in body" insertion mode.
+                InsertionModeInBody();
+                break;
+            default:
+                // If the current node is not a colgroup element, then this is a parse error; ignore the token.
+                if (currentNode is not Element { localName: "colgroup" }) {
+                    AddParseError("InColumnGroup - default");
+                } else {
+                    // Otherwise, pop the current node from the stack of open elements.
+                    stackOfOpenElements.Pop();
+                    // Switch the insertion mode to "in table".
+                    insertionMode = InsertionMode.InTable;
+                    // Reprocess the token.
+                    ReprocessTheToken();
+                }
+                break;
+        }
+    }
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intbody
+
+    private void InsertionModeInTableBody() {
+        // https://html.spec.whatwg.org/multipage/parsing.html#clear-the-stack-back-to-a-table-body-context
+        var ClearTheStackBackToTableContext = () => {
+            while (!((ReadOnlySpan<string>)["tbody", "tfoot", "thead", "template", "html"]).Contains(stackOfOpenElements.Peek().localName)) {
+                stackOfOpenElements.Pop();
+            }
+        };
+
+        switch (token) {
+            case StartTag { name: "tr" } tagToken:
+                // Clear the stack back to a table body context. (See below.)
+                ClearTheStackBackToTableContext();
+                // Insert an HTML element for the token, then switch the insertion mode to "in row".
+                InsertAnHTMLElement(tagToken);
+                insertionMode = InsertionMode.InRow;
+                break;
+            case StartTag { name: "th" or "td" }:
+                AddParseError("unexpected-cell-in-table-body");
+                // Clear the stack back to a table body context. (See below.)
+                ClearTheStackBackToTableContext();
+                // Insert an HTML element for a "tr" start tag token with no attributes, then switch the insertion mode to "in row".
+                InsertAnHTMLElement(new StartTag("tr"));
+                insertionMode = InsertionMode.InRow;
+                // Reprocess the current token.
+                ReprocessTheToken();
+                break;
+            case EndTag { name: "tbody" or "tfoot" or "thead" } tagToken:
+                // If the stack of open elements does not have an element in table scope that is an HTML element with the same tag name as the token, this is a parse error; ignore the token.
+                if (!HasAElementInTableScope(tagToken.name)) {
+                    AddParseError("in-table-body-unexpected-end-tag");
+                } else {
+                    // Otherwise:
+                    // 1. Clear the stack back to a table body context. (See below.)
+                    ClearTheStackBackToTableContext();
+                    // 2. Pop the current node from the stack of open elements. Switch the insertion mode to "in table".
+                    stackOfOpenElements.Pop();
+                    insertionMode = InsertionMode.InTable;
+                }
+                break;
+            case StartTag { name: "caption" or "col" or "colgroup" or "tbody" or "tfood" or "thead" }:
+            case EndTag { name: "table" }:
+                // If the stack of open elements does not have a tbody, thead, or tfoot element in table scope, this is a parse error; ignore the token.
+                if (!HasAElementInTableScope("tbody", "thead", "tfoot")) {
+                    AddParseError("TBODY, THEAD, TFoot");
+                } else {
+                    // Otherwise:
+                    // 1. Clear the stack back to a table body context. (See below.)
+                    ClearTheStackBackToTableContext();
+                    // 2. Pop the current node from the stack of open elements. Switch the insertion mode to "in table".
+                    stackOfOpenElements.Pop();
+                    insertionMode = InsertionMode.InTable;
+                    // 3. Reprocess the token.
+                    ReprocessTheToken();
+                }
+                break;
+            case EndTag { name: "body" or "caption" or "col" or "colgroup" or "html" or "td" or "th" or "tr" }:
+                // Parse error. Ignore the token.
+                AddParseError("in-table-body-unexpected-end-tag-ignored");
+                break;
+            default:
+                // Process the token using the rules for the "in table" insertion mode.
+                InsertionModeInTable();
+                break;
+        }
+    }
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intr
+
+    private void InsertionModeInRow() {
+        var ClearTheStackBackToTableRowContext = () => {
+            while (!((ReadOnlySpan<string>)["tr", "template", "html"]).Contains(stackOfOpenElements.Peek().localName)) {
+                stackOfOpenElements.Pop();
+            }
+        };
+        switch (token) {
+            case StartTag { name: "th" or "td" } tagToken:
+                // Clear the stack back to a table row context. (See below.)
+                ClearTheStackBackToTableRowContext();
+                // Insert an HTML element for the token, then switch the insertion mode to "in cell".
+                InsertAnHTMLElement(tagToken);
+                insertionMode = InsertionMode.InCell;
+                // Insert a marker at the end of the list of active formatting elements.
+                ListOfActiveFormattingElements.Add(null);
+                break;
+            case EndTag { name: "tr" }:
+                // If the stack of open elements does not have a tr element in table scope, this is a parse error; ignore the token.
+                if (!HasAElementInTableScope("tr")) {
+                    AddParseError("IN ROW - TR - table scope");
+                    break;
+                }
+                // Otherwise:
+
+                // 1. Clear the stack back to a table row context. (See below.)
+                ClearTheStackBackToTableRowContext();
+                // 2. Pop the current node (which will be a tr element) from the stack of open elements. Switch the insertion mode to "in table body".
+                stackOfOpenElements.Pop();
+                insertionMode = InsertionMode.InTableBody;
+                break;
+            case StartTag { name: "caption" or "col" or "colgroup" or "tbody" or "tfoot" or "thead" or "tr" }:
+            case EndTag { name: "table" }:
+                // If the stack of open elements does not have a tr element in table scope, this is a parse error; ignore the token.
+                if (!HasAElementInTableScope("tr")) {
+                    AddParseError("TR");
+                } else {
+                    // Otherwise:
+                    // 1. Clear the stack back to a table row context. (See below.)
+                    ClearTheStackBackToTableRowContext();
+                    // 2. Pop the current node (which will be a tr element) from the stack of open elements. Switch the insertion mode to "in table body".
+                    stackOfOpenElements.Pop();
+                    insertionMode = InsertionMode.InTableBody;
+                    // 3. Reprocess the token.
+                    ReprocessTheToken();
+                }
+                break;
+            case EndTag { name: "tbody" or "tfoot" or "thead" } tagToken:
+                // If the stack of open elements does not have an element in table scope that is an HTML element with the same tag name as the token, this is a parse error; ignore the token.
+                if (!HasAElementInTableScope(tagToken.name)) {
+                    AddParseError("in-row-tbody-not-in-table-scope");
+                    break;
+                }
+                // If the stack of open elements does not have a tr element in table scope, ignore the token.
+                if (!HasAElementInTableScope("tr")) {
+                    AddParseError("in-row-tr-missing");
+                    break;
+                }
+                // Otherwise:
+                // Clear the stack back to a table row context. (See below.)
+                ClearTheStackBackToTableRowContext();
+                // Pop the current node (which will be a tr element) from the stack of open elements. Switch the insertion mode to "in table body".
+                stackOfOpenElements.Pop();
+                insertionMode = InsertionMode.InTableBody;
+                // Reprocess the token.
+                ReprocessTheToken();
+                break;
+            case EndTag { name: "body" or "caption" or "col" or "colgroup" or "html" or "td" or "th" } tagToken:
+                // If the stack of open elements does not have an element in table scope that is an HTML element with the same tag name as the token, this is a parse error; ignore the token.
+                if (!HasAElementInTableScope(tagToken.name)) {
+                    AddParseError("in-row-end-tag-body");
+                    break; // ignore token
+                }
+                // If the stack of open elements does not have a tr element in table scope, ignore the token.
+                if (!HasAElementInTableScope("tr")) {
+                    break; // ignore token
+                }
+                // Otherwise:
+                // 1. Clear the stack back to a table row context. (See below.)
+                ClearTheStackBackToTableRowContext();
+                // 2. Pop the current node (which will be a tr element) from the stack of open elements. Switch the insertion mode to "in table body".
+                stackOfOpenElements.Pop();
+                insertionMode = InsertionMode.InTableBody;
+                // 3. Reprocess the token.
+                ReprocessTheToken();
+                break;
+            default:
+                InsertionModeInTable();
+                break;
+
+        }
+    }
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intd
+
+    private void InsertionModeInCell() {
+        var CloseTheCell = () => {
+
+            // Generate implied end tags.
+            GenerateImpliedEndTags();
+            // If the current node is not now a td element or a th element, then this is a parse error.
+            if (currentNode is not Element { localName: "td" or "th" }) {
+                AddParseError("unexpected-cell-end-tag");
+            }
+            // Pop elements from the stack of open elements until a td element or a th element has been popped from the stack.
+            while (true) {
+                var element = stackOfOpenElements.Pop();
+                if (element.localName is "td" or "th") break;
+            }
+            // Clear the list of active formatting elements up to the last marker.
+            ClearTheListOfACtiveFormattingElementsUpToTheLastMarker();
+            // Switch the insertion mode to "in row".
+            insertionMode = InsertionMode.InRow;
+        };
+        switch (token) {
+            case EndTag { name: "td" or "th" } tagToken:
+                // If the stack of open elements does not have an element in table scope that is an HTML element with the same tag name as that of the token, then this is a parse error; ignore the token.
+                if (!HasAElementInTableScope(tagToken.name)) {
+                    AddParseError("IN CELL - not in table scope");
+                } else {
+                    // Otherwise:
+                    // 1. Generate implied end tags.
+                    GenerateImpliedEndTags();
+                    // 2. Now, if the current node is not an HTML element with the same tag name as the token, then this is a parse error.
+                    if (currentNode.localName != tagToken.name) {
+                        AddParseError("IN CELL - Otherwise not same");
+                    }
+                    // 3. Pop elements from the stack of open elements until an HTML element with the same tag name as the token has been popped from the stack.
+                    while (true) {
+                        if (stackOfOpenElements.Pop().localName == tagToken.name) break;
+                    }
+                    // 4. Clear the list of active formatting elements up to the last marker.
+                    ClearTheListOfACtiveFormattingElementsUpToTheLastMarker();
+                    // 5. Switch the insertion mode to "in row".
+                    insertionMode = InsertionMode.InRow;
+                }
+                break;
+            case StartTag { name: "caption" or "col" or "colgroup" or "tbody" or "td" or "tfoot" or "th" or "thead" or "tr" }:
+                // Assert: The stack of open elements has a td or th element in table scope.
+                // todo
+                // Close the cell (see below) and reprocess the token.
+                CloseTheCell();
+                ReprocessTheToken();
+                break;
+            case EndTag { name: "body" or "caption" or "col" or "colgroup" or "html" }:
+                // Parse error. Ignore the token.
+                AddParseError("in-cell-unexpected-end-token-ignored");
+                break;
+            case EndTag { name: "table" or "tbody" or "tfoot" or "thead" or "tr" } tagToken:
+                // If the stack of open elements does not have an element in table scope that is an HTML element with the same tag name as that of the token, then this is a parse error; ignore the token.
+                if (!HasAElementInTableScope(tagToken.name)) {
+                    AddParseError("in-cell-unexpected-end-tag-ignored");
+                } else {
+                    // Otherwise, close the cell (see below) and reprocess the token.
+                    CloseTheCell();
+                    ReprocessTheToken();
+                }
+                break;
+            default:
+                InsertionModeInBody();
+                break;
+        }
+    }
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inselect
+
+    private void InsertionModeInSelect() {
+        switch (token) {
+            case Character { data: '\0' }:
+                // Parse error. Ignore the token.
+                AddParseError("in-select-null-character-ignored");
+                break;
+            case Character cToken:
+                InsertACharacter(cToken);
+                break;
+            case Tokenizer.Comment comment:
+                // Insert a comment.
+                InsertAComment(comment);
+                break;
+            case DOCTYPE:
+                // Parse error. Ignore the token.
+                AddParseError("in-select-unexpected-doctype-ignored");
+                break;
+            case StartTag { name: "html" }:
+                // Process the token using the rules for the "in body" insertion mode.
+                InsertionModeInBody();
+                break;
+            case StartTag { name: "option" } tagToken:
+                // If the current node is an option element, pop that node from the stack of open elements.
+                if (currentNode is Element { localName: "option" }) {
+                    stackOfOpenElements.Pop();
+                }
+                // Insert an HTML element for the token.
+                InsertAnHTMLElement(tagToken);
+                break;
+            case StartTag { name: "optgroup" } tagToken:
+                // If the current node is an option element, pop that node from the stack of open elements.
+                if (currentNode is Element { localName: "option" }) stackOfOpenElements.Pop();
+                // If the current node is an optgroup element, pop that node from the stack of open elements.
+                if (currentNode is Element { localName: "optgroup" }) stackOfOpenElements.Pop();
+                // Insert an HTML element for the token.
+                InsertAnHTMLElement(tagToken);
+                break;
+            case StartTag { name: "hr" } tagToken:
+                // If the current node is an option element, pop that node from the stack of open elements.
+                if (currentNode is Element { localName: "option" }) stackOfOpenElements.Pop();
+                // If the current node is an optgroup element, pop that node from the stack of open elements.
+                if (currentNode is Element { localName: "optgroup" }) stackOfOpenElements.Pop();
+                // Insert an HTML element for the token. Immediately pop the current node off the stack of open elements.
+                InsertAnHTMLElement(tagToken);
+                stackOfOpenElements.Pop();
+                // Acknowledge the token's self-closing flag, if it is set.
+                // todo
+                break;
+            case EndTag { name: "optgroup" }:
+                // First, if the current node is an option element, and the node immediately before it in the stack of open elements is an optgroup element, then pop the current node from the stack of open elements.
+                if (currentNode is Element { localName: "option" } && stackOfOpenElements[^2] is Element { localName: "optgroup" }) stackOfOpenElements.Pop();
+                // If the current node is an optgroup element, then pop that node from the stack of open elements. Otherwise, this is a parse error; ignore the token.
+                if (currentNode is Element { localName: "optgroup" }) {
+                    stackOfOpenElements.Pop();
+                } else {
+                    AddParseError("in-select-unexpected-optgroup-endtag");
+                }
+                break;
+            case EndTag { name: "option" }:
+                // If the current node is an option element, then pop that node from the stack of open elements. Otherwise, this is a parse error; ignore the token.
+                if (currentNode is Element { localName: "option" }) {
+                    stackOfOpenElements.Pop();
+                } else {
+                    AddParseError("IN SELECT - END OPTION");
+                }
+                break;
+            case EndTag { name: "select" }:
+                // If the stack of open elements does not have a select element in select scope, this is a parse error; ignore the token. (fragment case)
+                if (!HasAElementInSelectScope("select")) {
+                    AddParseError("IN SELECT: no select in scope");
+                } else {
+                    // Otherwise:
+                    // Pop elements from the stack of open elements until a select element has been popped from the stack.
+                    while (true) {
+                        if (stackOfOpenElements.Pop() is Element { localName: "select" }) {
+                            break;
+                        }
+                    }
+                    // Reset the insertion mode appropriately.
+                    ResetTheInsertionModeAppropriately();
+                }
+                break;
+
+            case StartTag { name: "select" }:
+                // Parse error.
+                AddParseError("IN SELECT: select in select");
+                // If the stack of open elements does not have a select element in select scope, ignore the token. (fragment case)
+                if (!HasAElementInSelectScope("select")) {
+
+                } else {
+                    // Otherwise:
+                    // 1. Pop elements from the stack of open elements until a select element has been popped from the stack.
+                    while (true) {
+                        if (stackOfOpenElements.Pop() is Element { localName: "select" }) {
+                            break;
+                        }
+                    }
+                    // 2. Reset the insertion mode appropriately.
+                    ResetTheInsertionModeAppropriately();
+                    // 3. NOTE: It just gets treated like an end tag.
+                }
+                break;
+            case StartTag { name: "input" or "keygen" or "textarea" }:
+                // Parse error.
+                AddParseError("in-select-unexpected-start-tag");
+                // If the stack of open elements does not have a select element in select scope, ignore the token. (fragment case)
+                if (!HasAElementInSelectScope("select")) {
+                    // ignore token
+                } else {
+                    // Otherwise:
+                    // Pop elements from the stack of open elements until a select element has been popped from the stack.
+                    while (stackOfOpenElements.Pop() is not Element { localName: "select" }) { }
+                    // Reset the insertion mode appropriately.
+                    ResetTheInsertionModeAppropriately();
+                    // Reprocess the token.
+                    ReprocessTheToken();
+                }
+                break;
+            case StartTag { name: "script" or "template" }:
+            case EndTag { name: "template" }:
+                // Process the token using the rules for the "in head" insertion mode.
+                InsertionModeInHead();
+                break;
+            case EndOfFile:
+                InsertionModeInBody();
+                break;
+            default:
+                AddParseError("IN SELECT: default");
+                // ignore the token;
+                break;
+
+        }
+    }
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inselectintable
+
+    private void InsertionModeInSelectInTable() {
+        switch (token) {
+            case StartTag { name: "caption" or "table" or "tbody" or "tfoot" or "thead" or "tr" or "td" or "th" }:
+                // Parse error.
+                AddParseError("select-in-table-unexpected-start-tag");
+                // Pop elements from the stack of open elements until a select element has been popped from the stack.
+                while (stackOfOpenElements.Pop() is not Element { localName: "select" }) { }
+                // Reset the insertion mode appropriately.
+                ResetTheInsertionModeAppropriately();
+                // Reprocess the token.
+                ReprocessTheToken();
+                break;
+            case EndTag { name: "caption" or "table" or "tbody" or "tfoot" or "thead" or "tr" or "td" or "th" } tagToken:
+                // Parse error.
+                AddParseError("in-select-in-table-unexpected-end-tag");
+                // If the stack of open elements does not have an element in table scope that is an HTML element with the same tag name as that of the token, then ignore the token.
+                if (!HasAElementInTableScope(tagToken.name)) {
+                    break;
+                } else {
+                    // Otherwise:
+                    // 1. Pop elements from the stack of open elements until a select element has been popped from the stack.
+                    while (stackOfOpenElements.Pop() is not Element { localName: "select" }) { }
+                    // 2. Reset the insertion mode appropriately.
+                    ResetTheInsertionModeAppropriately();
+                    // 3. Reprocess the token.
+                    ReprocessTheToken();
+                }
+                break;
+            default:
+                // Parse error. Ignore the token.
+                AddParseError("in-select-unexpected-token-ignored");
+                break;
+        }
+    }
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intemplate
+    private void InsertionModeInTemplate() {
+        switch (token) {
+            case Character:
+            case Tokenizer.Comment:
+            case DOCTYPE:
+                // Process the token using the rules for the "in body" insertion mode.
+                InsertionModeInBody();
+                break;
+            case StartTag { name: "base" or "basefont" or "bgsound" or "link" or "meta" or "noframes" or "script" or "style" or "template" or "title" }:
+            case EndTag { name: "template" }:
+                // Process the token using the rules for the "in head" insertion mode.
+                InsertionModeInHead();
+                break;
+            case StartTag { name: "caption" or "colgroup" or "tbody" or "tfoot" or "thead" }:
+                // Pop the current template insertion mode off the stack of template insertion modes.
+                stackOfTemplateInsertionModes.Pop();
+                // Push "in table" onto the stack of template insertion modes so that it is the new current template insertion mode.
+                stackOfTemplateInsertionModes.Push(InsertionMode.InTable);
+                // Switch the insertion mode to "in table", and reprocess the token.   
+                insertionMode = InsertionMode.InTable;
+                ReprocessTheToken();
+                break;
+            case StartTag { name: "col" }:
+                // Pop the current template insertion mode off the stack of template insertion modes.
+                stackOfTemplateInsertionModes.Pop();
+                // Push "in column group" onto the stack of template insertion modes so that it is the new current template insertion mode.
+                stackOfTemplateInsertionModes.Push(InsertionMode.InColumnGroup);
+                // Switch the insertion mode to "in column group", and reprocess the token. 
+                insertionMode = InsertionMode.InColumnGroup;
+                ReprocessTheToken();
+                break;
+            case StartTag { name: "tr" }:
+                // Pop the current template insertion mode off the stack of template insertion modes.
+                stackOfTemplateInsertionModes.Pop();
+                // Push "in table body" onto the stack of template insertion modes so that it is the new current template insertion mode.
+                stackOfTemplateInsertionModes.Push(InsertionMode.InTableBody);
+                // Switch the insertion mode to "in table body", and reprocess the token.
+                insertionMode = InsertionMode.InTableBody;
+                ReprocessTheToken();
+                break;
+            case StartTag { name: "td" or "th" }:
+                // Pop the current template insertion mode off the stack of template insertion modes.
+                stackOfTemplateInsertionModes.Pop();
+                // Push "in row" onto the stack of template insertion modes so that it is the new current template insertion mode.
+                stackOfTemplateInsertionModes.Push(InsertionMode.InRow);
+                // Switch the insertion mode to "in row", and reprocess the token.
+                insertionMode = InsertionMode.InRow;
+                ReprocessTheToken();
+                break;
+            case StartTag:
+                // Pop the current template insertion mode off the stack of template insertion modes.
+                stackOfTemplateInsertionModes.Pop();
+                // Push "in body" onto the stack of template insertion modes so that it is the new current template insertion mode.
+                stackOfTemplateInsertionModes.Push(InsertionMode.InBody);
+                // Switch the insertion mode to "in body", and reprocess the token.
+                insertionMode = InsertionMode.InBody;
+                ReprocessTheToken();
+                break;
+            case EndTag:
+                // Parse error. Ignore the token.
+                AddParseError("in-template-unexpected-end-tag-ignored");
+                break;
+            case EndOfFile:
+                // If there is no template element on the stack of open elements, then stop parsing. (fragment case)
+                if (!stackOfOpenElements.Any(item => item.localName == "template")) {
+                    StopParsing();
+                    break;
+                } else {
+                    // Otherwise, this is a parse error.
+                    AddParseError("in-template-eof");
+                    // Pop elements from the stack of open elements until a template element has been popped from the stack.
+                    while (stackOfOpenElements.Pop() is not Element { localName: "template" }) { }
+                    // Clear the list of active formatting elements up to the last marker.
+                    ClearTheListOfACtiveFormattingElementsUpToTheLastMarker();
+                    // Pop the current template insertion mode off the stack of template insertion modes.
+                    stackOfTemplateInsertionModes.Pop();
+                    // Reset the insertion mode appropriately.
+                    ResetTheInsertionModeAppropriately();
+                    // Reprocess the token.
+                    ReprocessTheToken();
+                }
+                break;
+        }
+    }
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-afterbody
+
+    private void InsertionModeAfterBody() {
+        switch (token) {
+            case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
+                // Process the token using the rules for the "in body" insertion mode.
+                InsertionModeInBody();
+                break;
+            case Tokenizer.Comment comment:
+                // Insert a comment as the last child of the first element in the stack of open elements (the html element).
+                InsertAComment(comment, (stackOfOpenElements[0], stackOfOpenElements[0].childNodes.Count));
+                break;
+            case DOCTYPE:
+                // Parse error. Ignore the token.
+                AddParseError("after-body-unexpected-doctype-ignored");
+                break;
+            case StartTag { name: "html" }:
+                // Process the token using the rules for the "in body" insertion mode.
+                InsertionModeInBody();
+                break;
+            case EndTag { name: "html" }:
+                // If the parser was created as part of the HTML fragment parsing algorithm, this is a parse error; ignore the token. (fragment case)
+                // todo parse error
+                // Otherwise, switch the insertion mode to "after after body".
+                insertionMode = InsertionMode.AfterAfterBody;
+                break;
+            case EndOfFile:
+                StopParsing();
+                break;
+            default:
+                // Parse error. Switch the insertion mode to "in body" and reprocess the token.
+                AddParseError("After Body - unexpected tag");
+                insertionMode = InsertionMode.InBody;
+                ReprocessTheToken();
+                break;
+        }
+    }
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inframeset
+    private void InsertionModeInFrameset() {
+        switch (token) {
+            case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' } cToken:
+                // Insert the character.
+                InsertACharacter(cToken);
+                break;
+            case Tokenizer.Comment comment:
+                // Insert a comment.
+                InsertAComment(comment);
+                break;
+            case DOCTYPE:
+                // Parse error. Ignore the token.
+                AddParseError("in-frameset-unexpected-doctype");
+                break;
+            case StartTag { name: "html" }:
+                // Process the token using the rules for the "in body" insertion mode.
+                InsertionModeInBody();
+                break;
+            case StartTag { name: "frameset" } tagToken:
+                // Insert an HTML element for the token.
+                InsertAnHTMLElement(tagToken);
+                break;
+            case EndTag { name: "frameset" }:
+                // If the current node is the root html element, then this is a parse error; ignore the token. (fragment case)
+                if (currentNode.localName == "html") {
+                    AddParseError("In frameset root html");
+                } else {
+                    // Otherwise, pop the current node from the stack of open elements.
+                    stackOfOpenElements.Pop();
+                }
+                // If the parser was not created as part of the HTML fragment parsing algorithm (fragment case), and the current node is no longer a frameset element, then switch the insertion mode to "after frameset".
+                if (currentNode.localName != "frameset") {
+                    // todo add fragment case 
+                    insertionMode = InsertionMode.AfterFrameset;
+                }
+                break;
+            case StartTag { name: "frame" } tagToken:
+                // Insert an HTML element for the token. Immediately pop the current node off the stack of open elements.
+                InsertAnHTMLElement(tagToken);
+                stackOfOpenElements.Pop();
+                // Acknowledge the token's self-closing flag, if it is set.
+                // todo
+                break;
+            case StartTag { name: "noframes" }:
+                // Process the token using the rules for the "in head" insertion mode.
+                InsertionModeInHead();
+                break;
+            case EndOfFile:
+                // If the current node is not the root html element, then this is a parse error.
+                if (currentNode.localName != "html") {
+                    AddParseError("in-frameset-eof-not-html");
+                }
+                // Note: The current node can only be the root html element in the fragment case.
+                // Stop parsing.
+                StopParsing();
+                break;
+            default:
+                // Parse error. Ignore the token.
+                AddParseError("in-frameset-unexpected-token");
+                break;
+        }
+    }
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-afterframeset
+    private void InsertionModeAfterFrameset() {
+        switch (token) {
+            case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' } cToken:
+                // Insert the character.
+                InsertACharacter(cToken);
+                break;
+            case Tokenizer.Comment comment:
+                // Insert a comment.
+                InsertAComment(comment);
+                break;
+            case DOCTYPE:
+                // Parse error. Ignore the token.
+                AddParseError("after-frameset-unexpected-doctype-ignored");
+                break;
+            case StartTag { name: "html" }:
+                // Process the token using the rules for the "in body" insertion mode.
+                InsertionModeInBody();
+                break;
+            case EndTag { name: "html" }:
+                // Switch the insertion mode to "after after frameset".
+                insertionMode = InsertionMode.AfterAfterFrameset;
+                break;
+            case StartTag { name: "noframes" }:
+                // Process the token using the rules for the "in head" insertion mode.
+                InsertionModeInHead();
+                break;
+            case EndOfFile:
+                // Stop parsing.
+                StopParsing();
+                break;
+            default:
+                // Parse error. Ignore the token.
+                AddParseError("after-frameset-unexpected-token");
+                break;
+        }
+    }
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#the-after-after-body-insertion-mode
+
+    private void InsertionModeAfterAfterBody() {
+        switch (token) {
+            case Tokenizer.Comment comment:
+                // Insert a comment as the last child of the Document object.
+                InsertAComment(comment, (document, document.childNodes.Count));
+                break;
+            case DOCTYPE:
+            case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
+            case StartTag { name: "html" }:
+                InsertionModeInBody();
+                break;
+            case EndOfFile:
+                StopParsing();
+                break;
+            default:
+                //Parse error. Switch the insertion mode to "in body" and reprocess the token.
+                AddParseError("expected-eof-but-got-start-tag");
+                insertionMode = InsertionMode.InBody;
+                ReprocessTheToken();
+                break;
+        }
+    }
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#the-after-after-frameset-insertion-mode
+    private void InsertionModeAfterAfterFrameset() {
+        switch (token) {
+            case Tokenizer.Comment comment:
+                // Insert a comment as the last child of the Document object.
+                InsertAComment(comment, (document, document.childNodes.Count));
+                break;
+            case DOCTYPE:
+            case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
+            case StartTag { name: "html" }:
+                // Process the token using the rules for the "in body" insertion mode.
+                InsertionModeInBody();
+                break;
+            case EndOfFile:
+                StopParsing();
+                break;
+            case StartTag { name: "noframes" }:
+                // Process the token using the rules for the "in head" insertion mode.
+                InsertionModeInHead();
+                break;
+            default:
+                // Parse error. Ignore the token.
+                AddParseError("after-after-frameset-unexpected-token-ignored");
+                break;
+        }
+    }
 
     // 13.2.4.2 The stack of open elements
     private static readonly string[] specialListElements = ["address", "applet", "area", "article", "aside", "base", "basefont", "bgsound", "blockquote", "body", "br", "button", "caption", "center", "col", "colgroup",
