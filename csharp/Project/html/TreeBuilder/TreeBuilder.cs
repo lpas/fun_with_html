@@ -305,7 +305,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             break;
                         case StartTag { name: "html" }:
                             // Process the token using the rules for the "in body" insertion mode.
-                            if (InsertionModeInBody(token)) {
+                            if (!InsertionModeInBody(token)) {
                                 return;
                             }
                             break;
