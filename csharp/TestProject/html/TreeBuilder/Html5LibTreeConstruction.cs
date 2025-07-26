@@ -14,7 +14,7 @@ public sealed class Html5LibTreeConstruction {
         // adoption02
         ("blocks.dat", ([],[],[])),
         ("comments01.dat", ([],[],[1,2,3,4,6,7,9,10,11,12,13])),
-        ("doctype01.dat", ([],[],[2,3,4,7,8,9,10,11,12,16,17,18,19,20,21,23,25,30,32,33,34,35,36])),
+        ("doctype01.dat", ([],[],[2,3,4,7,8,9,10,11,12,16,17,18,19,20,21,23,25,30,33,34,35,36])),
         ("domjs-unsafe.dat", ([
             0,1,2, 43,44,45,46,47,48 //svg
         ],[4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,36],[3])),
@@ -25,7 +25,7 @@ public sealed class Html5LibTreeConstruction {
         20, // adopting index
         22, // svg
         23, // math
-        ],[19,],[1,2,3,4,11])),
+        ],[19,],[1,2,3,11])),
         ("inbody01.dat", ([3,],[],[])), // not implemented
         ("isindex.dat", ([],[1],[])), // tree compare
         ("main-element.dat", ([2],[],[])), // svg
@@ -55,13 +55,13 @@ public sealed class Html5LibTreeConstruction {
             91, 110, // index out of bounds
             98,99, // svg
         ],[1,2,3,4,10,11,12, 20,37,40,41,44,64,65,66,67,68,76,79,80,81,82,83,84,85,86,87,88,89,92,93,94,95,96,97,101,107,109,110,111],
-        [25,26,27,29,30,31,32,33,35,38,45,57, 106])),        
+        [25,26,27,29,30,31,32,33,35,38,45, 106])),        
         // tests_innerHTML_1
         ("tests1.dat", ([29, 30, 57, 99, // tree building has problems infinity running tests
             70, 71, 72, 73, 74, 75,   // adoption agency index out of range
             102], // not implement it),
-            [22, 23, 31, 32, 51, 52, 53, 56, 60, 77, 78, 79, 90, 95, 96, 101, 110],
-            [27, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 52, 55] // tree is ok but parse error miss match
+            [22, 23, 31, 32, 51, 56, 60, 77, 78, 79, 90, 95, 96, 101, 110],
+            [27, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48] // tree is ok but parse error miss match
         )),
         ("tests2.dat", ([
             17, 24, 30, 31, // tokenizer not implemented
@@ -70,7 +70,7 @@ public sealed class Html5LibTreeConstruction {
             9, // adopting agency
             10,12,14,18, 26, 27,
         ],[
-            16, 20, 21, 22, 23, 25, 28, 34, 40, 42, 58, 59, 61
+            16, 20, 21, 22, 23, 25, 28, 34, 42, 58, 59, 61
         ])),
         ("tests3.dat", ([],[
             4, 5, 6, 7, 11, 16, 17,18, // need peek token in body <pre> & <textarea>
@@ -91,7 +91,7 @@ public sealed class Html5LibTreeConstruction {
             23 // select
         ],[
             1, 7,8,11, 12, 15, 19, 20, 21, 22, 30, 31, 32
-        ],[29])),
+        ],[])),
         ("tests8.dat", ([
         ],[
             4, 5, 6, 7,8,9,
@@ -138,7 +138,7 @@ public sealed class Html5LibTreeConstruction {
         ("tests26.dat", ([0,3, 4, // infinity running
         10,11,16,17, // svg
         12,13,18,19 //math
-        ],[2,9],[1,5,6,7,8,14])),
+        ],[2,9],[14])),
         // tricky01
         ("webkit01.dat", ([
             15, // tokenizer
@@ -150,8 +150,8 @@ public sealed class Html5LibTreeConstruction {
                 12,13, //index out of bounds
                 19, 20, 22, //svg
                 23, 24, //math
-                30, 31, 32, 33, 34, //infinity spinning
-        ],[5,10,14,15],[2,4])),
+                15, 30, 31, 32, 33, 34,  //infinity spinning
+        ],[5,10,14],[4])),
     ];
 
 

@@ -1202,9 +1202,6 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
             case EndTag { name: "a" or "b" or "big" or "code" or "em" or "font" or "i" or "s" or "small" or "strike" or "strong" or "tt" or "u" } tagToken:
                 // Run the adoption agency algorithm for the token.
                 AdoptionAgencyAlgorithm(tagToken);
-                if (AdoptionAgencyAlgorithm(tagToken)) {
-                    InsertionModeInBodyAnyOtherEndTag(tagToken);
-                }
                 break;
             case StartTag { name: "applet" or "marquee" or "object" } tagToken:
                 // Reconstruct the active formatting elements, if any.
