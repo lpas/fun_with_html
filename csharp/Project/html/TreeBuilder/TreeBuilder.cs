@@ -143,7 +143,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
 
     private List<InsertionMode> stackOfTemplateInsertionModes = [];
 
-
+    private bool finishedParsing = false;
     private Token token;
     private bool shouldReprocessToken = false;
 
@@ -162,6 +162,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
 
     public void build() {
         while (true) {
+            if (finishedParsing) break;
             token = GetNextToken();
             if (debugPrint) Debug.WriteLine(token);
 
@@ -305,9 +306,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             break;
                         case StartTag { name: "html" }:
                             // Process the token using the rules for the "in body" insertion mode.
-                            if (!InsertionModeInBody(token)) {
-                                return;
-                            }
+                            InsertionModeInBody(token);
                             break;
                         case EndTag { name: "noscript" }:
                             // Pop the current node (which will be a noscript element) from the stack of open elements; the new current node will be a head element.
@@ -359,11 +358,8 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             break;
                         case StartTag { name: "html" }:
                             //Process the token using the rules for the "in body" insertion mode.
-                            if (!InsertionModeInBody(token)) {
-                                return;
-                            }
+                            InsertionModeInBody(token);
                             break;
-
                         case StartTag { name: "body" } tagToken:
                             // Insert an HTML element for the token.
                             InsertAnHTMLElement(tagToken);
@@ -415,11 +411,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // 13.2.6.4.7 The "in body" insertion mode
                 // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inbody
                 case InsertionMode.InBody:
-                    bool flowControl = InsertionModeInBody(token);
-                    if (!flowControl) {
-                        return;
-                    }
-
+                    InsertionModeInBody(token);
                     break;
                 // 13.2.6.4.8 The "text" insertion mode
                 // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-incdata    
@@ -511,9 +503,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // 13.2.6.4.9 The "in table" insertion mode
                 // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intable
                 case InsertionMode.InTable: {
-                        if (InsertionModeInTable(token)) {
-                            return;
-                        }
+                        InsertionModeInTable(token);
                         break;
                     }
                 // 13.2.6.4.10 The "in table text" insertion mode
@@ -534,9 +524,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                                     // todo copied code
                                     fosterParenting = true;
                                     pendingTableCharacterTokens.ForEach((token) => {
-                                        if (!InsertionModeInBody(token)) {
-                                            throw new NotImplementedException();
-                                        }
+                                        InsertionModeInBody(token);
                                     });
                                     fosterParenting = false;
                                 } else {
@@ -605,9 +593,8 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             AddParseError("in-caption-unexpected-end-token-ignored");
                             break;
                         default:
-                            if (!InsertionModeInBody(token)) {
-                                return;
-                            }
+                            // Process the token using the rules for the "in body" insertion mode.
+                            InsertionModeInBody(token);
                             break;
                     }
                     break;
@@ -628,9 +615,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             break;
                         case StartTag { name: "html" }:
                             // Process the token using the rules for the "in body" insertion mode.
-                            if (!InsertionModeInBody(token)) {
-                                return;
-                            }
+                            InsertionModeInBody(token);
                             break;
                         case StartTag { name: "col" } tagToken:
                             // Insert an HTML element for the token. Immediately pop the current node off the stack of open elements.
@@ -660,9 +645,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             break;
                         case EndOfFile:
                             // Process the token using the rules for the "in body" insertion mode.
-                            if (!InsertionModeInBody(token)) {
-                                return;
-                            }
+                            InsertionModeInBody(token);
                             break;
                         default:
                             // If the current node is not a colgroup element, then this is a parse error; ignore the token.
@@ -742,10 +725,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                                 break;
                             default:
                                 // Process the token using the rules for the "in table" insertion mode.
-                                if (InsertionModeInTable(token)) {
-                                    return;
-                                }
-                                ;
+                                InsertionModeInTable(token);
                                 break;
                         }
 
@@ -840,10 +820,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                                 ReprocessTheToken();
                                 break;
                             default:
-                                if (InsertionModeInTable(token)) {
-                                    return;
-                                }
-                                ;
+                                InsertionModeInTable(token);
                                 break;
 
                         }
@@ -915,9 +892,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             }
                             break;
                         default:
-                            if (!InsertionModeInBody(token)) {
-                                return;
-                            }
+                            InsertionModeInBody(token);
                             break;
                     }
                     break;
@@ -943,9 +918,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             break;
                         case StartTag { name: "html" }:
                             // Process the token using the rules for the "in body" insertion mode.
-                            if (!InsertionModeInBody(token)) {
-                                return;
-                            }
+                            InsertionModeInBody(token);
                             break;
                         case StartTag { name: "option" } tagToken:
                             // If the current node is an option element, pop that node from the stack of open elements.
@@ -1050,9 +1023,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             InsertionModeInHead(token);
                             break;
                         case EndOfFile:
-                            if (!InsertionModeInBody(token)) {
-                                return;
-                            }
+                            InsertionModeInBody(token);
                             break;
                         default:
                             AddParseError("IN SELECT: default");
@@ -1104,9 +1075,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                         case Tokenizer.Comment:
                         case DOCTYPE:
                             // Process the token using the rules for the "in body" insertion mode.
-                            if (!InsertionModeInBody(token)) {
-                                return;
-                            }
+                            InsertionModeInBody(token);
                             break;
                         case StartTag { name: "base" or "basefont" or "bgsound" or "link" or "meta" or "noframes" or "script" or "style" or "template" or "title" }:
                         case EndTag { name: "template" }:
@@ -1166,7 +1135,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             // If there is no template element on the stack of open elements, then stop parsing. (fragment case)
                             if (!stackOfOpenElements.Any(item => item.localName == "template")) {
                                 StopParsing();
-                                return;
+                                break;
                             } else {
                                 // Otherwise, this is a parse error.
                                 AddParseError("in-template-eof");
@@ -1190,9 +1159,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                     switch (token) {
                         case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
                             // Process the token using the rules for the "in body" insertion mode.
-                            if (!InsertionModeInBody(token)) {
-                                return;
-                            }
+                            InsertionModeInBody(token);
                             break;
                         case Tokenizer.Comment comment:
                             // Insert a comment as the last child of the first element in the stack of open elements (the html element).
@@ -1204,9 +1171,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             break;
                         case StartTag { name: "html" }:
                             // Process the token using the rules for the "in body" insertion mode.
-                            if (!InsertionModeInBody(token)) {
-                                throw new NotImplementedException();
-                            }
+                            InsertionModeInBody(token);
                             break;
                         case EndTag { name: "html" }:
                             // If the parser was created as part of the HTML fragment parsing algorithm, this is a parse error; ignore the token. (fragment case)
@@ -1216,7 +1181,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             break;
                         case EndOfFile:
                             StopParsing();
-                            return;
+                            break;
                         default:
                             // Parse error. Switch the insertion mode to "in body" and reprocess the token.
                             AddParseError("After Body - unexpected tag");
@@ -1244,9 +1209,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             break;
                         case StartTag { name: "html" }:
                             // Process the token using the rules for the "in body" insertion mode.
-                            if (!InsertionModeInBody(token)) {
-                                return;
-                            }
+                            InsertionModeInBody(token);
                             break;
                         case StartTag { name: "frameset" } tagToken:
                             // Insert an HTML element for the token.
@@ -1285,7 +1248,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             // Note: The current node can only be the root html element in the fragment case.
                             // Stop parsing.
                             StopParsing();
-                            return;
+                            break;
                         default:
                             // Parse error. Ignore the token.
                             AddParseError("in-frameset-unexpected-token");
@@ -1310,9 +1273,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             break;
                         case StartTag { name: "html" }:
                             // Process the token using the rules for the "in body" insertion mode.
-                            if (!InsertionModeInBody(token)) {
-                                return;
-                            }
+                            InsertionModeInBody(token);
                             break;
                         case EndTag { name: "html" }:
                             // Switch the insertion mode to "after after frameset".
@@ -1341,13 +1302,11 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                         case DOCTYPE:
                         case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
                         case StartTag { name: "html" }:
-                            if (!InsertionModeInBody(token)) {
-                                throw new NotImplementedException();
-                            }
+                            InsertionModeInBody(token);
                             break;
                         case EndOfFile:
                             StopParsing();
-                            return;
+                            break;
                         default:
                             //Parse error. Switch the insertion mode to "in body" and reprocess the token.
                             AddParseError("expected-eof-but-got-start-tag");
@@ -1367,13 +1326,11 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                         case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
                         case StartTag { name: "html" }:
                             // Process the token using the rules for the "in body" insertion mode.
-                            if (!InsertionModeInBody(token)) {
-                                return;
-                            }
+                            InsertionModeInBody(token);
                             break;
                         case EndOfFile:
                             StopParsing();
-                            return;
+                            break;
                         case StartTag { name: "noframes" }:
                             // Process the token using the rules for the "in head" insertion mode.
                             InsertionModeInHead(token);
@@ -1461,9 +1418,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 break;
             case StartTag { name: "html" }:
                 // Process the token using the rules for the "in body" insertion mode.
-                if (!InsertionModeInBody(token)) {
-                    throw new NotImplementedException();
-                }
+                InsertionModeInBody(token);
                 break;
             case StartTag { name: "base" or "basefont" or "bgsound" or "link" } tagToken:
                 // Insert an HTML element for the token. Immediately pop the current node off the stack of open elements.
@@ -1644,7 +1599,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
 
 
     // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intable
-    private bool InsertionModeInTable(Token? token) {
+    private void InsertionModeInTable(Token? token) {
         // https://html.spec.whatwg.org/multipage/parsing.html#clear-the-stack-back-to-a-table-context
         var ClearTheStackBackToTableContext = () => {
             while (!((ReadOnlySpan<string>)["table", "template", "html"]).Contains(stackOfOpenElements.Peek().localName)) {
@@ -1781,28 +1736,22 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 break;
             case EndOfFile:
                 // Process the token using the rules for the "in body" insertion mode.
-                if (!InsertionModeInBody(token)) {
-                    return true;
-                }
+                InsertionModeInBody(token);
                 break;
             default:
                 // Parse error. Enable foster parenting, process the token using the rules for the "in body" insertion mode, and then disable foster parenting.
                 AddParseError("IN TABLE - default");
                 fosterParenting = true;
-                if (!InsertionModeInBody(token)) {
-                    return true;
-                }
+                InsertionModeInBody(token);
                 fosterParenting = false;
                 break;
         }
-
-        return false;
     }
 
 
     // 13.2.6.4.7 The "in body" insertion mode
     // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inbody
-    private bool InsertionModeInBody(Token? token) {
+    private void InsertionModeInBody(Token? token) {
         switch (token) {
             case Character { data: '\0' }:
                 // Parse error. Ignore the token.
@@ -1896,7 +1845,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                     }
                     // Stop parsing.
                     StopParsing();
-                    return false;
+                    break;
                 }
             case EndTag { name: "body" }:
                 // If the stack of open elements does not have a body element in scope, this is a parse error; ignore the token.
@@ -2481,8 +2430,6 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 InsertionModeInBodyAnyOtherEndTag(tagToken);
                 break;
         }
-
-        return true;
     }
 
     private void InsertionModeInBodyAnyOtherEndTag(Tag tagToken) {
@@ -2824,6 +2771,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
     // 13.2.7 the End
     // https://html.spec.whatwg.org/multipage/parsing.html#stop-parsing
     private void StopParsing() {
+        finishedParsing = true;
         //todo     
     }
 
