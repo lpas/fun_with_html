@@ -412,8 +412,8 @@ public class Tokenizer(string content) {
                 State.AfterDOCTYPESystemIdentifierState => AfterDOCTYPESystemIdentifierState(),
                 State.BogusDoctypeState => BogusDoctypeState(),
                 State.CDATASectionState => CDATASectionState(),
-                State.CDATASectionBracketState => throw new NotImplementedException(),
-                State.CDATASectionEndState => throw new NotImplementedException(),
+                State.CDATASectionBracketState => CDATASectionBracketState(),
+                State.CDATASectionEndState => CDATASectionEndState(),
                 State.CharacterReferenceState => CharacterReferenceState(),
                 State.NamedCharacterReferenceState => NamedCharacterReferenceState(),
                 State.AmbiguousAmpersandState => throw new NotImplementedException(),
@@ -1106,7 +1106,12 @@ public class Tokenizer(string content) {
             ConsumeNextCharacters(7);
             return SetState(State.DOCTYPEState);
         } else if (content.Length >= index + 7 && content[index..(index + 7)].Equals("[CDATA[")) {
-            throw new NotImplementedException();
+            // Consume those characters.
+            ConsumeNextCharacters(7);
+            //  If there is an adjusted current node and it is not an element in the HTML namespace, then switch to the CDATA section state.
+            //  Otherwise, this is a cdata-in-html-content parse error. Create a comment token whose data is the "[CDATA[" string. Switch to the bogus comment state.
+            // todo the if is missing fully here we need the tree builder here
+            return SetState(State.CDATASectionState);
         } else {
             AddParseError("incorrectly-opened-comment", Col + 1);
             currentCommentTag = new();
@@ -1795,6 +1800,36 @@ public class Tokenizer(string content) {
                 return new EndOfFile();
             default:
                 return new Character((char)c);
+        }
+    }
+
+    // 13.2.5.70 CDATA section bracket state
+    // https://html.spec.whatwg.org/multipage/parsing.html#cdata-section-bracket-state
+    private Token? CDATASectionBracketState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case ']':
+                return SetState(State.CDATASectionEndState);
+            default:
+                SetState(State.CDATASectionState);
+                return new Character(']');
+        }
+    }
+
+    // 13.2.5.71 CDATA section end state
+    // https://html.spec.whatwg.org/multipage/parsing.html#cdata-section-end-state
+    private Token? CDATASectionEndState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case ']':
+                return new Character(']');
+            case '>':
+                return SetState(State.DataState);
+            default:
+                currentTokens.Enqueue(new Character(']'));
+                SetState(State.CDATASectionState);
+                Reconsume();
+                return new Character(']');
         }
     }
 
