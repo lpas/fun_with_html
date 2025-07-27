@@ -30,7 +30,8 @@ enum InsertionMode {
 }
 
 public static class Namespaces {
-    public static readonly string HTML = "http://www.w3.org/1999/xhtml";
+    public const string HTML = "http://www.w3.org/1999/xhtml";
+    public const string SVG = "http://www.w3.org/2000/svg";
 }
 
 public abstract class Node(Document? ownerDocument) {
@@ -73,14 +74,18 @@ public class Comment(Document document, string data): CharacterData(document, da
     }
 }
 
-public class Element(Document document, string localName): Node(document) {
-    public string? @namespace;
+public class Element(Document document, string localName, string? @namespace = null): Node(document) {
+    public string? @namespace = @namespace;
     public string? namespacePrefix;
     public string localName = localName;
     public Dictionary<string, string> attributes = [];
 
     public override string ToString() {
-        return $"<{localName}>";
+        return @namespace switch {
+            Namespaces.HTML => $"<{localName}>",
+            Namespaces.SVG => $"<svg {localName}>",
+            _ => $"<{localName}>",
+        };
     }
 }
 
@@ -1382,7 +1387,21 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 InsertAnHTMLElement(tagToken);
                 break;
             case StartTag { name: "math" }: throw new NotImplementedException();
-            case StartTag { name: "svg" }: throw new NotImplementedException();
+            case StartTag { name: "svg" } tagToken:
+                // Reconstruct the active formatting elements, if any.
+                ReconstructTheActiveFormattingElements();
+                // Adjust SVG attributes for the token. (This fixes the case of SVG attributes that are not all lowercase.)
+                AdjustSvgAttributes(tagToken);
+                // Adjust foreign attributes for the token. (This fixes the use of namespaced attributes, in particular XLink in SVG.)
+                AdjustForeignAttributes(tagToken);
+                // Insert a foreign element for the token, with SVG namespace and false.
+                InsertAForeignElement(tagToken, Namespaces.SVG, false);
+                // If the token has its self-closing flag set, pop the current node off the stack of open elements and acknowledge the token's self-closing flag.
+                if (tagToken.selfClosing) {
+                    stackOfOpenElements.Pop();
+                    // todo acknowledge self closing 
+                }
+                break;
             case StartTag { name: "caption" or "col" or "colgroup" or "frame" or "head" or "tbody" or "td" or "tfoot" or "th" or "thead" or "tr" }:
                 AddParseError("InBody - unexpected-start-tag-ignored");
                 break;
@@ -2936,6 +2955,16 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
         return element;
     }
 
+    // https://html.spec.whatwg.org/multipage/parsing.html#adjust-foreign-attributes
+    private void AdjustForeignAttributes(StartTag tagToken) {
+        // todo 
+    }
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#adjust-svg-attributes
+    private void AdjustSvgAttributes(StartTag tagToken) {
+        // todo
+    }
+
     // https://html.spec.whatwg.org/multipage/parsing.html#insert-an-element-at-the-adjusted-insertion-location
     private void InsertAnElementAtTheAdjustedInsertionLocation(Element element) {
         // 1. Let the adjusted insertion location be the appropriate place for inserting a node.
@@ -3076,7 +3105,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
     //https://dom.spec.whatwg.org/#concept-create-element
     private Element CreateAnElement(Document document, string localName, string? @namespace, string? prefix = null, string? isValue = null, bool synchronousCustomElements = false) {
         if (debugPrint) Debug.WriteLine($"createELement {localName}");
-        return new Element(document, localName);
+        return new Element(document, localName, @namespace);
     }
 
     private static void InsertNode((Node target, int childPos) insertPosition, Node child) {
