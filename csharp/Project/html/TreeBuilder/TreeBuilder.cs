@@ -32,6 +32,7 @@ enum InsertionMode {
 public static class Namespaces {
     public const string HTML = "http://www.w3.org/1999/xhtml";
     public const string SVG = "http://www.w3.org/2000/svg";
+    public const string MATH = "http://www.w3.org/1998/Math/MathML";
 }
 
 public abstract class Node(Document? ownerDocument) {
@@ -84,6 +85,7 @@ public class Element(Document document, string localName, string? @namespace = n
         return @namespace switch {
             Namespaces.HTML => $"<{localName}>",
             Namespaces.SVG => $"<svg {localName}>",
+            Namespaces.MATH => $"<math {localName}>",
             _ => $"<{localName}>",
         };
     }
@@ -1386,7 +1388,21 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // Insert an HTML element for the token.
                 InsertAnHTMLElement(tagToken);
                 break;
-            case StartTag { name: "math" }: throw new NotImplementedException();
+            case StartTag { name: "math" } tagToken:
+                // Reconstruct the active formatting elements, if any.
+                ReconstructTheActiveFormattingElements();
+                // Adjust MathML attributes for the token. (This fixes the case of MathML attributes that are not all lowercase.)
+                AdjustMathMLAttributes(tagToken);
+                // Adjust foreign attributes for the token. (This fixes the use of namespaced attributes, in particular XLink.)
+                AdjustForeignAttributes(tagToken);
+                // Insert a foreign element for the token, with MathML namespace and false.
+                InsertAForeignElement(tagToken, Namespaces.MATH, false);
+                // If the token has its self-closing flag set, pop the current node off the stack of open elements and acknowledge the token's self-closing flag.
+                if (tagToken.selfClosing) {
+                    stackOfOpenElements.Pop();
+                    // todo acknowledge self closing 
+                }
+                break;
             case StartTag { name: "svg" } tagToken:
                 // Reconstruct the active formatting elements, if any.
                 ReconstructTheActiveFormattingElements();
@@ -2955,14 +2971,19 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
         return element;
     }
 
-    // https://html.spec.whatwg.org/multipage/parsing.html#adjust-foreign-attributes
-    private void AdjustForeignAttributes(StartTag tagToken) {
-        // todo 
+    // https://html.spec.whatwg.org/multipage/parsing.html#adjust-mathml-attributes
+    private static void AdjustMathMLAttributes(StartTag tagToken) {
+        // todo
     }
 
     // https://html.spec.whatwg.org/multipage/parsing.html#adjust-svg-attributes
-    private void AdjustSvgAttributes(StartTag tagToken) {
+    private static void AdjustSvgAttributes(StartTag tagToken) {
         // todo
+    }
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#adjust-foreign-attributes
+    private static void AdjustForeignAttributes(StartTag tagToken) {
+        // todo 
     }
 
     // https://html.spec.whatwg.org/multipage/parsing.html#insert-an-element-at-the-adjusted-insertion-location
