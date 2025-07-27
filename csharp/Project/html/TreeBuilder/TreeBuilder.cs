@@ -593,7 +593,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 } else {
                     // Otherwise, run these steps:
                     // 1. Generate all implied end tags thoroughly.
-                    GenerateImpliedEndTags();
+                    GenerateAllImpliedEndTagsThoroughly();
                     // 2. If the current node is not a template element, then this is a parse error.
                     if (currentNode is not Element { localName: "template" }) {
                         AddParseError("in-head-expected-template-as-current-node");
@@ -2864,6 +2864,16 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
             } else {
                 return;
             }
+        }
+    }
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#generate-all-implied-end-tags-thoroughly
+    private void GenerateAllImpliedEndTagsThoroughly() {
+        // When the steps below require the UA to generate all implied end tags thoroughly, then, while the current node is a caption element, a colgroup element,
+        // a dd element, a dt element, an li element, an optgroup element, an option element, a p element, an rb element, an rp element, an rt element, an rtc element,
+        //  a tbody element, a td element, a tfoot element, a th element, a thead element, or a tr element, the UA must pop the current node off the stack of open elements.
+        while (currentNode is Element { localName: "caption" or "colgroup" or "dd" or "dt" or "li" or "optgroup" or "option" or "p" or "rb" or "rp" or "rt" or "rtc" or "tbody" or "td" or "tfoot" or "th" or "thead" or "tr" }) {
+            stackOfOpenElements.Pop();
         }
     }
 
