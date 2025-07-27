@@ -10,7 +10,7 @@ public sealed class Html5LibTreeConstruction {
     private static string ProjectDirectory => Directory.GetParent(Environment.CurrentDirectory).Parent.Parent.Parent.Parent.FullName;
 
     private static (string, (int[] skipTests, int[] expectWrongTree, int[] expectWrongErrors))[] files = [
-        ("adoption01.dat", ([7,8,12,13,14,16,],[0,1,2,4,5,6,9,10,11],[])),
+        ("adoption01.dat", ([7,8,12,13,14,16,],[1,2,4,5,9,10,11],[0])),
         ("adoption02.dat", ([0],[1,],[])),
         ("blocks.dat", ([],[],[])),
         ("comments01.dat", ([],[],[1,2,3,4,6,7,9,10,11,12,13])),
@@ -54,20 +54,19 @@ public sealed class Html5LibTreeConstruction {
             21,22,90,100, // infinity spinning
             91, 110, // index out of bounds
             98,99, // svg
-        ],[1,2,3,4,10,11,12, 20,37,40,41,44,64,65,66,67,68,76,79,80,81,82,83,84,85,86,87,88,89,92,93,94,95,96,97,101,107,109,110,111],
+        ],[1,2,3,4,10,11,12, 20,37,40,41,44,64,65,66,67,68,79,80,81,82,83,84,85,86,87,88,89,92,93,94,95,96,97,101,107,109,110,111],
         [25,26,27,29,30,31,32,33,35,38,45, 106])),        
         // tests_innerHTML_1
         ("tests1.dat", ([29, 30, 57, 99, // tree building has problems infinity running tests
             70, 71, 72, 73, 74, 75,   // adoption agency index out of range
             102], // not implement it),
-            [22, 23, 32, 51, 56, 60, 77, 78, 79, 90, 95, 96, 101, 110],
-            [27, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48] // tree is ok but parse error miss match
+            [22, 23, 32, 51, 56, 60, 77, 78, 79, 90, 95, 101, 110],
+            [27, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 96] // tree is ok but parse error miss match
         )),
         ("tests2.dat", ([
             17, 24, 30, 31, // tokenizer not implemented
             39, // infinity running
         ],[
-            9, // adopting agency
             10,12,14,18, 26, 27,
         ],[
             16, 20, 21, 22, 23, 25, 28, 34, 42, 58, 59, 61
@@ -144,13 +143,13 @@ public sealed class Html5LibTreeConstruction {
             38, // not implemented
             41, 42, 43, 46,47,48, // svg
             49 //math
-        ],[36,37,39,40,50,],[3,9,10,13,14,17,19,44,45])),
+        ],[36,37,40,50,],[3,9,10,13,14,17,19,39,44,45])),
         ("webkit02.dat", ([
                 12,13, //index out of bounds
                 19, 20, 22, //svg
                 23, 24, //math
                 15, 30, 31, 32, 33, 34,  //infinity spinning
-        ],[5,10,14],[4])),
+        ],[5,10],[4])),
     ];
 
 

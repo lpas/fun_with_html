@@ -1453,12 +1453,12 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
         void AdoptionAgencyAlgorithm(Tag tagToken) {
             // 1. Let subject be token's tag name.
             var subject = tagToken.name;
-            // 2. If the current node is an HTML element whose tag name is subject, and the current node is not in the list of active formatting elements, then pop the current node off the stack of open elements and return.
-            if (currentNode is Element e)
-                if (e.localName == subject && !ListOfActiveFormattingElements.Contains(currentNode)) {
-                    stackOfOpenElements.Pop();
-                    return;
-                }
+            // 2. If the current node is an HTML element whose tag name is subject, and the current node is not in the list of active formatting elements,
+            // then pop the current node off the stack of open elements and return.
+            if (currentNode is Element e && e.localName == subject && !ListOfActiveFormattingElements.Contains(currentNode)) {
+                stackOfOpenElements.Pop();
+                return;
+            }
             // 3. Let outerLoopCounter be 0.
             var outerLoopCounter = 0;
             // 4. While true:
@@ -1471,13 +1471,13 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 Element? formattingElement = null;
                 // * is between the end of the list and the last marker in the list, if any, or the start of the list otherwise, and
                 // * has the tag name subject.
-                var formattingElementPos = 0;
+                var formattingElementPosInListOfActiveFormattingElements = 0;
                 for (var i = ListOfActiveFormattingElements.Count - 1; i >= 0; i--) {
                     var element = ListOfActiveFormattingElements[i];
                     if (element is null) break;
                     if (element.localName == subject) {
                         formattingElement = element;
-                        formattingElementPos = i;
+                        formattingElementPosInListOfActiveFormattingElements = i;
                         break;
                     }
                 }
@@ -1501,35 +1501,32 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 if (formattingElement != currentNode) {
                     AddParseError("adoption-agency-1.3");
                 }
-                // 7. Let furthestBlock be the topmost node in the stack of open elements that is lower in the stack than formattingElement, and is an element in the special category. There might not be one.
+                // 7. Let furthestBlock be the topmost node in the stack of open elements that is lower in the stack than formattingElement,
+                // and is an element in the special category. There might not be one.
                 Element? furthestBlock = null;
-                var furthestBlockPos = 0;
+                var furthestBlockPosInStackOfOpenElements = 0;
                 for (var i = stackOfOpenElements.Count - 1; i >= 0; i--) {
                     var element = stackOfOpenElements[i];
                     if (element == formattingElement) break;
                     if (specialListElements.Contains(element.localName)) {
                         furthestBlock = element;
-                        furthestBlockPos = i;
+                        furthestBlockPosInStackOfOpenElements = i;
                     }
                 }
-                // 8. If there is no furthestBlock, then the UA must first pop all the nodes from the bottom of the stack of open elements, from the current node up to and including formattingElement, then remove formattingElement from the list of active formatting elements, and finally return.
+                // 8. If there is no furthestBlock, then the UA must first pop all the nodes from the bottom of the stack of open elements,
+                // from the current node up to and including formattingElement, then remove formattingElement from the list of active formatting elements, and finally return.
                 if (furthestBlock == null) {
-                    while (true) {
-                        var element = stackOfOpenElements.Pop();
-                        if (element == formattingElement) {
-                            break;
-                        }
-                    }
+                    while (stackOfOpenElements.Pop() != formattingElement) { }
                     ListOfActiveFormattingElements.Remove(formattingElement);
                     return;
                 }
-                // 9. Let commonAncestor be the element immediately above formattingElement in the stack of open elements.            
-                Element commonAncestor = stackOfOpenElements[furthestBlockPos - 1];
+                // 9. Let commonAncestor be the element immediately above formattingElement in the stack of open elements.
+                Element commonAncestor = stackOfOpenElements[stackOfOpenElements.IndexOf(formattingElement) - 1];
                 // 10. Let a bookmark note the position of formattingElement in the list of active formatting elements relative to the elements on either side of it in the list.
-                var bookmark = formattingElementPos;
+                var bookmark = formattingElementPosInListOfActiveFormattingElements;
                 // 11. Let node and lastNode be furthestBlock.
                 var node = furthestBlock;
-                var nodePos = furthestBlockPos;
+                var nodePosInStackOfOpenElements = furthestBlockPosInStackOfOpenElements;
                 var lastNode = furthestBlock;
                 // 12. Let innerLoopCounter be 0.
                 var innerLoopCounter = 0;
@@ -1537,8 +1534,9 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 while (true) {
                     // 1. Increment innerLoopCounter by 1.
                     innerLoopCounter++;
-                    // 2. Let node be the element immediately above node in the stack of open elements, or if node is no longer in the stack of open elements (e.g. because it got removed by this algorithm), the element that was immediately above node in the stack of open elements before node was removed.
-                    node = stackOfOpenElements[--nodePos];
+                    // 2. Let node be the element immediately above node in the stack of open elements, or if node is no longer in the stack of open elements
+                    // (e.g. because it got removed by this algorithm), the element that was immediately above node in the stack of open elements before node was removed.
+                    node = stackOfOpenElements[--nodePosInStackOfOpenElements];
                     // 3. If node is formattingElement, then break.
                     if (node == formattingElement) break;
                     // 4. If innerLoopCounter is greater than 3 and node is in the list of active formatting elements, then remove node from the list of active formatting elements.
@@ -1550,23 +1548,26 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                         stackOfOpenElements.Remove(node);
                         continue;
                     }
-                    // 6. Create an element for the token for which the element node was created, in the HTML namespace, with commonAncestor as the intended parent; replace the entry for node in the list of active formatting elements with an entry for the new element, replace the entry for node in the stack of open elements with an entry for the new element, and let node be the new element.
+                    // 6. Create an element for the token for which the element node was created, in the HTML namespace, with commonAncestor as the intended parent;
+                    // replace the entry for node in the list of active formatting elements with an entry for the new element, 
+                    // replace the entry for node in the stack of open elements with an entry for the new element, and let node be the new element.
                     var element = CreateAnElementForAToken(new StartTag(node.localName), Namespaces.HTML, commonAncestor); // todo this is hacky we need the real token;
                     var index = ListOfActiveFormattingElements.IndexOf(node);
                     ListOfActiveFormattingElements[index] = element;
-                    stackOfOpenElements[nodePos] = element;
+                    stackOfOpenElements[nodePosInStackOfOpenElements] = element;
                     node = element;
                     // 7. If lastNode is furthestBlock, then move the aforementioned bookmark to be immediately after the new node in the list of active formatting elements.
                     if (lastNode == furthestBlock) {
                         bookmark = index + 1;
                     }
                     // 8. Append lastNode to node.
-                    node.childNodes.Append(lastNode);
+                    AppendNode(node, lastNode);
                     // 9. Set lastNode to node.
                     lastNode = node;
 
                 }
-                // 14. Insert whatever lastNode ended up being in the previous step at the appropriate place for inserting a node, but using commonAncestor as the override target.
+                // 14. Insert whatever lastNode ended up being in the previous step at the appropriate place for inserting a node, 
+                // but using commonAncestor as the override target.
                 var adjustedInsertionLocation = AppropriatePlaceForInsertingANode(commonAncestor);
                 InsertNode(adjustedInsertionLocation, lastNode);
                 // 15. Create an element for the token for which formattingElement was created, in the HTML namespace, with furthestBlock as the intended parent.
@@ -1576,10 +1577,12 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 furthestBlock.childNodes.Clear();
                 // 17. Append that new element to furthestBlock.
                 AppendNode(furthestBlock, elem);
-                // 18. Remove formattingElement from the list of active formatting elements, and insert the new element into the list of active formatting elements at the position of the aforementioned bookmark.
+                // 18. Remove formattingElement from the list of active formatting elements,
+                // and insert the new element into the list of active formatting elements at the position of the aforementioned bookmark.
                 ListOfActiveFormattingElements[bookmark] = elem;
                 ListOfActiveFormattingElements.Remove(formattingElement);
-                // 19. Remove formattingElement from the stack of open elements, and insert the new element into the stack of open elements immediately below the position of furthestBlock in that stack.
+                // 19. Remove formattingElement from the stack of open elements,
+                // and insert the new element into the stack of open elements immediately below the position of furthestBlock in that stack.
                 stackOfOpenElements.Remove(formattingElement);
                 var indexA = stackOfOpenElements.IndexOf(furthestBlock);
                 stackOfOpenElements.Insert(indexA + 1, elem);
@@ -3083,6 +3086,8 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
     }
 
     private static void InsertNode((Node target, int childPos) insertPosition, Node child) {
+        child.parent?.childNodes.Remove(child);
+
         insertPosition.target.childNodes.Insert(insertPosition.childPos, child);
         child.parent = insertPosition.target;
     }
