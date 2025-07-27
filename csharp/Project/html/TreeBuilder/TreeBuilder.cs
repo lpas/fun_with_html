@@ -912,33 +912,29 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                     // 1. Set the frameset-ok flag to "not ok".
                     framesetOk = false;
                     // 2. Initialize node to be the current node (the bottommost node of the stack).
-                    var node = currentNode;
-                // 3. Loop: If node is an li element, then run these substeps:
-                loop:
-                    if (node is Element { localName: "li" }) {
-                        // 1. Generate implied end tags, except for li elements.
-                        GenerateImpliedEndTags("li");
-                        // 2. If the current node is not an li element, then this is a parse error.
-                        if (currentNode is not Element { localName: "li" }) {
-                            AddParseError("insertionMode in body: LI");
+                    // 3. Loop: If node is an li element, then run these substeps:
+                    for (var i = stackOfOpenElements.Count - 1; i > 0; i--) {
+                        var node = stackOfOpenElements[i];
+                        if (node is Element { localName: "li" }) {
+                            // 1. Generate implied end tags, except for li elements.
+                            GenerateImpliedEndTags("li");
+                            // 2. If the current node is not an li element, then this is a parse error.
+                            if (currentNode is not Element { localName: "li" }) {
+                                AddParseError("insertionMode in body: LI");
+                            }
+                            // 3. Pop elements from the stack of open elements until an li element has been popped from the stack.
+                            while (stackOfOpenElements.Pop() is not Element { localName: "li" }) { }
+                            // 4. Jump to the step labeled done below.
+                            break;
                         }
-                        // 3. Pop elements from the stack of open elements until an li element has been popped from the stack.
-                        while (true) {
-                            if (stackOfOpenElements.Pop() is Element { localName: "li" }) break;
+                        // 4. If node is in the special category, but is not an address, div, or p element, then jump to the step labeled done below.
+                        if (node.localName is not "address" or "div" or "p" && specialListElements.Contains(node.localName)) {
+                            break;
                         }
-                        // 4. Jump to the step labeled done below.
-                        goto done;
-                    }
-                    // 4. If node is in the special category, but is not an address, div, or p element, then jump to the step labeled done below.
-                    if (node.localName is not "address" or "div" or "p" && specialListElements.Contains(node.localName)) {
-                        goto done;
-                    } else {
-                        // 5. Otherwise, set node to the previous entry in the stack of open elements and return to the step labeled loop.
                         throw new NotImplementedException();
-                        goto loop;
+                        // 5. Otherwise, set node to the previous entry in the stack of open elements and return to the step labeled loop.
                     }
-                // 6. Done: If the stack of open elements has a p element in button scope, then close a p element.
-                done:
+                    // 6. Done: If the stack of open elements has a p element in button scope, then close a p element.
                     if (HasAElementInButtonScope("p")) {
                         CloseAPElement();
                     }
@@ -947,48 +943,46 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                     break;
                 }
             case StartTag { name: "dd" or "dt" } tagToken: {
-                    // todo the algo looks similar to StartTag {li}
                     // Run these steps:
                     // 1. Set the frameset-ok flag to "not ok".
                     framesetOk = false;
                     // 2. Initialize node to be the current node (the bottommost node of the stack).
-                    var node = currentNode;
-                // 3. Loop: If node is a dd element, then run these substeps:
-                loop:
-                    if (node is Element { localName: "dd" }) {
-                        // 1. Generate implied end tags, except for dd elements.
-                        GenerateImpliedEndTags("dd");
-                        // 2. If the current node is not a dd element, then this is a parse error.
-                        if (currentNode is not Element { localName: "dd" }) {
-                            AddParseError("in-body-dd-unexpected-current-node");
+                    // 3. Loop: If node is a dd element, then run these substeps:
+                    for (var i = stackOfOpenElements.Count - 1; i > 0; i--) {
+                        var node = stackOfOpenElements[i];
+                        if (node is Element { localName: "dd" }) {
+                            // 1. Generate implied end tags, except for dd elements.
+                            GenerateImpliedEndTags("dd");
+                            // 2. If the current node is not a dd element, then this is a parse error.
+                            if (currentNode is not Element { localName: "dd" }) {
+                                AddParseError("in-body-dd-unexpected-current-node");
+                            }
+                            // 3. Pop elements from the stack of open elements until a dd element has been popped from the stack.
+                            while (stackOfOpenElements.Pop() is not Element { localName: "dd" }) { }
+                            // 4. Jump to the step labeled done below.
+                            break;
                         }
-                        // 3. Pop elements from the stack of open elements until a dd element has been popped from the stack.
-                        while (stackOfOpenElements.Pop() is not Element { localName: "dd" }) { }
-                        // 4. Jump to the step labeled done below.
-                        goto done;
-                    }
-                    // 4. If node is a dt element, then run these substeps:
-                    if (node is Element { localName: "dt" }) {
-                        // 1. Generate implied end tags, except for dt elements.
-                        GenerateImpliedEndTags("dt");
-                        // 2. If the current node is not a dt element, then this is a parse error.
-                        if (currentNode is not Element { localName: "dt" }) {
-                            AddParseError("in-body-dd-unexpected-current-node");
+                        // 4. If node is a dt element, then run these substeps:
+                        if (node is Element { localName: "dt" }) {
+                            // 1. Generate implied end tags, except for dt elements.
+                            GenerateImpliedEndTags("dt");
+                            // 2. If the current node is not a dt element, then this is a parse error.
+                            if (currentNode is not Element { localName: "dt" }) {
+                                AddParseError("in-body-dd-unexpected-current-node");
+                            }
+                            // 3. Pop elements from the stack of open elements until a dt element has been popped from the stack.
+                            while (stackOfOpenElements.Pop() is not Element { localName: "dt" }) { }
+                            // 4. Jump to the step labeled done below.
+                            break;
                         }
-                        // 3. Pop elements from the stack of open elements until a dt element has been popped from the stack.
-                        while (stackOfOpenElements.Pop() is not Element { localName: "dt" }) { }
-                        // 4. Jump to the step labeled done below.
-                        goto done;
-                    }
-                    // 5. If node is in the special category, but is not an address, div, or p element, then jump to the step labeled done below.
-                    if (node.localName is not "address" or "div" or "p" && specialListElements.Contains(node.localName)) {
-                        goto done;
-                    } else {
+                        // 5. If node is in the special category, but is not an address, div, or p element, then jump to the step labeled done below.
+                        if (node.localName is not "address" or "div" or "p" && specialListElements.Contains(node.localName)) {
+                            break;
+                        }
                         // 6. Otherwise, set node to the previous entry in the stack of open elements and return to the step labeled loop.
                         throw new NotImplementedException();
                     }
-                // 7. Done: If the stack of open elements has a p element in button scope, then close a p element.
-                done:
+                    // 7. Done: If the stack of open elements has a p element in button scope, then close a p element.
                     // 8. Finally, insert an HTML element for the token.
                     InsertAnHTMLElement(tagToken);
                 }
