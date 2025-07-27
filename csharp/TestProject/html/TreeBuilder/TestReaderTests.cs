@@ -96,8 +96,8 @@ Test
             |   <head>
             |   <body>
             |     <hr>
-            |       foo="bar"
             |       bar="baz"
+            |       foo="bar"
             """);
         var testCase = testReader.GetTestCases().First();
         var document = new Document();

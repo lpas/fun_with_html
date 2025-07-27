@@ -27,7 +27,7 @@ public sealed class Html5LibTreeConstruction {
         23, // math
         ],[19,],[1,2,3,11])),
         ("inbody01.dat", ([3,],[],[])), // not implemented
-        ("isindex.dat", ([],[1],[])), // tree compare
+        ("isindex.dat", ([],[],[])),
         ("main-element.dat", ([2],[],[])), // svg
         // math
         ("menuitem-element.dat", ([
@@ -123,7 +123,6 @@ public sealed class Html5LibTreeConstruction {
             93,94 // adopting
         ],[
             24, 25, 26,
-            36, 37, 85,// tree compare
             45, 47, 79, 89,
         ],[])),
         ("tests20.dat", ([
@@ -145,7 +144,7 @@ public sealed class Html5LibTreeConstruction {
             38, // not implemented
             41, 42, 43, 46,47,48, // svg
             49 //math
-        ],[13,36,37,39,40,50,],[3,9,10,14,17,19,44,45])),
+        ],[36,37,39,40,50,],[3,9,10,13,14,17,19,44,45])),
         ("webkit02.dat", ([
                 12,13, //index out of bounds
                 19, 20, 22, //svg

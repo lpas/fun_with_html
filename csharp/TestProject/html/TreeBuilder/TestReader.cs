@@ -136,7 +136,8 @@ public class TestReader(IEnumerable<string> iter) {
                 }
             }
             if (node is Element element && element.attributes.Count > 0) {
-                foreach (var attr in Enumerable.Reverse(element.attributes)) {
+                // we order descending to insert reverse in the stack
+                foreach (var attr in element.attributes.OrderByDescending(item => item.Key)) {
                     stack.Push((new NodeAttr(attr.Key, attr.Value), depth + 1));
                 }
             }
