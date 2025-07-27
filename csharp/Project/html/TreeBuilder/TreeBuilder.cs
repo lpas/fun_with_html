@@ -931,8 +931,8 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                         if (node.localName is not "address" or "div" or "p" && specialListElements.Contains(node.localName)) {
                             break;
                         }
-                        throw new NotImplementedException();
                         // 5. Otherwise, set node to the previous entry in the stack of open elements and return to the step labeled loop.
+                        // we done this with the loop up top
                     }
                     // 6. Done: If the stack of open elements has a p element in button scope, then close a p element.
                     if (HasAElementInButtonScope("p")) {
@@ -980,7 +980,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                             break;
                         }
                         // 6. Otherwise, set node to the previous entry in the stack of open elements and return to the step labeled loop.
-                        throw new NotImplementedException();
+                        // we done this with the loop up top
                     }
                     // 7. Done: If the stack of open elements has a p element in button scope, then close a p element.
                     // 8. Finally, insert an HTML element for the token.

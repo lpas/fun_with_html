@@ -26,14 +26,11 @@ public sealed class Html5LibTreeConstruction {
         22, // svg
         23, // math
         ],[19,],[1,2,3,11])),
-        ("inbody01.dat", ([3,],[],[])), // not implemented
+        ("inbody01.dat", ([],[],[])),
         ("isindex.dat", ([],[],[])),
         ("main-element.dat", ([2],[],[])), // svg
         // math
-        ("menuitem-element.dat", ([
-            6,19,  // not implemented
-            9, // infinity spinning
-            ],[],[])),
+        ("menuitem-element.dat", ([9,],[],[])), // infinity spinning
         ("namespace-sensitivity.dat", ([0],[],[])), // svg
         ("noscript01.dat", ([],[],[])),
         // pending-spec-changes-plain-text-unsafe
@@ -58,47 +55,35 @@ public sealed class Html5LibTreeConstruction {
         [25,26,27,29,30,31,32,33,35,38,45, 106])),        
         // tests_innerHTML_1
         ("tests1.dat", ([29, 30, 57, 99, // tree building has problems infinity running tests
-            70, 71, 72, 73, 74, 75,   // adoption agency index out of range
-            102], // not implement it),
-            [22, 23, 32, 51, 56, 60, 77, 78, 79, 90, 95, 101, 110],
+            70, 71, 72, 73, 74, 75, ],  // adoption agency index out of range
+            [22, 23, 32, 51, 56, 60, 77, 78, 79, 90, 95, 101, 102, 110],
             [27, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 96] // tree is ok but parse error miss match
         )),
         ("tests2.dat", ([
             17, 24, 30, 31, // tokenizer not implemented
             39, // infinity running
-        ],[
-            10,12,14,18, 26, 27,
-        ],[
-            16, 20, 21, 22, 23, 25, 28, 34, 42, 58, 59, 61
-        ])),
+        ],[10,12,14,18, 26, 27,],
+        [16, 20, 21, 22, 23, 25, 28, 34, 42, 58, 59, 61])),
         ("tests3.dat", ([],[
             4, 5, 6, 7, 11, 16, 17,18, // need peek token in body <pre> & <textarea>
             19, 21, 23 // adopting agency
         ],[])),
         ("tests4.dat", ([],[],[])), // fragments
-        ("tests5.dat", ([
-            12, 13, // tokenizer not implemented
-        ],[],[])),
+        ("tests5.dat", ([12, 13],[],[])),// tokenizer not implemented
         ("tests6.dat", ([
             2, 3, // tokenizer not implemented
-            25,
             32, 35, // adopting
             46, // doctype
             47, 48, 49, 50, 51 // frameset stuff
-        ],[],[4, 5])),
+        ],[25],[4, 5])),
         ("tests7.dat", ([
             23 // select
         ],[
             1, 7,8,11, 12, 15, 19, 20, 21, 22, 30, 31, 32
         ],[])),
-        ("tests8.dat", ([
-        ],[
-            4, 5, 6, 7,8,9,
-        ],[])),
+        ("tests8.dat", ([],[4, 5, 6, 7,8,9,],[])),
         // 9-14 are math & svg stuff
-        ("tests15.dat", ([],[
-            6, 7, 8, 9, 10, 11, 12,
-        ],[])),
+        ("tests15.dat", ([],[6, 7, 8, 9, 10, 11, 12,],[])),
         ("tests16.dat", ([81,92,93,94,178,189, // not implemented in tokenizer
             195, // infinity running
         ],[
@@ -117,7 +102,6 @@ public sealed class Html5LibTreeConstruction {
             0, 18, 30, 31, 32, 33, 34, 73, 81, 82, 83, // math
             19, 72, 74, 75, 76, // svg
             14, 15, 16, 17, 97, 98, // infinity running
-            29, // not implemented
             90, 91, 92, // adopting index out of bounds
             93,94 // adopting
         ],[
@@ -140,10 +124,9 @@ public sealed class Html5LibTreeConstruction {
         // tricky01
         ("webkit01.dat", ([
             15, // tokenizer
-            38, // not implemented
             41, 42, 43, 46,47,48, // svg
             49 //math
-        ],[36,37,40,50,],[3,9,10,13,14,17,19,39,44,45])),
+        ],[36,37,40,50,],[3,9,10,13,14,17,19,38,39,44,45])),
         ("webkit02.dat", ([
                 12,13, //index out of bounds
                 19, 20, 22, //svg
