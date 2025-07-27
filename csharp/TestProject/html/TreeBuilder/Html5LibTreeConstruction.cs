@@ -73,14 +73,8 @@ public sealed class Html5LibTreeConstruction {
         ("tests6.dat", ([
             2, 3, // tokenizer not implemented
             32, 35, // adopting
-            46, // doctype
-            47, 48, 49, 50, 51 // frameset stuff
-        ],[25],[4, 5])),
-        ("tests7.dat", ([
-            23 // select
-        ],[
-            1, 7,8,11, 12, 15, 19, 20, 21, 22, 30, 31, 32
-        ],[])),
+        ],[25,47,48,49,50,51],[4, 5])),
+        ("tests7.dat", ([],[1, 7,8,11, 12, 15, 19, 20, 21, 22, 23, 30, 31, 32],[])),
         ("tests8.dat", ([],[4, 5, 6, 7,8,9,],[])),
         // 9-14 are math & svg stuff
         ("tests15.dat", ([],[6, 7, 8, 9, 10, 11, 12,],[])),
@@ -94,10 +88,9 @@ public sealed class Html5LibTreeConstruction {
         ])),
         ("tests17.dat", ([],[0,1,],[])),
         ("tests18.dat", ([
-            14, 27, // select
             21,22, 35, // svg
             28, 29, //  infinity running
-        ],[7,8,9,12,15,23,24,],[])),
+        ],[7,8,9,12,14,15,23,24,],[])),
         ("tests19.dat", ([
             0, 18, 30, 31, 32, 33, 34, 73, 81, 82, 83, // math
             19, 72, 74, 75, 76, // svg
