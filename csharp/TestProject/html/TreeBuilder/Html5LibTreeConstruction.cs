@@ -33,7 +33,7 @@ public sealed class Html5LibTreeConstruction {
         // pending-spec-changes-plain-text-unsafe
         // pending-spec-changes
         ("plain-text-unsafe.dat", ([
-        ],[0,1,2,4,5, 13,18,19,21,22,23,24,25,27 ],[3,6,7,8,9,11,12,14,15,16,17,20,26,28,29,30,31,32])),
+        ],[0,1,2,4,5,18,19,21,22,23,24,25 ],[3,6,7,8,9,11,12,13,14,15,16,17,20,26,27,28,29,30,31,32])),
         ("quirks01.dat", ([],[2],[])),
         // ruby.dat 
         ("scriptdata01.dat", ([],[5,15,16,17,19,20,21,22,23,24,25,],[3,4,6])),
@@ -42,7 +42,7 @@ public sealed class Html5LibTreeConstruction {
         ("tables01.dat", ([],[3,6,7,8,9, 17,18],[])),
         ("template.dat", ([
             21,22,90,100, // infinity spinning
-            91, 98, 110, // index out of bounds
+            91, 98, 99, 110, // index out of bounds
         ],[1,2,3,4,10,11,12, 20,37,40,41,44,64,65,66,67,68,79,80,81,82,83,84,85,86,87,88,89,92,93,94,95,96,97,98,99,101,107,109,110,111],
         [106])),
         // tests_innerHTML_1
@@ -71,8 +71,8 @@ public sealed class Html5LibTreeConstruction {
         ("tests9.dat", ([],[3,6,7,8,9,10,16,17,18,23,24,
             25,26 // todo example of tree compare math attributes
             ],[])),
-        ("tests10.dat", ([26,38],[1,5,6,7,8,9,15,16,17,22,23,24,25,30,31,34,35,36,40,42,44,46,48,50,51,52,53,],[])),
-        ("tests11.dat", ([],[2,8,9,10],[])), // adjust foreign attr names
+        ("tests10.dat", ([26,38],[1,5,6,7,8,9,15,16,17,22,23,24,25,30,31,34,35,40,42,44,46,48,50,51,52,53,],[])),
+        ("tests11.dat", ([],[2],[])), // adjust foreign attr names
         ("tests12.dat", ([],[0,1],[])),
         // tests13.dat is missing
         ("tests14.dat", ([],[],[])),
@@ -98,7 +98,7 @@ public sealed class Html5LibTreeConstruction {
         ],[83])),
         ("tests20.dat", ([
             62, //infinity spinning
-        ],[41,48, 54,55,56,57,62,63],[])),
+        ],[41, 54,55,56,57,62,63],[])),
         ("tests21.dat", ([19 // infinity spinning
         ],[2,9,13, // handling of CDATA
         ],[3,4,7,8,16,17])),
@@ -107,7 +107,7 @@ public sealed class Html5LibTreeConstruction {
         ("tests24.dat", ([0,1,2,3,4,5,6,7],[],[])), // tokenizer
         ("tests25.dat", ([],[],[])),
         ("tests26.dat", ([0,3, 4, // infinity running
-        ],[2,9,10,11],[14])),
+        ],[2,9],[14])),
         ("tricky01.dat", ([1,8, // index out of range
         4, // infinity spinning
         ],[0,2,5,6,7,9],[])),
@@ -118,7 +118,7 @@ public sealed class Html5LibTreeConstruction {
         ("webkit02.dat", ([
                 12,13, //index out of bounds
                 15, 30, 31, 32, 33, 34,  //infinity spinning
-        ],[5,10,19, 20, 22,23,],[4])),
+        ],[5,10, 22,23,],[4])),
     ];
 
 

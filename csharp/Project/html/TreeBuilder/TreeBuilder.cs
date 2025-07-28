@@ -3470,8 +3470,9 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 }
                 // If the adjusted current node is an element in the SVG namespace, and the token's tag name is one of the ones in the first column of the following table,
                 // change the tag name to the name given in the corresponding cell in the second column. (This fixes the case of SVG elements that are not all lowercase.)
-                // todo
-
+                if (adjustedCurrentNode is Element { @namespace: Namespaces.SVG }) {
+                    AdjustForeignContentSvgTagNames(tagToken);
+                }
                 // If the adjusted current node is an element in the SVG namespace, adjust SVG attributes for the token. 
                 // (This fixes the case of SVG attributes that are not all lowercase.)
                 if (adjustedCurrentNode is Element { @namespace: Namespaces.SVG }) {
@@ -3541,6 +3542,56 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
             default:
                 throw new InvalidOperationException();
         }
+
+        static void AdjustForeignContentSvgTagNames(StartTag tagToken) {
+            (string, string)[] list = [
+                ("altglyph", "altGlyph"),
+                ("altglyphdef", "altGlyphDef"),
+                ("altglyphitem", "altGlyphItem"),
+                ("animatecolor", "animateColor"),
+                ("animatemotion", "animateMotion"),
+                ("animatetransform", "animateTransform"),
+                ("clippath", "clipPath"),
+                ("feblend", "feBlend"),
+                ("fecolormatrix", "feColorMatrix"),
+                ("fecomponenttransfer", "feComponentTransfer"),
+                ("fecomposite", "feComposite"),
+                ("feconvolvematrix", "feConvolveMatrix"),
+                ("fediffuselighting", "feDiffuseLighting"),
+                ("fedisplacementmap", "feDisplacementMap"),
+                ("fedistantlight", "feDistantLight"),
+                ("fedropshadow", "feDropShadow"),
+                ("feflood", "feFlood"),
+                ("fefunca", "feFuncA"),
+                ("fefuncb", "feFuncB"),
+                ("fefuncg", "feFuncG"),
+                ("fefuncr", "feFuncR"),
+                ("fegaussianblur", "feGaussianBlur"),
+                ("feimage", "feImage"),
+                ("femerge", "feMerge"),
+                ("femergenode", "feMergeNode"),
+                ("femorphology", "feMorphology"),
+                ("feoffset", "feOffset"),
+                ("fepointlight", "fePointLight"),
+                ("fespecularlighting", "feSpecularLighting"),
+                ("fespotlight", "feSpotLight"),
+                ("fetile", "feTile"),
+                ("feturbulence", "feTurbulence"),
+                ("foreignobject", "foreignObject"),
+                ("glyphref", "glyphRef"),
+                ("lineargradient", "linearGradient"),
+                ("radialgradient", "radialGradient"),
+                ("textpath", "textPath"),
+            ];
+
+            foreach (var item in list) {
+                if (tagToken.name == item.Item1) {
+                    tagToken.name = item.Item2;
+                    break;
+                }
+            }
+        }
+
     }
 
     //https://dom.spec.whatwg.org/#concept-create-element
