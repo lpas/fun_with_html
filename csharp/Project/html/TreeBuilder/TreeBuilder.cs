@@ -437,7 +437,10 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // Parse error. Ignore the token.
                 AddParseError("before-head-unexpected-doctype-ignored");
                 break;
-            case StartTag { name: "html" }: throw new NotImplementedException();
+            case StartTag { name: "html" }:
+                // Process the token using the rules for the "in body" insertion mode.
+                InsertionModeInBody();
+                break;
             case StartTag { name: "head" } tagToken: {
                     // Insert an HTML element for the token.
                     var element = InsertAnHTMLElement(tagToken);
@@ -3234,15 +3237,35 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 InsertAForeignElement(tagToken, adjustedCurrentNode.@namespace, false);
                 // If the token has its self-closing flag set, then run the appropriate steps from the following list:
                 if (tagToken.selfClosing) {
-                    throw new NotImplementedException();
                     // If the token's tag name is "script", and the new current node is in the SVG namespace
-                    // Acknowledge the token's self-closing flag, and then act as described in the steps for a "script" end tag below.
-                    // Otherwise
-                    // Pop the current node off the stack of open elements and acknowledge the token's self-closing flag.
+                    // Acknowledge the token's self-closing flag, and then act as described in the steps for a "script" end tag below.                    
+                    if (tagToken.name == "script" && currentNode is Element { @namespace: Namespaces.SVG }) {
+                        // todo acknowledge self-closing
+                        throw new NotImplementedException();
+                    } else {
+                        // Otherwise
+                        // Pop the current node off the stack of open elements and acknowledge the token's self-closing flag.
+                        // todo acknowledge self-closing
+                        stackOfOpenElements.Pop();
+                    }
                 }
 
                 break;
-            case EndTag { name: "script" } when currentNode is Element { @namespace: Namespaces.SVG, localName: "script" }: throw new NotImplementedException();
+            case EndTag { name: "script" } when currentNode is Element { @namespace: Namespaces.SVG, localName: "script" }:
+                // Pop the current node off the stack of open elements.
+                stackOfOpenElements.Pop();
+                // Let the old insertion point have the same value as the current insertion point. Let the insertion point be just before the next input character.
+                // todo
+                // Increment the parser's script nesting level by one. Set the parser pause flag to true.
+                // todo
+                // If the active speculative HTML parser is null and the user agent supports SVG, then Process the SVG script element according to the SVG rules. [SVG]
+                // todo
+                // NOTE: Even if this causes new characters to be inserted into the tokenizer, the parser will not be executed reentrantly, since the parser pause flag is true.
+                // Decrement the parser's script nesting level by one. If the parser's script nesting level is zero, then set the parser pause flag to false.
+                // todo
+                // Let the insertion point have the value of the old insertion point. (In other words, restore the insertion point to its previous value. This value might be the "undefined" value.)
+                // todo
+                break;
             case EndTag tagToken:
                 // Run these steps:
                 // 1. Initialize node to be the current node (the bottommost node of the stack).

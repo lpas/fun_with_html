@@ -26,7 +26,7 @@ public sealed class Html5LibTreeConstruction {
         ("inbody01.dat", ([],[],[])),
         ("isindex.dat", ([],[],[])),
         ("main-element.dat", ([],[],[])),
-        // math
+        ("math.dat", ([],[],[])),
         ("menuitem-element.dat", ([9,],[],[])), // infinity spinning
         ("namespace-sensitivity.dat", ([],[0],[])),
         ("noscript01.dat", ([],[],[])),
@@ -36,9 +36,9 @@ public sealed class Html5LibTreeConstruction {
         ],[0,1,2,4,5, 13,18,19,21,22,23,24,25,27 ],[3,6,7,8,9,11,12,14,15,16,17,20,26,28,29,30,31,32])),
         ("quirks01.dat", ([],[1,2,3],[])),
         // ruby.dat 
-         ("scriptdata01.dat", ([],[5,15,16,17,19,20,21,22,23,24,25,],[3,4,6])),
-         ("search-element.dat", ([],[],[])),
-        // svg
+        ("scriptdata01.dat", ([],[5,15,16,17,19,20,21,22,23,24,25,],[3,4,6])),
+        ("search-element.dat", ([],[],[])),
+        ("svg.dat", ([],[],[])),
         ("tables01.dat", ([],[3,6,7,8,9, 17,18],[])),
         ("template.dat", ([
             21,22,90,100, // infinity spinning
@@ -68,7 +68,14 @@ public sealed class Html5LibTreeConstruction {
         ],[25,47,48,49,50,51],[4, 5])),
         ("tests7.dat", ([],[1, 7,8,11, 12, 15, 19, 20, 21, 22, 23, 30, 31, 32],[])),
         ("tests8.dat", ([],[4, 5, 6, 7,8,9,],[])),
-        // 9-14 are math & svg stuff
+        ("tests9.dat", ([],[3,6,7,8,9,10,16,17,18,23,24,
+            25,26 // todo example of tree compare math attributes
+            ],[])),
+        ("tests10.dat", ([26,38],[1,5,6,7,8,9,15,16,17,22,23,24,25,30,31,34,35,36,40,42,44,46,48,50,51,52,53,],[])),
+        ("tests11.dat", ([],[0,1,2,8,9,10],[])), // adjust foreign attr names
+        ("tests12.dat", ([],[0,1],[])),
+        // tests13.dat is missing
+        ("tests14.dat", ([],[],[])),
         ("tests15.dat", ([],[6, 7, 8, 9, 10, 11, 12,],[])),
         ("tests16.dat", ([81,92,93,94,178,189, // not implemented in tokenizer
             195, // infinity running
@@ -92,14 +99,18 @@ public sealed class Html5LibTreeConstruction {
         ("tests20.dat", ([
             62, //infinity spinning
         ],[41,48, 54,55,56,57,62,63],[])),
-        // tests21 svg
+        ("tests21.dat", ([19 // infinity spinning
+        ],[2,9,13, // handling of CDATA
+        ],[3,4,7,8,16,17])),
         ("tests22.dat", ([0,1,2,3,4],[],[])), // adopting
         ("tests23.dat", ([],[0,1,2,3,4],[])), // adopting
         ("tests24.dat", ([0,1,2,3,4,5,6,7],[],[])), // tokenizer
         ("tests25.dat", ([],[],[])),
         ("tests26.dat", ([0,3, 4, // infinity running
         ],[2,9,10,11],[14])),
-        // tricky01
+        ("tricky01.dat", ([1,8, // index out of range
+        4, // infinity spinning
+        ],[0,2,5,6,7,9],[])),
         ("webkit01.dat", ([
             15, // tokenizer
             48, // infinity spinning
