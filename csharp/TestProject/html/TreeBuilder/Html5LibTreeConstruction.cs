@@ -72,7 +72,7 @@ public sealed class Html5LibTreeConstruction {
             25,26 // todo example of tree compare math attributes
             ],[])),
         ("tests10.dat", ([26,38],[1,5,6,7,8,9,15,16,17,22,23,24,25,30,31,34,35,36,40,42,44,46,48,50,51,52,53,],[])),
-        ("tests11.dat", ([],[0,1,2,8,9,10],[])), // adjust foreign attr names
+        ("tests11.dat", ([],[2,8,9,10],[])), // adjust foreign attr names
         ("tests12.dat", ([],[0,1],[])),
         // tests13.dat is missing
         ("tests14.dat", ([],[],[])),
@@ -94,7 +94,7 @@ public sealed class Html5LibTreeConstruction {
             90, 91, 92, // adopting index out of bounds
             93,94 // adopting
         ],[
-            0, 24, 25, 26,30, 31, 32, 33, 34, 45, 47, 72, 73, 74, 76, 79, 82, 89,
+            24, 25, 26,30, 31, 32, 33, 34, 45, 47, 72, 73, 74, 76, 79, 82, 89,
         ],[83])),
         ("tests20.dat", ([
             62, //infinity spinning
@@ -118,7 +118,7 @@ public sealed class Html5LibTreeConstruction {
         ("webkit02.dat", ([
                 12,13, //index out of bounds
                 15, 30, 31, 32, 33, 34,  //infinity spinning
-        ],[5,10,19, 20, 22,23, 24,],[4])),
+        ],[5,10,19, 20, 22,23,],[4])),
     ];
 
 

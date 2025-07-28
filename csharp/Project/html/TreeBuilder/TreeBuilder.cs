@@ -3028,17 +3028,93 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
 
     // https://html.spec.whatwg.org/multipage/parsing.html#adjust-mathml-attributes
     private static void AdjustMathMLAttributes(StartTag tagToken) {
-        // todo
+        (string, string)[] list = [("definitionurl", "definitionURL")];
+        foreach (var item in list) {
+            AdjustAttribute(tagToken, item);
+        }
     }
 
     // https://html.spec.whatwg.org/multipage/parsing.html#adjust-svg-attributes
     private static void AdjustSvgAttributes(StartTag tagToken) {
-        // todo
+        if (tagToken.Attributes.Count == 0) return;
+
+        (string, string)[] list = [
+            ("attributename", "attributeName"),
+            ("attributetype", "attributeType"),
+            ("basefrequency", "baseFrequency"),
+            ("baseprofile", "baseProfile"),
+            ("calcmode", "calcMode"),
+            ("clippathunits", "clipPathUnits"),
+            ("diffuseconstant", "diffuseConstant"),
+            ("edgemode", "edgeMode"),
+            ("filterunits", "filterUnits"),
+            ("glyphref", "glyphRef"),
+            ("gradienttransform", "gradientTransform"),
+            ("gradientunits", "gradientUnits"),
+            ("kernelmatrix", "kernelMatrix"),
+            ("kernelunitlength", "kernelUnitLength"),
+            ("keypoints", "keyPoints"),
+            ("keysplines", "keySplines"),
+            ("keytimes", "keyTimes"),
+            ("lengthadjust", "lengthAdjust"),
+            ("limitingconeangle", "limitingConeAngle"),
+            ("markerheight", "markerHeight"),
+            ("markerunits", "markerUnits"),
+            ("markerwidth", "markerWidth"),
+            ("maskcontentunits", "maskContentUnits"),
+            ("maskunits", "maskUnits"),
+            ("numoctaves", "numOctaves"),
+            ("pathlength", "pathLength"),
+            ("patterncontentunits", "patternContentUnits"),
+            ("patterntransform", "patternTransform"),
+            ("patternunits", "patternUnits"),
+            ("pointsatx", "pointsAtX"),
+            ("pointsaty", "pointsAtY"),
+            ("pointsatz", "pointsAtZ"),
+            ("preservealpha", "preserveAlpha"),
+            ("preserveaspectratio", "preserveAspectRatio"),
+            ("primitiveunits", "primitiveUnits"),
+            ("refx", "refX"),
+            ("refy", "refY"),
+            ("repeatcount", "repeatCount"),
+            ("repeatdur", "repeatDur"),
+            ("requiredextensions", "requiredExtensions"),
+            ("requiredfeatures", "requiredFeatures"),
+            ("specularconstant", "specularConstant"),
+            ("specularexponent", "specularExponent"),
+            ("spreadmethod", "spreadMethod"),
+            ("startoffset", "startOffset"),
+            ("stddeviation", "stdDeviation"),
+            ("stitchtiles", "stitchTiles"),
+            ("surfacescale", "surfaceScale"),
+            ("systemlanguage",  "systemLanguage"),
+            ("tablevalues", "tableValues"),
+            ("targetx", "targetX"),
+            ("targety", "targetY"),
+            ("textlength", "textLength"),
+            ("viewbox", "viewBox"),
+            ("viewtarget", "viewTarget"),
+            ("xchannelselector", "xChannelSelector"),
+            ("ychannelselector", "yChannelSelector"),
+            ("zoomandpan", "zoomAndPan")
+        ];
+        foreach (var item in list) {
+            AdjustAttribute(tagToken, item);
+        }
     }
 
     // https://html.spec.whatwg.org/multipage/parsing.html#adjust-foreign-attributes
     private static void AdjustForeignAttributes(StartTag tagToken) {
         // todo 
+    }
+
+    private static void AdjustAttribute(StartTag tagToken, (string from, string to) item) {
+        if (tagToken.Attributes.Count == 0) return;
+
+        var attributeToUpdate = tagToken.Attributes.FirstOrDefault((attr) => attr.name == item.from);
+        if (attributeToUpdate is not null) {
+            attributeToUpdate.name = item.to;
+        }
     }
 
     // https://html.spec.whatwg.org/multipage/parsing.html#insert-an-element-at-the-adjusted-insertion-location
