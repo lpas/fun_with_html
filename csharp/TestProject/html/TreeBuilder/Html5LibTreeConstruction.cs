@@ -72,7 +72,7 @@ public sealed class Html5LibTreeConstruction {
             25,26 // todo example of tree compare math attributes
             ],[])),
         ("tests10.dat", ([26,38],[1,5,6,7,8,9,15,16,17,22,23,24,25,30,31,34,35,40,42,44,46,48,50,51,52,53,],[])),
-        ("tests11.dat", ([],[2],[])), // adjust foreign attr names
+        ("tests11.dat", ([],[],[])),
         ("tests12.dat", ([],[0,1],[])),
         // tests13.dat is missing
         ("tests14.dat", ([],[],[])),

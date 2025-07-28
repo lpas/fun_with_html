@@ -97,6 +97,8 @@ Test
             |   <body>
             |     <hr>
             |       bar="baz"
+            |       filterUnits=""
+            |       filterres=""
             |       foo="bar"
             """);
         var testCase = testReader.GetTestCases().First();
@@ -109,6 +111,8 @@ Test
         var hr = new Element(document, "hr");
         hr.attributes.Add("foo", "bar");
         hr.attributes.Add("bar", "baz");
+        hr.attributes.Add("filterres", "");
+        hr.attributes.Add("filterUnits", "");
         body.childNodes.Add(hr);
         TestReader.AssertEqDocument(testCase, document);
     }
