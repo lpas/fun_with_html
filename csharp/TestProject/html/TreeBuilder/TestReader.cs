@@ -111,13 +111,8 @@ public class TestReader(IEnumerable<string> iter) {
     }
 
     public static void AssertEqDocument(TestCase testCase, Document document) {
-        var stack = new Stack<(Node, int)>();
-        foreach (var child in Enumerable.Reverse(document.childNodes)) {
-            stack.Push((child, 1));
-        }
         var iter = testCase.document.GetEnumerator();
-        while (stack.Count > 0) {
-            var (node, depth) = stack.Pop();
+        foreach (var (node, depth) in GetTreeLines(document)) {
             var indentation = depth == 0 ? "" : ("|" + new string(' ', depth * 2 - 1));
             if (!iter.MoveNext()) {
                 Assert.Fail($"tree != testCase (testCase empty) \n tree:     {indentation}{node} \n testCase: {iter.Current}");
@@ -125,6 +120,22 @@ public class TestReader(IEnumerable<string> iter) {
             if ($"{indentation}{node}" != iter.Current) {
                 Assert.Fail($"tree != testCase (diff) \n tree:     {indentation}{node} \n testCase: {iter.Current}");
             }
+        }
+        if (iter.MoveNext()) {
+            Assert.Fail($"tree != testCase (document empty) \n tree:     \n testCase: {iter.Current}");
+        }
+    }
+
+
+    public static IEnumerable<(Node node, int depth)> GetTreeLines(Node baseNode) {
+        var stack = new Stack<(Node, int)>();
+        foreach (var child in Enumerable.Reverse(baseNode.childNodes)) {
+            stack.Push((child, 1));
+        }
+
+        while (stack.Count > 0) {
+            var (node, depth) = stack.Pop();
+            yield return (node, depth);
             if (node is Element { localName: "template" }) {
                 var templateContent = new TemplateContent {
                     childNodes = node.childNodes
@@ -142,22 +153,13 @@ public class TestReader(IEnumerable<string> iter) {
                 }
             }
         }
-        if (iter.MoveNext()) {
-            Assert.Fail($"tree != testCase (document empty) \n tree:     \n testCase: {iter.Current}");
-        }
     }
 
 
     public static void PrintDebugDocumentTree(Node baseNode) {
-        var stack = new Stack<(Node, int)>();
-        stack.Push((baseNode, 0));
-        while (stack.Count > 0) {
-            var (node, depth) = stack.Pop();
+        foreach (var (node, depth) in GetTreeLines(baseNode)) {
             var indentation = depth == 0 ? "" : ("|" + new string(' ', depth * 2 - 1));
             Console.WriteLine($"{indentation}{node}");
-            foreach (var child in Enumerable.Reverse(node.childNodes)) {
-                stack.Push((child, depth + 1));
-            }
         }
     }
 

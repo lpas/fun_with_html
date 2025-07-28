@@ -159,7 +159,7 @@ public sealed class Html5LibTreeConstruction {
                     Console.WriteLine("ERROR TREE");
                     Console.WriteLine(index);
                     Console.WriteLine(testCase);
-                    treeBuilder.PrintDebugDocumentTree();
+                    TestReader.PrintDebugDocumentTree(treeBuilder.Document);
                     foreach (var error in treeBuilder.Errors) {
                         Console.WriteLine(error);
                     }

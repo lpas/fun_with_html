@@ -3612,28 +3612,6 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
         child.parent = target;
     }
 
-    public void PrintDebugDocumentTree() {
-        PrintDebugDocumentTree(document);
-    }
-    public static void PrintDebugDocumentTree(Node baseNode) {
-        var stack = new Stack<(Node, int)>();
-        stack.Push((baseNode, 0));
-        while (stack.Count > 0) {
-            var (node, depth) = stack.Pop();
-            var indentation = depth == 0 ? "" : ("|" + new string(' ', depth * 2 - 1));
-            Console.WriteLine($"{indentation}{node}");
-            if (node is Element element && element.attributes.Count > 0) {
-                var attributeIndentation = "|" + new string(' ', (depth + 1) * 2 - 1);
-                foreach (var attr in element.attributes) {
-                    Console.WriteLine($"{attributeIndentation}{attr.Key}=\"{attr.Value}\"");
-                }
-            }
-            foreach (var child in Enumerable.Reverse(node.childNodes)) {
-                stack.Push((child, depth + 1));
-            }
-        }
-    }
-
 }
 
 
