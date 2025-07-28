@@ -129,7 +129,11 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
     private InsertionMode insertionMode = InsertionMode.Initial;
     private InsertionMode originalInsertionMode = InsertionMode.Initial;
     private List<Element> stackOfOpenElements = [];
+    // The current node is the bottommost node in this stack of open elements.
     private Element currentNode { get => stackOfOpenElements.Peek(); }
+    // The adjusted current node is the context element if the parser was created as part of the HTML fragment parsing algorithm and the stack of open elements has only one element in it (fragment case);
+    // otherwise, the adjusted current node is the current node.
+    private Element adjustedCurrentNode { get => currentNode; } // todo fragment case
     public List<ParseError> Errors { get => [.. parseErrors]; }
 
     private Element? headElementPointer = null;
@@ -173,88 +177,126 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
             MoveToNextToken();
             if (debugPrint) Debug.WriteLine(token);
 
-
-            switch (insertionMode) {
-                case InsertionMode.Initial:
-                    InsertionModeInitial();
-                    break;
-                case InsertionMode.BeforeHtml:
-                    InsertionModeBeforeHtml();
-                    break;
-                case InsertionMode.BeforeHead:
-                    InsertionModeBeforeHead();
-                    break;
-                case InsertionMode.InHead:
-                    InsertionModeInHead();
-                    break;
-                case InsertionMode.InHeadNoscript:
-                    InsertionModeInHeadNoscript();
-                    break;
-                case InsertionMode.AfterHead:
-                    InsertionModeAfterHead();
-                    break;
-                case InsertionMode.InBody:
-                    InsertionModeInBody();
-                    break;
-                case InsertionMode.Text:
-                    InsertionModeText();
-                    break;
-                case InsertionMode.InTable:
-                    InsertionModeInTable();
-                    break;
-                case InsertionMode.InTableText:
-                    InSertionModeInTableText();
-                    break;
-                case InsertionMode.InCaption:
-                    InsertionModeInCaption();
-                    break;
-                case InsertionMode.InColumnGroup:
-                    InsertionModeInColumnGroup();
-                    break;
-                case InsertionMode.InTableBody:
-                    InsertionModeInTableBody();
-                    break;
-                case InsertionMode.InRow:
-                    InsertionModeInRow();
-                    break;
-                case InsertionMode.InCell:
-                    InsertionModeInCell();
-                    break;
-                case InsertionMode.InSelect:
-                    InsertionModeInSelect();
-                    break;
-                case InsertionMode.InSelectInTable:
-                    InsertionModeInSelectInTable();
-                    break;
-                case InsertionMode.InTemplate:
-                    InsertionModeInTemplate();
-                    break;
-                case InsertionMode.AfterBody:
-                    InsertionModeAfterBody();
-                    break;
-                case InsertionMode.InFrameset:
-                    InsertionModeInFrameset();
-                    break;
-                case InsertionMode.AfterFrameset:
-                    InsertionModeAfterFrameset();
-                    break;
-                case InsertionMode.AfterAfterBody:
-                    InsertionModeAfterAfterBody();
-                    break;
-                case InsertionMode.AfterAfterFrameset:
-                    InsertionModeAfterAfterFrameset();
-                    break;
-
-                default:
-                    throw new NotImplementedException($"insertionMode: {insertionMode}");
-
+            // https://html.spec.whatwg.org/multipage/parsing.html#tree-construction-dispatcher
+            if (stackOfOpenElements.Count == 0
+                || adjustedCurrentNode is Element { @namespace: Namespaces.HTML }
+                || (IsAMathMlTextIntegrationPoint(adjustedCurrentNode) && token is StartTag tag && tag.name is not "mglyph" or "malignmark")
+                || (IsAMathMlTextIntegrationPoint(adjustedCurrentNode) && token is Character)
+                || (IsAMathMLAnnotationXmlElement(adjustedCurrentNode) && token is StartTag tag2 && tag2.name is "svg")
+                || (IsAnHTMLIntegrationPoint(adjustedCurrentNode) && token is StartTag)
+                || (IsAnHTMLIntegrationPoint(adjustedCurrentNode) && token is Character)
+                || token is EndOfFile
+            ) {
+                ProcessTokenWithCurrentInsertionMode();
+            } else {
+                ParsingTokensInForeignContent();
             }
+        }
+    }
 
+    // https://html.spec.whatwg.org/multipage/parsing.html#insertion-mode
+    private void ProcessTokenWithCurrentInsertionMode() {
+        switch (insertionMode) {
+            case InsertionMode.Initial:
+                InsertionModeInitial();
+                break;
+            case InsertionMode.BeforeHtml:
+                InsertionModeBeforeHtml();
+                break;
+            case InsertionMode.BeforeHead:
+                InsertionModeBeforeHead();
+                break;
+            case InsertionMode.InHead:
+                InsertionModeInHead();
+                break;
+            case InsertionMode.InHeadNoscript:
+                InsertionModeInHeadNoscript();
+                break;
+            case InsertionMode.AfterHead:
+                InsertionModeAfterHead();
+                break;
+            case InsertionMode.InBody:
+                InsertionModeInBody();
+                break;
+            case InsertionMode.Text:
+                InsertionModeText();
+                break;
+            case InsertionMode.InTable:
+                InsertionModeInTable();
+                break;
+            case InsertionMode.InTableText:
+                InSertionModeInTableText();
+                break;
+            case InsertionMode.InCaption:
+                InsertionModeInCaption();
+                break;
+            case InsertionMode.InColumnGroup:
+                InsertionModeInColumnGroup();
+                break;
+            case InsertionMode.InTableBody:
+                InsertionModeInTableBody();
+                break;
+            case InsertionMode.InRow:
+                InsertionModeInRow();
+                break;
+            case InsertionMode.InCell:
+                InsertionModeInCell();
+                break;
+            case InsertionMode.InSelect:
+                InsertionModeInSelect();
+                break;
+            case InsertionMode.InSelectInTable:
+                InsertionModeInSelectInTable();
+                break;
+            case InsertionMode.InTemplate:
+                InsertionModeInTemplate();
+                break;
+            case InsertionMode.AfterBody:
+                InsertionModeAfterBody();
+                break;
+            case InsertionMode.InFrameset:
+                InsertionModeInFrameset();
+                break;
+            case InsertionMode.AfterFrameset:
+                InsertionModeAfterFrameset();
+                break;
+            case InsertionMode.AfterAfterBody:
+                InsertionModeAfterAfterBody();
+                break;
+            case InsertionMode.AfterAfterFrameset:
+                InsertionModeAfterAfterFrameset();
+                break;
 
+            default:
+                throw new NotImplementedException($"insertionMode: {insertionMode}");
 
         }
+    }
 
-
+    // https://w3c.github.io/mathml-core/#dfn-annotation-xml
+    private static bool IsAMathMLAnnotationXmlElement(Element elem) {
+        return false; // todo
+    }
+    // https://html.spec.whatwg.org/multipage/parsing.html#mathml-text-integration-point
+    private static bool IsAMathMlTextIntegrationPoint(Element elem) {
+        // A node is a MathML text integration point if it is one of the following elements:
+        // A MathML mi element
+        // A MathML mo element
+        // A MathML mn element
+        // A MathML ms element
+        // A MathML mtext element        
+        return elem is Element { @namespace: Namespaces.MATH, localName: "mi" or "mo" or "mn" or "mn" or "ms" or "mtext" };
+    }
+    // https://html.spec.whatwg.org/multipage/parsing.html#html-integration-point
+    private static bool IsAnHTMLIntegrationPoint(Element elem) {
+        // A node is an HTML integration point if it is one of the following elements:
+        // A MathML annotation-xml element whose start tag token had an attribute with the name "encoding" whose value was an ASCII case-insensitive match for the string "text/html"
+        // A MathML annotation-xml element whose start tag token had an attribute with the name "encoding" whose value was an ASCII case-insensitive match for the string "application/xhtml+xml"
+        // An SVG foreignObject element
+        // An SVG desc element
+        // An SVG title element
+        // todo math annotation cases
+        return elem is Element { @namespace: Namespaces.SVG, localName: "foreignObject" or "desc" or "title" };
     }
 
     // 13.2.6.2 Parsing elements that contain only text
@@ -3131,6 +3173,105 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
 
         // 16. Return element.
         return element;
+    }
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inforeign
+    private void ParsingTokensInForeignContent() {
+        switch (token) {
+            case Character { data: '\0' }:
+                // Parse error. Insert a U+FFFD REPLACEMENT CHARACTER character.
+                AddParseError("foreign-content-unexpeced-null-character");
+                InsertACharacter(new Character('\uFFFD'));
+                break;
+            case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' } cToken:
+                // Insert the token's character.
+                InsertACharacter(cToken);
+                break;
+            case Character cToken:
+                // Insert the token's character.
+                InsertACharacter(cToken);
+                // Set the frameset-ok flag to "not ok".
+                framesetOk = false;
+                break;
+            case Tokenizer.Comment comment:
+                // Insert a comment.
+                InsertAComment(comment);
+                break;
+            case DOCTYPE:
+                // Parse error. Ignore the token.
+                AddParseError("foreign-content-unexpected-doctype-ignored");
+                break;
+            case StartTag { name: "b" or "big" or "blockquote" or "body" or "br" or "center" or "code" or "dd" or "div" or "dl" or "dt" or "em" or "embed" or "h1" or "h2" or "h3" or "h4" or "h5" or "h6" or "head" or "hr" or "i" or "img" or "li" or "listing" or "menu" or "meta" or "nobr" or "ol" or "p" or "pre" or "ruby" or "s" or "small" or "span" or "strong" or "strike" or "sub" or "sup" or "table" or "tt" or "u" or "ul" or "var" }:
+            case StartTag { name: "font" } tag when tag.Attributes.Any(item => item.name is "color" or "face" or "size"):
+            case EndTag { name: "br" or "p" }:
+                // Parse error.
+                AddParseError("foreign-content-unexpected-end-tag");
+                // While the current node is not a MathML text integration point, an HTML integration point, or an element in the HTML namespace, pop elements from the stack of open elements.
+                while (!(IsAMathMlTextIntegrationPoint(currentNode) || IsAnHTMLIntegrationPoint(currentNode) || currentNode is Element { @namespace: Namespaces.HTML })) {
+                    stackOfOpenElements.Pop();
+                }
+                // Reprocess the token according to the rules given in the section corresponding to the current insertion mode in HTML content.            
+                ProcessTokenWithCurrentInsertionMode();
+                break;
+            case StartTag tagToken:
+                // If the adjusted current node is an element in the MathML namespace, adjust MathML attributes for the token. 
+                // (This fixes the case of MathML attributes that are not all lowercase.)
+                if (adjustedCurrentNode is Element { @namespace: Namespaces.MATH }) {
+                    AdjustMathMLAttributes(tagToken);
+                }
+                // If the adjusted current node is an element in the SVG namespace, and the token's tag name is one of the ones in the first column of the following table,
+                // change the tag name to the name given in the corresponding cell in the second column. (This fixes the case of SVG elements that are not all lowercase.)
+                // todo
+
+                // If the adjusted current node is an element in the SVG namespace, adjust SVG attributes for the token. 
+                // (This fixes the case of SVG attributes that are not all lowercase.)
+                if (adjustedCurrentNode is Element { @namespace: Namespaces.SVG }) {
+                    AdjustSvgAttributes(tagToken);
+                }
+                // Adjust foreign attributes for the token. (This fixes the use of namespaced attributes, in particular XLink in SVG.)
+                AdjustForeignAttributes(tagToken);
+                // Insert a foreign element for the token, with the adjusted current node's namespace and false.
+                InsertAForeignElement(tagToken, adjustedCurrentNode.@namespace, false);
+                // If the token has its self-closing flag set, then run the appropriate steps from the following list:
+                if (tagToken.selfClosing) {
+                    throw new NotImplementedException();
+                    // If the token's tag name is "script", and the new current node is in the SVG namespace
+                    // Acknowledge the token's self-closing flag, and then act as described in the steps for a "script" end tag below.
+                    // Otherwise
+                    // Pop the current node off the stack of open elements and acknowledge the token's self-closing flag.
+                }
+
+                break;
+            case EndTag { name: "script" } when currentNode is Element { @namespace: Namespaces.SVG, localName: "script" }: throw new NotImplementedException();
+            case EndTag tagToken:
+                // Run these steps:
+                // 1. Initialize node to be the current node (the bottommost node of the stack).
+                var node = currentNode;
+                // 2. If node's tag name, converted to ASCII lowercase, is not the same as the tag name of the token, then this is a parse error.
+                if (!string.Equals(node.localName, tagToken.name, StringComparison.OrdinalIgnoreCase)) {
+                    AddParseError("foreign-content-unexpected-end-tag");
+                }
+                // 3. Loop: If node is the topmost element in the stack of open elements, then return. (fragment case)
+                for (var i = stackOfOpenElements.Count - 1; i > 0; i--) {
+                    if (i == 0) break;
+                    // 4. If node's tag name, converted to ASCII lowercase, is the same as the tag name of the token, 
+                    // pop elements from the stack of open elements until node has been popped from the stack, and then return.
+                    if (string.Equals(node.localName, tagToken.name, StringComparison.OrdinalIgnoreCase)) {
+                        while (stackOfOpenElements.Pop() != node) { }
+                        break;
+                    }
+                    // 5. Set node to the previous entry in the stack of open elements.
+                    node = stackOfOpenElements[i - 1];
+                    // 6. If node is not an element in the HTML namespace, return to the step labeled loop.
+                    if (node.@namespace != Namespaces.HTML) continue;
+                    // 7. Otherwise, process the token according to the rules given in the section corresponding to the current insertion mode in HTML content.
+                    ProcessTokenWithCurrentInsertionMode();
+                    break;
+                }
+                break;
+            default:
+                throw new InvalidOperationException();
+        }
     }
 
     //https://dom.spec.whatwg.org/#concept-create-element

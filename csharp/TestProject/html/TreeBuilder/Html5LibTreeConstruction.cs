@@ -16,7 +16,7 @@ public sealed class Html5LibTreeConstruction {
         ("comments01.dat", ([],[],[1,2,3,4,6,7,9,10,11,12,13])),
         ("doctype01.dat", ([],[],[2,3,4,7,8,9,10,11,12,16,17,18,19,20,21,23,25,30,33,34,35,36])),
         ("domjs-unsafe.dat", ([
-        ],[4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,36,44,45,46,47,48],[3])),
+        ],[4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,36],[3])),
         // entities01
         // entities02
         // foreign-fragment
@@ -25,7 +25,7 @@ public sealed class Html5LibTreeConstruction {
         ],[19,],[1,2,3,11])),
         ("inbody01.dat", ([],[],[])),
         ("isindex.dat", ([],[],[])),
-        ("main-element.dat", ([],[2],[])),
+        ("main-element.dat", ([],[],[])),
         // math
         ("menuitem-element.dat", ([9,],[],[])), // infinity spinning
         ("namespace-sensitivity.dat", ([],[0],[])),
@@ -33,13 +33,13 @@ public sealed class Html5LibTreeConstruction {
         // pending-spec-changes-plain-text-unsafe
         // pending-spec-changes
         ("plain-text-unsafe.dat", ([
-        ],[0,1,2,4,5,10, 13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32 ],[3,6,7,8,9,11,12])),
+        ],[0,1,2,4,5, 13,18,19,21,22,23,24,25,27 ],[3,6,7,8,9,11,12,14,15,16,17,20,26,28,29,30,31,32])),
         ("quirks01.dat", ([],[1,2,3],[])),
         // ruby.dat 
          ("scriptdata01.dat", ([],[5,15,16,17,19,20,21,22,23,24,25,],[3,4,6])),
-         ("search-element.dat", ([],[2],[])),
+         ("search-element.dat", ([],[],[])),
         // svg
-        ("tables01.dat", ([],[3,6,7,8,9,16, 17,18],[])),
+        ("tables01.dat", ([],[3,6,7,8,9, 17,18],[])),
         ("template.dat", ([
             21,22,90,100, // infinity spinning
             91, 110, // index out of bounds
@@ -81,7 +81,7 @@ public sealed class Html5LibTreeConstruction {
         ("tests17.dat", ([],[0,1,],[])),
         ("tests18.dat", ([
             28, 29, //  infinity running
-        ],[7,8,9,12,14,15,23,24, 21,22,],[])),
+        ],[7,8,9,12,14,15,23,24,],[])),
         ("tests19.dat", ([
             14, 15, 16, 17, 97, 98, // infinity running
             90, 91, 92, // adopting index out of bounds
@@ -91,19 +91,19 @@ public sealed class Html5LibTreeConstruction {
         ],[83])),
         ("tests20.dat", ([
             62, //infinity spinning
-        ],[41,48,49,52, 53, 54,55,56,57,58,59,60,61,62,63],[])),
+        ],[41,48, 54,55,56,57,62,63],[])),
         // tests21 svg
         ("tests22.dat", ([0,1,2,3,4],[],[])), // adopting
         ("tests23.dat", ([],[0,1,2,3,4],[])), // adopting
         ("tests24.dat", ([0,1,2,3,4,5,6,7],[],[])), // tokenizer
         ("tests25.dat", ([],[],[])),
         ("tests26.dat", ([0,3, 4, // infinity running
-        ],[2,9,10,11,12,13,16,17,18,19],[14])),
+        ],[2,9,10,11],[14])),
         // tricky01
         ("webkit01.dat", ([
             15, // tokenizer
             48, // infinity spinning
-        ],[36,37,40,41, 42, 43,46,47,49,50,],[3,9,10,13,14,17,19,38,39,44,45])),
+        ],[36,37,40,50,],[3,9,10,13,14,17,19,38,39,44,45])),
         ("webkit02.dat", ([
                 12,13, //index out of bounds
                 15, 30, 31, 32, 33, 34,  //infinity spinning
