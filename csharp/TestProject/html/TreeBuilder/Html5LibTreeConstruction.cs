@@ -114,7 +114,7 @@ public sealed class Html5LibTreeConstruction {
         ("webkit01.dat", ([
             15, // tokenizer
             48, // infinity spinning
-        ],[36,37,40,50,],[3,9,10,13,14,17,19,38,39,44,45])),
+        ],[36,37,40,50,],[3,9,10,13,14,17,19,38,39,44])),
         ("webkit02.dat", ([
                 12,13, //index out of bounds
                 15, 30, 31, 32, 33, 34,  //infinity spinning

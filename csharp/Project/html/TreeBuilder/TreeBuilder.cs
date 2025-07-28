@@ -192,6 +192,14 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
             } else {
                 ParsingTokensInForeignContent();
             }
+
+
+            if (!shouldReprocessToken) {
+                if (token is StartTag { selfClosing: true, acknowledgedSelfClosingFlag: false }) {
+                    AddParseError("non-void-html-element-start-tag-with-trailing-solidus");
+                }
+            }
+
         }
     }
 
@@ -664,20 +672,19 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 InsertAnHTMLElement(tagToken);
                 stackOfOpenElements.Pop();
                 // Acknowledge the token's self-closing flag, if it is set.
-                // todo
+                tagToken.AcknowledgeSelfClosingFlag();
                 break;
             case StartTag { name: "meta" } tagToken:
                 // Insert an HTML element for the token. Immediately pop the current node off the stack of open elements.
                 InsertAnHTMLElement(tagToken);
                 stackOfOpenElements.Pop();
                 // Acknowledge the token's self-closing flag, if it is set.
-
-                // If the active speculative HTML parser is null, then:
-
+                tagToken.AcknowledgeSelfClosingFlag();
+                // If the active speculative HTML parser is null, then:                
                 // 1. If the element has a charset attribute, and getting an encoding from its value results in an encoding, and the confidence is currently tentative, then change the encoding to the resulting encoding.
-
+                // todo
                 // 2. Otherwise, if the element has an http-equiv attribute whose value is an ASCII case-insensitive match for the string "Content-Type", and the element has a content attribute, and applying the algorithm for extracting a character encoding from a meta element to that attribute's value returns an encoding, and the confidence is currently tentative, then change the encoding to the extracted encoding.
-
+                // todo
                 break;
             case StartTag { name: "title" } startTag:
                 // Follow the generic RCDATA element parsing algorithm.
@@ -823,6 +830,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 break;
             case StartTag { name: "head" }:
             case EndTag:
+                // Parse error. Ignore the token.
                 AddParseError("InsertionMode.InHead: EndTag");
                 break; // ignore the token
             default:
@@ -976,7 +984,6 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 AddParseError("in-body-unexpected-doctype-ignored");
                 break;
             case StartTag { name: "html" } tagToken:
-
                 // Parse error.
                 AddParseError("in-body-unexpected-html");
                 // If there is a template element on the stack of open elements, then ignore the token.
@@ -991,6 +998,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 break;
             case StartTag { name: "base" or "basefont" or "bgsound" or "link" or "meta" or "noframes" or "script" or "style" or "template" or "title" }:
             case EndTag { name: "template" }:
+                // Process the token using the rules for the "in head" insertion mode.
                 InsertionModeInHead();
                 break;
             case StartTag { name: "body" } tagToken:
@@ -1474,7 +1482,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 InsertAnHTMLElement(tagToken);
                 stackOfOpenElements.Pop();
                 // Acknowledge the token's self-closing flag, if it is set.
-                // todo
+                tagToken.AcknowledgeSelfClosingFlag();
                 // Set the frameset-ok flag to "not ok".
                 framesetOk = false;
                 break;
@@ -1485,7 +1493,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 InsertAnHTMLElement(tagToken);
                 stackOfOpenElements.Pop();
                 // Acknowledge the token's self-closing flag, if it is set.
-                // todo
+                tagToken.AcknowledgeSelfClosingFlag();
                 // If the token does not have an attribute with the name "type", or if it does, but that attribute's value is not an ASCII case-insensitive match for the string "hidden", then: set the frameset-ok flag to "not ok".
                 if (!tagToken.Attributes.Any((item) => item.name == "type" && string.Equals(item.value, "hidden", StringComparison.OrdinalIgnoreCase))) {
                     framesetOk = false;
@@ -1496,7 +1504,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 InsertAnHTMLElement(tagToken);
                 stackOfOpenElements.Pop();
                 // Acknowledge the token's self-closing flag, if it is set.
-                // todo
+                tagToken.AcknowledgeSelfClosingFlag();
                 break;
             case StartTag { name: "hr" } tagToken:
                 // If the stack of open elements has a p element in button scope, then close a p element.
@@ -1507,7 +1515,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 InsertAnHTMLElement(tagToken);
                 stackOfOpenElements.Pop();
                 // Acknowledge the token's self-closing flag, if it is set.
-                // todo
+                tagToken.AcknowledgeSelfClosingFlag();
                 // Set the frameset-ok flag to "not ok".
                 framesetOk = false;
                 break;
@@ -1615,7 +1623,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // If the token has its self-closing flag set, pop the current node off the stack of open elements and acknowledge the token's self-closing flag.
                 if (tagToken.selfClosing) {
                     stackOfOpenElements.Pop();
-                    // todo acknowledge self closing 
+                    tagToken.AcknowledgeSelfClosingFlag();
                 }
                 break;
             case StartTag { name: "svg" } tagToken:
@@ -1630,7 +1638,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // If the token has its self-closing flag set, pop the current node off the stack of open elements and acknowledge the token's self-closing flag.
                 if (tagToken.selfClosing) {
                     stackOfOpenElements.Pop();
-                    // todo acknowledge self closing 
+                    tagToken.AcknowledgeSelfClosingFlag();
                 }
                 break;
             case StartTag { name: "caption" or "col" or "colgroup" or "frame" or "head" or "tbody" or "td" or "tfoot" or "th" or "thead" or "tr" }:
@@ -1976,7 +1984,9 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 ReprocessTheToken();
                 break;
             case StartTag { name: "tbody" or "tfoot" or "thead" } tagToken:
+                // Clear the stack back to a table context. (See below.)
                 ClearTheStackBackToTableContext();
+                // Insert an HTML element for the token, then switch the insertion mode to "in table body".                            
                 InsertAnHTMLElement(tagToken);
                 insertionMode = InsertionMode.InTableBody;
                 break;
@@ -2042,7 +2052,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                     // Pop that input element off the stack of open elements.
                     stackOfOpenElements.Pop();
                     // Acknowledge the token's self-closing flag, if it is set.
-                    // todo
+                    tagToken.AcknowledgeSelfClosingFlag();
                 }
                 break;
             case StartTag { name: "form" } tagToken:
@@ -2174,6 +2184,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
     private void InsertionModeInColumnGroup() {
         switch (token) {
             case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' } cToken:
+                // Insert the character.
                 InsertACharacter(cToken);
                 break;
             case Tokenizer.Comment comment:
@@ -2193,7 +2204,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 InsertAnHTMLElement(tagToken);
                 stackOfOpenElements.Pop();
                 // Acknowledge the token's self-closing flag, if it is set.
-                // todo
+                tagToken.AcknowledgeSelfClosingFlag();
                 break;
             case EndTag { name: "colgroup" }:
                 // If the current node is not a colgroup element, then this is a parse error; ignore the token.
@@ -2515,7 +2526,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 InsertAnHTMLElement(tagToken);
                 stackOfOpenElements.Pop();
                 // Acknowledge the token's self-closing flag, if it is set.
-                // todo
+                tagToken.AcknowledgeSelfClosingFlag();
                 break;
             case EndTag { name: "optgroup" }:
                 // First, if the current node is an option element, and the node immediately before it in the stack of open elements is an optgroup element, then pop the current node from the stack of open elements.
@@ -2806,7 +2817,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 InsertAnHTMLElement(tagToken);
                 stackOfOpenElements.Pop();
                 // Acknowledge the token's self-closing flag, if it is set.
-                // todo
+                tagToken.AcknowledgeSelfClosingFlag();
                 break;
             case StartTag { name: "noframes" }:
                 // Process the token using the rules for the "in head" insertion mode.
@@ -2877,9 +2888,11 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
             case DOCTYPE:
             case Character { data: '\t' or '\n' or '\f' or '\r' or ' ' }:
             case StartTag { name: "html" }:
+                // Process the token using the rules for the "in body" insertion mode.
                 InsertionModeInBody();
                 break;
             case EndOfFile:
+                // Stop parsing.
                 StopParsing();
                 break;
             default:
@@ -3487,13 +3500,13 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                     // If the token's tag name is "script", and the new current node is in the SVG namespace
                     // Acknowledge the token's self-closing flag, and then act as described in the steps for a "script" end tag below.                    
                     if (tagToken.name == "script" && currentNode is Element { @namespace: Namespaces.SVG }) {
-                        // todo acknowledge self-closing
+                        tagToken.AcknowledgeSelfClosingFlag();
                         throw new NotImplementedException();
                     } else {
                         // Otherwise
-                        // Pop the current node off the stack of open elements and acknowledge the token's self-closing flag.
-                        // todo acknowledge self-closing
+                        // Pop the current node off the stack of open elements and acknowledge the token's self-closing flag.                        
                         stackOfOpenElements.Pop();
+                        tagToken.AcknowledgeSelfClosingFlag();
                     }
                 }
 

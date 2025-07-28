@@ -117,6 +117,10 @@ public class Tag: Token, IEquatable<Tag> {
     public bool selfClosing { get; set; } = false;
     public List<Attribute> Attributes { get; set; } = [];
 
+    public bool acknowledgedSelfClosingFlag { get; private set; } = false;
+    public void AcknowledgeSelfClosingFlag() {
+        acknowledgedSelfClosingFlag = true;
+    }
     public override string ToString() {
         var sb = new StringBuilder();
         sb.Append(base.ToString());
