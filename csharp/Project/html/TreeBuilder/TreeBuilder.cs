@@ -1033,15 +1033,17 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 break;
             case EndOfFile: {
                     // If the stack of template insertion modes is not empty, then process the token using the rules for the "in template" insertion mode.
-                    // todo
-                    // Otherwise, follow these steps:
-                    // todo
-                    // If there is a node in the stack of open elements that is not either a dd element, a dt element, an li element, an optgroup element, an option element, a p element, an rb element, an rp element, an rt element, an rtc element, a tbody element, a td element, a tfoot element, a th element, a thead element, a tr element, the body element, or the html element, then this is a parse error.
-                    if (stackOfOpenElements.Any((elem) => elem is not Element { localName: "dd" or "dt" or "li" or "optgroup" or "option" or "p" or "rb" or "rp" or "rt" or "rtc" or "tbody" or "td" or "tfoot" or "th" or "thead" or "tr" or "body" or "html" })) {
-                        AddParseError("expected-closing-tag-but-got-eof");
+                    if (stackOfTemplateInsertionModes.Count != 0) {
+                        InsertionModeInTemplate();
+                    } else {
+                        // Otherwise, follow these steps:
+                        // 1. If there is a node in the stack of open elements that is not either a dd element, a dt element, an li element, an optgroup element, an option element, a p element, an rb element, an rp element, an rt element, an rtc element, a tbody element, a td element, a tfoot element, a th element, a thead element, a tr element, the body element, or the html element, then this is a parse error.
+                        if (stackOfOpenElements.Any((elem) => elem is not Element { localName: "dd" or "dt" or "li" or "optgroup" or "option" or "p" or "rb" or "rp" or "rt" or "rtc" or "tbody" or "td" or "tfoot" or "th" or "thead" or "tr" or "body" or "html" })) {
+                            AddParseError("expected-closing-tag-but-got-eof");
+                        }
+                        // 2. Stop parsing.
+                        StopParsing();
                     }
-                    // Stop parsing.
-                    StopParsing();
                     break;
                 }
             case EndTag { name: "body" }:

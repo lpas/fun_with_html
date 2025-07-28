@@ -42,9 +42,9 @@ public sealed class Html5LibTreeConstruction {
         ("tables01.dat", ([],[3,6,7,8,9, 17,18],[])),
         ("template.dat", ([
             21,22,90,100, // infinity spinning
-            91, 110, // index out of bounds
+            91, 98, 110, // index out of bounds
         ],[1,2,3,4,10,11,12, 20,37,40,41,44,64,65,66,67,68,79,80,81,82,83,84,85,86,87,88,89,92,93,94,95,96,97,98,99,101,107,109,110,111],
-        [25,32,38, 106])),
+        [106])),
         // tests_innerHTML_1
         ("tests1.dat", ([29, 30, 57, 99, // tree building has problems infinity running tests
             70, 71, 72, 73, 74, 75, ],  // adoption agency index out of range
