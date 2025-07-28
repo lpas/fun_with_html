@@ -34,7 +34,7 @@ public sealed class Html5LibTreeConstruction {
         // pending-spec-changes
         ("plain-text-unsafe.dat", ([
         ],[0,1,2,4,5, 13,18,19,21,22,23,24,25,27 ],[3,6,7,8,9,11,12,14,15,16,17,20,26,28,29,30,31,32])),
-        ("quirks01.dat", ([],[1,2,3],[])),
+        ("quirks01.dat", ([],[2],[])),
         // ruby.dat 
         ("scriptdata01.dat", ([],[5,15,16,17,19,20,21,22,23,24,25,],[3,4,6])),
         ("search-element.dat", ([],[],[])),
@@ -58,7 +58,7 @@ public sealed class Html5LibTreeConstruction {
         [16, 20, 21, 22, 23, 25, 28, 34, 42, 58, 59, 61])),
         ("tests3.dat", ([],[
             4, 5, 6, 7, 11, 16, 17,18, // need peek token in body <pre> & <textarea>
-            19, 21, 23 // adopting agency
+            19, 21 // adopting agency
         ],[])),
         ("tests4.dat", ([],[],[])), // fragments
         ("tests5.dat", ([12, 13],[],[])),// tokenizer not implemented
