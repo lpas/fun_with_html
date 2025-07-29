@@ -33,7 +33,7 @@ public sealed class Html5LibTreeConstruction {
         // pending-spec-changes-plain-text-unsafe
         // pending-spec-changes
         ("plain-text-unsafe.dat", ([
-        ],[0,1,2,4,5,18,19,21,22,23,24,25 ],[3,6,7,8,9,11,12,13,14,15,16,17,20,26,27,28,29,30,31,32])),
+        ],[0,1,2,4,5,18,19,21,22 ],[3,6,7,8,9,11,12,13,14,15,16,17,20,26,27,28,29,30,31,32])),
         ("quirks01.dat", ([],[2],[])),
         // ruby.dat 
         ("scriptdata01.dat", ([],[5,15,16,17,19,20,21,22,23,24,25,],[3,4,6])),
@@ -56,17 +56,14 @@ public sealed class Html5LibTreeConstruction {
             39, // infinity running
         ],[10,12,14,18, 26, 27,],
         [16, 20, 21, 22, 23, 25, 28, 34, 42, 58, 59, 61])),
-        ("tests3.dat", ([],[
-            4, 5, 6, 7, 11, 16, 17,18, // need peek token in body <pre> & <textarea>
-            19, 21 // adopting agency
-        ],[])),
+        ("tests3.dat", ([],[19, 21],[])), // adopting agency
         ("tests4.dat", ([],[],[])), // fragments
         ("tests5.dat", ([12, 13],[],[])),// tokenizer not implemented
         ("tests6.dat", ([
             2, 3, // tokenizer not implemented
             32, 35, // adopting
         ],[25,47,48,49,50,51],[4, 5])),
-        ("tests7.dat", ([],[1, 7,8,11, 12, 15, 19, 20, 21, 22, 23, 30, 31, 32],[])),
+        ("tests7.dat", ([],[1, 7,8,11, 12, 19, 20, 21, 22, 23, 30, 31, 32],[])),
         ("tests8.dat", ([],[4, 5, 6, 7,8,9,],[])),
         ("tests9.dat", ([],[3,6,7,8,9,10,16,17,18,23,24,
             25,26 // todo example of tree compare math attributes

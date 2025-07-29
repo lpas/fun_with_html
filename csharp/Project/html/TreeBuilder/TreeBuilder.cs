@@ -163,6 +163,10 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
         shouldReprocessToken = true;
     }
 
+    // we skip pre & textarea newlines this way
+    // the spec says we should look into the next token but this would mess up parsing state
+    private bool skipNextLineFeedToken = false;
+
     private void MoveToNextToken() {
         if (shouldReprocessToken) {
             shouldReprocessToken = false;
@@ -177,6 +181,11 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
             if (finishedParsing) break;
             MoveToNextToken();
             if (debugPrint) Debug.WriteLine(token);
+            if (skipNextLineFeedToken && token is Character { data: '\n' }) {
+                skipNextLineFeedToken = false;
+                continue;
+            }
+            skipNextLineFeedToken = false;
 
             // https://html.spec.whatwg.org/multipage/parsing.html#tree-construction-dispatcher
             if (stackOfOpenElements.Count == 0
@@ -1116,7 +1125,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // Insert an HTML element for the token.
                 InsertAnHTMLElement(tagToken);
                 // If the next token is a U+000A LINE FEED (LF) character token, then ignore that token and move on to the next one. (Newlines at the start of pre blocks are ignored as an authoring convenience.)
-                // todo need peek token
+                skipNextLineFeedToken = true;
                 // Set the frameset-ok flag to "not ok".
                 framesetOk = false;
                 break;
@@ -1529,7 +1538,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 // 1. Insert an HTML element for the token.
                 InsertAnHTMLElement(tagToken);
                 // 2. If the next token is a U+000A LINE FEED (LF) character token, then ignore that token and move on to the next one. (Newlines at the start of textarea elements are ignored as an authoring convenience.)
-                // todo need peek token
+                skipNextLineFeedToken = true;
                 // 3. Switch the tokenizer to the RCDATA state.
                 tokenizer.SwitchState(State.RCDATAState);
                 // 4. Set the original insertion mode to the current insertion mode.
