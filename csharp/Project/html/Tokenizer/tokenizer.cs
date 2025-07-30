@@ -2380,7 +2380,7 @@ public class Tokenizer(string content, bool debugPrint = false) {
             characterReferenceCode = 0xFFFD;
         }
         // If the number is greater than 0x10FFFF, then this is a character-reference-outside-unicode-range parse error. Set the character reference code to 0xFFFD.
-        if (characterReferenceCode > 0x10FFF) {
+        if (characterReferenceCode > 0x10FFFF) {
             AddParseError("character-reference-outside-unicode-range");
             characterReferenceCode = 0xFFFD;
         }
@@ -2394,7 +2394,7 @@ public class Tokenizer(string content, bool debugPrint = false) {
             AddParseError("noncharacter-character-reference");
         }
         // If the number is 0x0D, or a control that's not ASCII whitespace, then this is a control-character-reference parse error. If the number is one of the numbers in the first column of the following table, then find the row with that number in the first column, and set the character reference code to the number in the second column of that row.        
-        if (characterReferenceCode is 0x0D || IsControl((char)characterReferenceCode) && !IsASCIIWhitespace((char)characterReferenceCode)) {
+        if (characterReferenceCode <= char.MaxValue && (characterReferenceCode is 0x0D || IsControl((char)characterReferenceCode) && !IsASCIIWhitespace((char)characterReferenceCode))) {
             AddParseError("control-character-reference", Col + 1);
             switch (characterReferenceCode) {
                 case 0x80: characterReferenceCode = 0x20AC; break;
@@ -2427,7 +2427,11 @@ public class Tokenizer(string content, bool debugPrint = false) {
             }
         }
         temporaryBuffer = "";
-        temporaryBuffer += (char)characterReferenceCode;
+        if (characterReferenceCode >= char.MinValue && characterReferenceCode <= char.MaxValue) {
+            temporaryBuffer += (char)characterReferenceCode;
+        } else {
+            temporaryBuffer += char.ConvertFromUtf32((int)characterReferenceCode);
+        }
         FlushCodePointsConsumedAsACharacterReference();
         SetState(returnState);
         return currentTokens.Count > 0 ? currentTokens.Dequeue() : null;
@@ -2450,9 +2454,9 @@ public class Tokenizer(string content, bool debugPrint = false) {
     }
 
     private static bool IsNonCharacter(double c) {
-        return c is >= 0xFDD0 and <= 0xDFEF or 0xFFFF or 0x1FFFE or 0x1FFFF or 0x2FFFE or 0x2FFFF or 0x3FFFE or 0x3FFFF or 0x4FFFE or 0x4FFFF or 0x5FFFE or 0x5FFFF
-         or 0x6FFFE or 0x6FFFF or 0x7FFFE or 0x7FFFF or 0x8FFFE or 0x8FFFF or 0x9FFFE or 0x9FFFF or 0xAFFFE or 0xAFFFF or 0xBFFFE or 0xBFFFF or 0xCFFFE or 0xCFFFF or 0xDFFFE or 0xDFFFF
-          or 0xEFFFE or 0xEFFFF or 0xFFFFE or 0xFFFFF or 0x10FFFE or 0x10FFFF;
+        return c is (>= 0xFDD0 and <= 0xFDEF) or 0xFFFE or 0xFFFF or 0x1FFFE or 0x1FFFF or 0x2FFFE or 0x2FFFF or 0x3FFFE or 0x3FFFF
+         or 0x4FFFE or 0x4FFFF or 0x5FFFE or 0x5FFFF or 0x6FFFE or 0x6FFFF or 0x7FFFE or 0x7FFFF or 0x8FFFE or 0x8FFFF or 0x9FFFE or 0x9FFFF or 0xAFFFE or 0xAFFFF or 0xBFFFE or 0xBFFFF
+         or 0xCFFFE or 0xCFFFF or 0xDFFFE or 0xDFFFF or 0xEFFFE or 0xEFFFF or 0xFFFFE or 0xFFFFF or 0x10FFFE or 0x10FFFF;
     }
 
     private static bool IsASCIIWhitespace(char c) {

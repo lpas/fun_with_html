@@ -17,13 +17,12 @@ public sealed class Html5LibTreeConstruction {
         ("entities.test", []),
         ("escapeFlag.test", []),
         ("namedEntities.test", []),
-        // ("numericEntities.test", [40,41]),
+        ("numericEntities.test", []),
         // pendingSpecChanges
         ("test1.test", []),
         ("test2.test", []),
         ("test3.test", [79]), // Errors are not in the same order
-        ("test4.test", [34,35, // implementation problem utf16 and c#
-                        60,61]), // no errors raised in lookahead
+        ("test4.test", [60,61]), // no errors raised in lookahead
         // ("unicodeChars.test", []), // todo
         // ("unicodeCharsProblematic.test", []), // todo doubleEscaped
         // ("xmlViolation.test", []),  // todo  xmlViolationTests instead of tests
@@ -36,7 +35,6 @@ public sealed class Html5LibTreeConstruction {
             var contents = File.ReadAllText(path);
             var tests = JsonSerializer.Deserialize<Tests>(contents);
             foreach (var (test, index) in tests.tests.Select((test, i) => (test, i))) {
-
                 // test4 no 34,35 -- utf16 handling problem with c#
                 // if (index == 34) continue;
                 // if (index == 35) continue;
@@ -90,14 +88,14 @@ public sealed class Html5LibTreeConstruction {
             }
 
             if (tokenizerOutput.Count != testOutput.Count) {
-                // Console.WriteLine("test:");
-                // foreach (var item in testOutput) {
-                //     Console.WriteLine(item);
-                // }
-                // Console.WriteLine("tokenizer:");
-                // foreach (var item in tokenizerOutput) {
-                //     Console.WriteLine(item);
-                // }
+                Console.WriteLine("test:");
+                foreach (var item in testOutput) {
+                    Console.WriteLine(item);
+                }
+                Console.WriteLine("tokenizer:");
+                foreach (var item in tokenizerOutput) {
+                    Console.WriteLine(item);
+                }
                 return "tokenizer != test";
             }
 
@@ -116,14 +114,14 @@ public sealed class Html5LibTreeConstruction {
             }
 
             if (errors.Count != tokenizer.Errors.Count) {
-                // Console.WriteLine("test:");
-                // foreach (var error in errors) {
-                //     Console.WriteLine(error);
-                // }
-                // Console.WriteLine("tokenizer:");
-                // foreach (var error in tokenizer.Errors) {
-                //     Console.WriteLine(error);
-                // }
+                Console.WriteLine("test:");
+                foreach (var error in errors) {
+                    Console.WriteLine(error);
+                }
+                Console.WriteLine("tokenizer:");
+                foreach (var error in tokenizer.Errors) {
+                    Console.WriteLine(error);
+                }
                 return "[errors] tokenizer != test";
             }
             for (var i = 0; i < tokenizer.Errors.Count; i++) {
