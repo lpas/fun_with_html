@@ -120,9 +120,9 @@ public struct ParseError {
     }
 }
 
-public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false) {
+public class TreeBuilder {
 
-    private bool debugPrint = debugPrint;
+    private bool debugPrint;
 
     public Document Document { get => document; }
 
@@ -131,10 +131,10 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
     private InsertionMode originalInsertionMode = InsertionMode.Initial;
     private List<Element> stackOfOpenElements = [];
     // The current node is the bottommost node in this stack of open elements.
-    private Element currentNode { get => stackOfOpenElements.Peek(); }
+    private Element? currentNode { get => stackOfOpenElements.Count > 0 ? stackOfOpenElements.Peek() : null; }
     // The adjusted current node is the context element if the parser was created as part of the HTML fragment parsing algorithm and the stack of open elements has only one element in it (fragment case);
     // otherwise, the adjusted current node is the current node.
-    private Element adjustedCurrentNode { get => currentNode; } // todo fragment case
+    internal Element? adjustedCurrentNode { get => currentNode; } // todo fragment case
     public List<ParseError> Errors { get => [.. parseErrors]; }
 
     private Element? headElementPointer = null;
@@ -148,7 +148,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
 
     private HashSet<ParseError> parseErrors = [];
 
-    private Tokenizer.Tokenizer tokenizer = tokenizer;
+    private Tokenizer.Tokenizer tokenizer;
     private bool framesetOk = false;
 
     private List<Character> pendingTableCharacterTokens = [];
@@ -156,7 +156,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
     private List<InsertionMode> stackOfTemplateInsertionModes = [];
 
     private bool finishedParsing = false;
-    private Token token;
+    private Token token = new();
     private bool shouldReprocessToken = false;
 
     private void ReprocessTheToken() {
@@ -175,6 +175,11 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
         }
     }
 
+    public TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false) {
+        this.tokenizer = tokenizer;
+        this.tokenizer.SetParser(this);
+        this.debugPrint = debugPrint;
+    }
 
     public void build() {
         while (true) {
@@ -292,11 +297,11 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
     }
 
     // https://w3c.github.io/mathml-core/#dfn-annotation-xml
-    private static bool IsAMathMLAnnotationXmlElement(Element elem) {
+    private static bool IsAMathMLAnnotationXmlElement(Element? elem) {
         return false; // todo
     }
     // https://html.spec.whatwg.org/multipage/parsing.html#mathml-text-integration-point
-    private static bool IsAMathMlTextIntegrationPoint(Element elem) {
+    private static bool IsAMathMlTextIntegrationPoint(Element? elem) {
         // A node is a MathML text integration point if it is one of the following elements:
         // A MathML mi element
         // A MathML mo element
@@ -306,7 +311,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
         return elem is Element { @namespace: Namespaces.MATH, localName: "mi" or "mo" or "mn" or "mn" or "ms" or "mtext" };
     }
     // https://html.spec.whatwg.org/multipage/parsing.html#html-integration-point
-    private static bool IsAnHTMLIntegrationPoint(Element elem) {
+    private static bool IsAnHTMLIntegrationPoint(Element? elem) {
         // A node is an HTML integration point if it is one of the following elements:
         // A MathML annotation-xml element whose start tag token had an attribute with the name "encoding" whose value was an ASCII case-insensitive match for the string "text/html"
         // A MathML annotation-xml element whose start tag token had an attribute with the name "encoding" whose value was an ASCII case-insensitive match for the string "application/xhtml+xml"
@@ -1274,7 +1279,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                     // 1. Generate implied end tags.
                     GenerateImpliedEndTags();
                     // 2. If the current node is not an HTML element with the same tag name as that of the token, then this is a parse error.
-                    if (currentNode.localName != tagToken.name) {
+                    if (currentNode?.localName != tagToken.name) {
                         AddParseError("INBODY - ENDTAG - !==");
                     }
                     // 3. Pop elements from the stack of open elements until an HTML element with the same tag name as the token has been popped from the stack.
@@ -1337,7 +1342,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                     // 1. Generate implied end tags, except for li elements.
                     GenerateImpliedEndTags("li");
                     // 2. If the current node is not an li element, then this is a parse error.
-                    if (currentNode.localName != "li") {
+                    if (currentNode?.localName != "li") {
                         AddParseError("in BODY - </li> ");
                     }
                     // 3. Pop elements from the stack of open elements until an li element has been popped from the stack.
@@ -1355,7 +1360,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                     // 1. Generate implied end tags, except for HTML elements with the same tag name as the token.
                     GenerateImpliedEndTags();
                     // 2. If the current node is not an HTML element with the same tag name as that of the token, then this is a parse error.
-                    if (currentNode.localName != tagToken.name) {
+                    if (currentNode?.localName != tagToken.name) {
                         AddParseError("in-body-end-dd-dt-wrong-current-node");
                     }
                     // 3. Pop elements from the stack of open elements until an HTML element with the same tag name as the token has been popped from the stack.
@@ -1373,7 +1378,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                     // 1. Generate implied end tags.
                     GenerateImpliedEndTags();
                     // 2. If the current node is not an HTML element with the same tag name as that of the token, then this is a parse error.
-                    if (currentNode.localName != tagToken.name) {
+                    if (currentNode?.localName != tagToken.name) {
                         AddParseError("IN BODY <hX> 2");
                     }
                     // 3. Pop elements from the stack of open elements until an HTML element whose tag name is one of "h1", "h2", "h3", "h4", "h5", or "h6" has been popped from the stack.
@@ -1453,7 +1458,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                     // 1. Generate implied end tags.
                     GenerateImpliedEndTags();
                     // 2. If the current node is not an HTML element with the same tag name as that of the token, then this is a parse error.
-                    if (currentNode.localName != tagToken.name) {
+                    if (currentNode?.localName != tagToken.name) {
                         AddParseError("end-tag-too-early");
                     }
                     // 3. Pop elements from the stack of open elements until an HTML element with the same tag name as the token has been popped from the stack.
@@ -1669,7 +1674,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
             var node = currentNode;
             // 2. Loop: If node is an HTML element with the same tag name as the token, then:
             while (true) {
-                if (node.localName == tagToken.name) {
+                if (node?.localName == tagToken.name) {
                     // 1. Generate implied end tags, except for HTML elements with the same tag name as the token.
                     GenerateImpliedEndTags(tagToken.name);
                     // 2. If node is not the current node, then this is a parse error.
@@ -1684,7 +1689,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                     }
                 } else {
                     // 3. Otherwise, if node is in the special category, then this is a parse error; ignore the token, and return.    
-                    if (specialListElements.Contains(node.localName)) {
+                    if (specialListElements.Contains(node?.localName)) {
                         AddParseError("unexpected-end-tag");
                         return;
                     }
@@ -2447,7 +2452,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                     // 1. Generate implied end tags.
                     GenerateImpliedEndTags();
                     // 2. Now, if the current node is not an HTML element with the same tag name as the token, then this is a parse error.
-                    if (currentNode.localName != tagToken.name) {
+                    if (currentNode?.localName != tagToken.name) {
                         AddParseError("IN CELL - Otherwise not same");
                     }
                     // 3. Pop elements from the stack of open elements until an HTML element with the same tag name as the token has been popped from the stack.
@@ -2809,14 +2814,14 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 break;
             case EndTag { name: "frameset" }:
                 // If the current node is the root html element, then this is a parse error; ignore the token. (fragment case)
-                if (currentNode.localName == "html") {
+                if (currentNode?.localName == "html") {
                     AddParseError("In frameset root html");
                 } else {
                     // Otherwise, pop the current node from the stack of open elements.
                     stackOfOpenElements.Pop();
                 }
                 // If the parser was not created as part of the HTML fragment parsing algorithm (fragment case), and the current node is no longer a frameset element, then switch the insertion mode to "after frameset".
-                if (currentNode.localName != "frameset") {
+                if (currentNode?.localName != "frameset") {
                     // todo add fragment case 
                     insertionMode = InsertionMode.AfterFrameset;
                 }
@@ -2834,7 +2839,7 @@ public class TreeBuilder(Tokenizer.Tokenizer tokenizer, bool debugPrint = false)
                 break;
             case EndOfFile:
                 // If the current node is not the root html element, then this is a parse error.
-                if (currentNode.localName != "html") {
+                if (currentNode?.localName != "html") {
                     AddParseError("in-frameset-eof-not-html");
                 }
                 // Note: The current node can only be the root html element in the fragment case.

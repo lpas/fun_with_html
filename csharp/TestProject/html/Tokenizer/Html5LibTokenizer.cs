@@ -12,13 +12,21 @@ public sealed class Html5LibTreeConstruction {
 
     // files + expected errors
     private static (string, int[])[] files = [
+        ("contentModelFlags.test", []),
+        ("domjs.test", []),
         ("entities.test", []),
+        ("escapeFlag.test", []),
+        ("namedEntities.test", []),
+        // ("numericEntities.test", [40,41]),
+        // pendingSpecChanges
         ("test1.test", []),
         ("test2.test", []),
         ("test3.test", [79]), // Errors are not in the same order
         ("test4.test", [34,35, // implementation problem utf16 and c#
                         60,61]), // no errors raised in lookahead
-        ("escapeFlag.test", []),
+        // ("unicodeChars.test", []), // todo
+        // ("unicodeCharsProblematic.test", []), // todo doubleEscaped
+        // ("xmlViolation.test", []),  // todo  xmlViolationTests instead of tests
     ];
 
     [TestMethod]
@@ -44,6 +52,7 @@ public sealed class Html5LibTreeConstruction {
                 var description = test.description;
                 var input = test.input;
                 Console.WriteLine($"{file}:{index}|{description}");
+                if (test.doubleEscaped ?? false) continue;
                 var error = checkTest(input, test);
                 if (error is not null) {
                     if (expectedErrors.Contains(index)) continue;
@@ -94,12 +103,19 @@ public sealed class Html5LibTreeConstruction {
 
             for (var i = 0; i < tokenizerOutput.Count; i++) {
                 if (!tokenizerOutput[i].Equals(testOutput[i])) {
+                    // Console.WriteLine("test:");
+                    // foreach (var item in testOutput) {
+                    //     Console.WriteLine(item);
+                    // }
+                    // Console.WriteLine("tokenizer:");
+                    // foreach (var item in tokenizerOutput) {
+                    //     Console.WriteLine(item);
+                    // }
                     return $"tokenizer != test {i}: tokenizer ({tokenizerOutput[i]}) test ({testOutput[i]})";
                 }
             }
 
             if (errors.Count != tokenizer.Errors.Count) {
-                return "[errors] tokenizer != test";
                 // Console.WriteLine("test:");
                 // foreach (var error in errors) {
                 //     Console.WriteLine(error);
@@ -108,6 +124,7 @@ public sealed class Html5LibTreeConstruction {
                 // foreach (var error in tokenizer.Errors) {
                 //     Console.WriteLine(error);
                 // }
+                return "[errors] tokenizer != test";
             }
             for (var i = 0; i < tokenizer.Errors.Count; i++) {
                 if (tokenizer.Errors[i].error != errors[i].error) {
@@ -188,6 +205,7 @@ class Test {
     public List<ErrorItem>? errors { get; set; }
     public List<string>? initialStates { get; set; }
     public string? lastStartTag { get; set; }
+    public bool? doubleEscaped { get; set; }
 }
 
 class ErrorItem {

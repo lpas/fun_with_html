@@ -1,4 +1,5 @@
 
+using System.Diagnostics;
 using System.Text;
 using FunWithHtml.html.TreeBuilder;
 
@@ -25,14 +26,17 @@ enum State {
     ScriptDataEndTagOpenState,
     ScriptDataEndTagNameState,
     ScriptDataEscapeStartState,
-    ScriptDataEscapedDasState,
-    ScriptDataEscapedLessTahSignState,
+    ScriptDataEscapedStartDashState,
+    ScriptDataEscapedState,
+    ScriptDataEscapedDashState,
+    ScriptDataEscapedDashDashState,
+    ScriptDataEscapedLessThanSignState,
     ScriptDataEscapedEndTagOpenState,
     ScriptDataEscapedEndTagNameState,
     ScriptDataDoubleEscapeStartState,
     ScriptDataDoubleEscapedState,
     ScriptDataDoubleEscapedDashState,
-    ScriptDataDoubleEscapedDahsDashState,
+    ScriptDataDoubleEscapedDashDashState,
     ScriptDataDoubleEscapedLessTanSignState,
     ScriptDataDoubleEscapeEndState,
     BeforeAttributeNameState,
@@ -227,7 +231,7 @@ public class Attribute: IEquatable<Attribute> {
 
 }
 
-public class Tokenizer(string content) {
+public class Tokenizer(string content, bool debugPrint = false) {
 
     private static readonly Lazy<Entities> entities = new(() => new Entities());
 
@@ -260,6 +264,9 @@ public class Tokenizer(string content) {
     private bool shouldReconsume = false;
     private char? currentCharacter = null;
 
+    private TreeBuilder.TreeBuilder? parser = null;
+
+    private bool debugPrint = debugPrint;
 
     private static string NormalizeNewLines(string str) {
         // To normalize newlines in a string, replace every U+000D CR U+000A LF code point pair with a single U+000A LF code point, and then replace every remaining U+000D CR code point with a U+000A LF code point.
@@ -349,6 +356,10 @@ public class Tokenizer(string content) {
         this.state = state;
     }
 
+    internal void SetParser(TreeBuilder.TreeBuilder parser) {
+        this.parser = parser;
+    }
+
     public Token NextToken() {
         if (currentTokens.Count > 0) {
             var token = currentTokens.Dequeue();
@@ -357,6 +368,8 @@ public class Tokenizer(string content) {
         }
 
         while (true) {
+            if (debugPrint) Debug.WriteLine(state);
+
             var token = state switch {
                 State.DataState => DataState(),
                 State.RCDATAState => RCDATAState(),
@@ -376,16 +389,19 @@ public class Tokenizer(string content) {
                 State.ScriptDataEndTagOpenState => ScriptDataEndTagOpenState(),
                 State.ScriptDataEndTagNameState => ScriptDataEndTagNameState(),
                 State.ScriptDataEscapeStartState => ScriptDataEscapeStartState(),
-                State.ScriptDataEscapedDasState => throw new NotImplementedException(),
-                State.ScriptDataEscapedLessTahSignState => throw new NotImplementedException(),
-                State.ScriptDataEscapedEndTagOpenState => throw new NotImplementedException(),
-                State.ScriptDataEscapedEndTagNameState => throw new NotImplementedException(),
-                State.ScriptDataDoubleEscapeStartState => throw new NotImplementedException(),
-                State.ScriptDataDoubleEscapedState => throw new NotImplementedException(),
-                State.ScriptDataDoubleEscapedDashState => throw new NotImplementedException(),
-                State.ScriptDataDoubleEscapedDahsDashState => throw new NotImplementedException(),
-                State.ScriptDataDoubleEscapedLessTanSignState => throw new NotImplementedException(),
-                State.ScriptDataDoubleEscapeEndState => throw new NotImplementedException(),
+                State.ScriptDataEscapedStartDashState => ScriptDataEscapedStartDashState(),
+                State.ScriptDataEscapedState => ScriptDataEscapedState(),
+                State.ScriptDataEscapedDashState => ScriptDataEscapedDashState(),
+                State.ScriptDataEscapedDashDashState => ScriptDataEscapedDashDashState(),
+                State.ScriptDataEscapedLessThanSignState => ScriptDataEscapedLessThanSignState(),
+                State.ScriptDataEscapedEndTagOpenState => ScriptDataEscapedEndTagOpenState(),
+                State.ScriptDataEscapedEndTagNameState => ScriptDataEscapedEndTagNameState(),
+                State.ScriptDataDoubleEscapeStartState => ScriptDataDoubleEscapeStartState(),
+                State.ScriptDataDoubleEscapedState => ScriptDataDoubleEscapedState(),
+                State.ScriptDataDoubleEscapedDashState => ScriptDataDoubleEscapedDashState(),
+                State.ScriptDataDoubleEscapedDashDashState => ScriptDataDoubleEscapedDashDashState(),
+                State.ScriptDataDoubleEscapedLessTanSignState => ScriptDataDoubleEscapedLessTanSignState(),
+                State.ScriptDataDoubleEscapeEndState => ScriptDataDoubleEscapeEndState(),
                 State.BeforeAttributeNameState => BeforeAttributeNameState(),
                 State.AttributeNameState => AttributeNameState(),
                 State.AfterAttributeNameState => AfterAttributeNameState(),
@@ -435,7 +451,7 @@ public class Tokenizer(string content) {
                 State.HexadecimalCharacterReferenceState => HexadecimalCharacterReferenceState(),
                 State.DecimalCharacterReferenceState => DecimalCharacterReferenceState(),
                 State.NumericCharacterReferenceEndState => NumericCharacterReferenceEndState(),
-                _ => throw new NotImplementedException(),
+                _ => throw new ArgumentOutOfRangeException(nameof(State)),
             };
             if (token != null) {
                 HandleTokenEmit(token);
@@ -656,8 +672,17 @@ public class Tokenizer(string content) {
             char? c = ConsumeNextInputCharacter();
             switch (c) {
                 case '\t' or '\n' or '\f' or ' ':
-                    throw new NotImplementedException();
-                case '/': throw new NotImplementedException();
+                    if (IsAppropriateEndTagToken()) {
+                        return SetState(State.BeforeAttributeNameState);
+                    } else {
+                        goto default;
+                    }
+                case '/':
+                    if (IsAppropriateEndTagToken()) {
+                        return SetState(State.SelfClosingStartTagState);
+                    } else {
+                        goto default;
+                    }
                 case '>':
                     if (IsAppropriateEndTagToken()) {
                         SetState(State.DataState);
@@ -665,7 +690,10 @@ public class Tokenizer(string content) {
                     } else {
                         goto default;
                     }
-                case >= 'A' and <= 'Z': throw new NotImplementedException();
+                case >= 'A' and <= 'Z':
+                    currentTag.name += (char)(byte)(c | 0x20);
+                    temporaryBuffer += c;
+                    break;
                 case >= 'a' and <= 'z':
                     currentTag.name += c;
                     temporaryBuffer += c;
@@ -722,8 +750,17 @@ public class Tokenizer(string content) {
             char? c = ConsumeNextInputCharacter();
             switch (c) {
                 case '\t' or '\n' or '\f' or ' ':
-                    throw new NotImplementedException();
-                case '/': throw new NotImplementedException();
+                    if (IsAppropriateEndTagToken()) {
+                        return SetState(State.BeforeAttributeNameState);
+                    } else {
+                        goto default;
+                    }
+                case '/':
+                    if (IsAppropriateEndTagToken()) {
+                        return SetState(State.SelfClosingStartTagState);
+                    } else {
+                        goto default;
+                    }
                 case '>':
                     if (IsAppropriateEndTagToken()) {
                         SetState(State.DataState);
@@ -731,7 +768,10 @@ public class Tokenizer(string content) {
                     } else {
                         goto default;
                     }
-                case >= 'A' and <= 'Z': throw new NotImplementedException();
+                case >= 'A' and <= 'Z':
+                    currentTag.name += (char)(byte)(c | 0x20); ;
+                    temporaryBuffer += c;
+                    break;
                 case >= 'a' and <= 'z':
                     currentTag.name += c;
                     temporaryBuffer += c;
@@ -838,11 +878,313 @@ public class Tokenizer(string content) {
         char? c = ConsumeNextInputCharacter();
         switch (c) {
             case '-':
-                SetState(State.ScriptDataEscapeStartState);
+                SetState(State.ScriptDataEscapedStartDashState);
                 return new Character('-');
             default:
                 Reconsume();
                 return SetState(State.ScriptDataState);
+        }
+    }
+
+    // 13.2.5.19 Script data escape start dash state
+    // https://html.spec.whatwg.org/multipage/parsing.html#script-data-escape-start-dash-state
+    private Token? ScriptDataEscapedStartDashState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case '-':
+                SetState(State.ScriptDataEscapedDashDashState);
+                return new Character('-');
+            default:
+                Reconsume();
+                return SetState(State.ScriptDataState);
+        }
+    }
+
+    // 13.2.5.20 Script data escaped state
+    // https://html.spec.whatwg.org/multipage/parsing.html#script-data-escaped-state
+    private Token? ScriptDataEscapedState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case '-':
+                SetState(State.ScriptDataEscapedDashState);
+                return new Character('-');
+            case '<':
+                return SetState(State.ScriptDataEscapedLessThanSignState);
+            case '\0':
+                AddParseError("unexpected-null-character");
+                return new Character('\uFFFD');
+            case null:
+                AddParseError("eof-in-script-html-comment-like-text");
+                return new EndOfFile();
+            default:
+                return new Character((char)c);
+        }
+    }
+
+    // 13.2.5.21 Script data escaped dash state
+    // https://html.spec.whatwg.org/multipage/parsing.html#script-data-escaped-dash-state
+    private Token? ScriptDataEscapedDashState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case '-':
+                SetState(State.ScriptDataEscapedDashDashState);
+                return new Character('-');
+            case '<':
+                return SetState(State.ScriptDataEscapedLessThanSignState);
+            case '\0':
+                AddParseError("unexpected-null-character");
+                SetState(State.ScriptDataEscapedState);
+                return new Character('\uFFFD');
+            case null:
+                AddParseError("eof-in-script-html-comment-like-text");
+                return new EndOfFile();
+            default:
+                SetState(State.ScriptDataEscapedState);
+                return new Character((char)c);
+        }
+    }
+
+    // 13.2.5.22 Script data escaped dash dash state
+    // https://html.spec.whatwg.org/multipage/parsing.html#script-data-escaped-dash-dash-state
+    private Token? ScriptDataEscapedDashDashState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case '-':
+                return new Character('-');
+            case '<':
+                return SetState(State.ScriptDataEscapedLessThanSignState);
+            case '>':
+                SetState(State.ScriptDataState);
+                return new Character('>');
+            case '\0':
+                AddParseError("unexpected-null-character");
+                SetState(State.ScriptDataEscapedState);
+                return new Character('\uFFFD');
+            case null:
+                AddParseError("eof-in-script-html-comment-like-text");
+                return new EndOfFile();
+            default:
+                SetState(State.ScriptDataEscapedState);
+                return new Character((char)c);
+        }
+    }
+
+    // 13.2.5.23 Script data escaped less-than sign state
+    // https://html.spec.whatwg.org/multipage/parsing.html#script-data-escaped-less-than-sign-state
+    private Token? ScriptDataEscapedLessThanSignState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case '/':
+                temporaryBuffer = "";
+                return SetState(State.ScriptDataEscapedEndTagOpenState);
+            case >= 'a' and <= 'z' or >= 'A' and <= 'Z':
+                temporaryBuffer = "";
+                SetState(State.ScriptDataDoubleEscapeStartState);
+                Reconsume();
+                return new Character('<');
+            default:
+                SetState(State.ScriptDataEscapedState);
+                Reconsume();
+                return new Character('<');
+        }
+    }
+
+    // 13.2.5.24 Script data escaped end tag open state
+    // https://html.spec.whatwg.org/multipage/parsing.html#script-data-escaped-end-tag-open-state
+    private Token? ScriptDataEscapedEndTagOpenState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case >= 'a' and <= 'z' or >= 'A' and <= 'Z':
+                currentTag = new EndTag();
+                Reconsume();
+                return SetState(State.ScriptDataEscapedEndTagNameState);
+            default:
+                SetState(State.ScriptDataEscapedState);
+                Reconsume();
+                currentTokens.Enqueue(new Character('/'));
+                return new Character('<');
+        }
+    }
+
+    // 13.2.5.25 Script data escaped end tag name state
+    // https://html.spec.whatwg.org/multipage/parsing.html#script-data-escaped-end-tag-name-state
+    private Token? ScriptDataEscapedEndTagNameState() {
+        while (true) {
+            char? c = ConsumeNextInputCharacter();
+            switch (c) {
+                case '\t' or '\n' or '\f' or ' ':
+                    if (IsAppropriateEndTagToken()) {
+                        return SetState(State.BeforeAttributeNameState);
+                    } else {
+                        goto default;
+                    }
+                case '/':
+                    if (IsAppropriateEndTagToken()) {
+                        return SetState(State.SelfClosingStartTagState);
+                    } else {
+                        goto default;
+                    }
+                case '>':
+                    if (IsAppropriateEndTagToken()) {
+                        SetState(State.DataState);
+                        return currentTag;
+                    } else {
+                        goto default;
+                    }
+                case >= 'A' and <= 'Z':
+                    currentTag.name += (char)(byte)(c | 0x20);
+                    temporaryBuffer += c;
+                    break;
+                case >= 'a' and <= 'z':
+                    currentTag.name += c;
+                    temporaryBuffer += c;
+                    break;
+                default:
+                    currentTokens.Enqueue(new Character('<'));
+                    currentTokens.Enqueue(new Character('/'));
+                    foreach (var chr in temporaryBuffer) {
+                        currentTokens.Enqueue(new Character(chr));
+                    }
+                    Reconsume();
+                    SetState(State.ScriptDataEscapedState);
+                    return currentTokens.Dequeue();
+            }
+        }
+    }
+
+    // 13.2.5.26 Script data double escape start state
+    // https://html.spec.whatwg.org/multipage/parsing.html#script-data-double-escape-start-state
+
+    private Token? ScriptDataDoubleEscapeStartState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case '\t' or '\n' or '\f' or ' ' or '/' or '>':
+                if (temporaryBuffer == "script") {
+                    SetState(State.ScriptDataDoubleEscapedState);
+                } else {
+                    SetState(State.ScriptDataEscapedState);
+                }
+                return new Character((char)c);
+            case >= 'A' and <= 'Z':
+                temporaryBuffer += (char)(byte)(c | 0x20);
+                return new Character((char)c);
+            case >= 'a' and <= 'z':
+                temporaryBuffer += c;
+                return new Character((char)c);
+            default:
+                Reconsume();
+                return SetState(State.ScriptDataEscapedState);
+        }
+    }
+
+    // 13.2.5.27 Script data double escaped state
+    // https://html.spec.whatwg.org/multipage/parsing.html#script-data-double-escaped-state
+    private Token? ScriptDataDoubleEscapedState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case '-':
+                SetState(State.ScriptDataDoubleEscapedDashState);
+                return new Character('-');
+            case '<':
+                SetState(State.ScriptDataDoubleEscapedLessTanSignState);
+                return new Character('<');
+            case '\0':
+                AddParseError("unexpected-null-character");
+                return new Character('\uFFFD');
+            case null:
+                AddParseError("eof-in-script-html-comment-like-text");
+                return new EndOfFile();
+            default:
+                return new Character((char)c);
+        }
+    }
+
+    // 13.2.5.28 Script data double escaped dash state
+    // https://html.spec.whatwg.org/multipage/parsing.html#script-data-double-escaped-dash-state
+    private Token? ScriptDataDoubleEscapedDashState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case '-':
+                SetState(State.ScriptDataDoubleEscapedDashDashState);
+                return new Character('-');
+            case '<':
+                SetState(State.ScriptDataDoubleEscapedLessTanSignState);
+                return new Character('<');
+            case '\0':
+                AddParseError("unexpected-null-character");
+                SetState(State.ScriptDataDoubleEscapedState);
+                return new Character('\uFFFD');
+            case null:
+                AddParseError("eof-in-script-html-comment-like-text");
+                return new EndOfFile();
+            default:
+                SetState(State.ScriptDataDoubleEscapedState);
+                return new Character((char)c);
+        }
+    }
+
+    // 13.2.5.29 Script data double escaped dash dash state
+    // https://html.spec.whatwg.org/multipage/parsing.html#script-data-double-escaped-dash-dash-state
+    private Token? ScriptDataDoubleEscapedDashDashState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case '-':
+                return new Character('-');
+            case '<':
+                SetState(State.ScriptDataDoubleEscapedLessTanSignState);
+                return new Character('<');
+            case '>':
+                SetState(State.ScriptDataState);
+                return new Character('>');
+            case '\0':
+                AddParseError("unexpected-null-character");
+                SetState(State.ScriptDataDoubleEscapedState);
+                return new Character('\uFFFD');
+            case null:
+                AddParseError("eof-in-script-html-comment-like-text");
+                return new EndOfFile();
+            default:
+                SetState(State.ScriptDataDoubleEscapedState);
+                return new Character((char)c);
+        }
+    }
+
+    // 13.2.5.30 Script data double escaped less-than sign state
+    // https://html.spec.whatwg.org/multipage/parsing.html#script-data-double-escaped-less-than-sign-state
+    private Token? ScriptDataDoubleEscapedLessTanSignState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case '/':
+                temporaryBuffer = "";
+                SetState(State.ScriptDataDoubleEscapeEndState);
+                return new Character('/');
+            default:
+                Reconsume();
+                return SetState(State.ScriptDataDoubleEscapedState);
+        }
+    }
+
+    // 13.2.5.31 Script data double escape end state
+    // https://html.spec.whatwg.org/multipage/parsing.html#script-data-double-escape-end-state
+    private Token? ScriptDataDoubleEscapeEndState() {
+        char? c = ConsumeNextInputCharacter();
+        switch (c) {
+            case '\t' or '\n' or '\f' or ' ' or '/' or '>':
+                if (temporaryBuffer == "script") {
+                    SetState(State.ScriptDataEscapedState);
+                } else {
+                    SetState(State.ScriptDataDoubleEscapedState);
+                }
+                return new Character((char)c);
+            case >= 'A' and <= 'Z':
+                temporaryBuffer += (char)(byte)(c | 0x20);
+                return new Character((char)c);
+            case >= 'a' and <= 'z':
+                temporaryBuffer += c;
+                return new Character((char)c);
+            default:
+                Reconsume();
+                return SetState(State.ScriptDataDoubleEscapedState);
         }
     }
 
@@ -1121,9 +1463,14 @@ public class Tokenizer(string content) {
             // Consume those characters.
             ConsumeNextCharacters(7);
             //  If there is an adjusted current node and it is not an element in the HTML namespace, then switch to the CDATA section state.
-            //  Otherwise, this is a cdata-in-html-content parse error. Create a comment token whose data is the "[CDATA[" string. Switch to the bogus comment state.
-            // todo the if is missing fully here we need the tree builder here
-            return SetState(State.CDATASectionState);
+            if (parser is not null && parser.adjustedCurrentNode is not null && parser.adjustedCurrentNode is not Element { @namespace: Namespaces.HTML }) { // todo
+                return SetState(State.CDATASectionState);
+            } else {
+                //  Otherwise, this is a cdata-in-html-content parse error. Create a comment token whose data is the "[CDATA[" string. Switch to the bogus comment state.
+                AddParseError("cdata-in-html-content");
+                currentCommentTag = new() { data = "[CDATA[" };
+                return SetState(State.BogusCommentState);
+            }
         } else {
             AddParseError("incorrectly-opened-comment", Col + 1);
             currentCommentTag = new();
@@ -1824,6 +2171,7 @@ public class Tokenizer(string content) {
                 return SetState(State.CDATASectionEndState);
             default:
                 SetState(State.CDATASectionState);
+                Reconsume();
                 return new Character(']');
         }
     }
