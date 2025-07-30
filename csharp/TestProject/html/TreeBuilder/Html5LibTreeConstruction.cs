@@ -17,12 +17,14 @@ public sealed class Html5LibTreeConstruction {
         ("doctype01.dat", ([],[],[2,3,4,7,8,9,10,11,12,16,17,18,19,20,21,23,25,30,33,34,35,36])),
         ("domjs-unsafe.dat", ([
         ],[4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,36],[3])),
-        // entities01
-        // entities02
+        ("entities01.dat", ([],[
+            64, 65, 66, // 
+        ],[1,2,4,6,7,14,15,16,17,18,19,20,21,22,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,
+            41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,557,558,59,60,61,62, 67,68,69,70,71,72,73,74])),
+        ("entities02.dat", ([],[],[9,10,11,12,13,19,23,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41])),
         // foreign-fragment
-        ("html5test-com.dat", ([6,7,8,9,10,13, // tokenizer
-        20, // adopting index
-        ],[19,],[1,2,3,11])),
+        ("html5test-com.dat", ([20, // adopting index
+        ],[13,19,],[1,2,3,11])),
         ("inbody01.dat", ([],[],[])),
         ("isindex.dat", ([],[],[])),
         ("main-element.dat", ([],[],[])),
@@ -51,17 +53,13 @@ public sealed class Html5LibTreeConstruction {
             [22, 23, 32, 51, 56, 60, 77, 78, 79, 90, 95, 101, 102, 110],
             [27, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 96] // tree is ok but parse error miss match
         )),
-        ("tests2.dat", ([
-            17, 24, 30, 31, // tokenizer not implemented
-            39, // infinity running
-        ],[10,12,14,18, 26, 27,],
-        [16, 20, 21, 22, 23, 25, 28, 34, 42, 58, 59, 61])),
+        ("tests2.dat", ([39, // infinity running
+        ],[10,12,14, 18, 26, 27,],
+        [16, 17, 20, 21, 22, 23, 25, 28, 30, 31, 34, 42, 58, 59, 61])),
         ("tests3.dat", ([],[19, 21],[])), // adopting agency
-        ("tests4.dat", ([],[],[])), // fragments
-        ("tests5.dat", ([12, 13],[],[])),// tokenizer not implemented
-        ("tests6.dat", ([
-            2, 3, // tokenizer not implemented
-            32, 35, // adopting
+        ("tests4.dat", ([],[],[])),
+        ("tests5.dat", ([],[],[])),
+        ("tests6.dat", ([32, 35, // adopting
         ],[25,47,48,49,50,51],[4, 5])),
         ("tests7.dat", ([],[1, 7,8,11, 12, 19, 20, 21, 22, 23, 30, 31, 32],[])),
         ("tests8.dat", ([],[4, 5, 6, 7,8,9,],[])),
@@ -74,8 +72,7 @@ public sealed class Html5LibTreeConstruction {
         // tests13.dat is missing
         ("tests14.dat", ([],[],[])),
         ("tests15.dat", ([],[6, 7, 8, 9, 10, 11, 12,],[])),
-        ("tests16.dat", ([81,92,93,94,178,189, // not implemented in tokenizer
-            195, // infinity running
+        ("tests16.dat", ([195, // infinity running
         ],[
             38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 63, 64, 65, 66, 67, 68, 69, 71,
             137,138,139,140,141,142,143,144,145,146,160,161,162,163,164,165,166,168,194,
@@ -101,7 +98,7 @@ public sealed class Html5LibTreeConstruction {
         ],[3,4,7,8,16,17])),
         ("tests22.dat", ([0,1,2,3,4],[],[])), // adopting
         ("tests23.dat", ([],[0,1,2,3,4],[])), // adopting
-        ("tests24.dat", ([0,1,2,3,4,5,6,7],[],[])), // tokenizer
+        ("tests24.dat", ([],[],[])),
         ("tests25.dat", ([],[],[])),
         ("tests26.dat", ([0,3, 4, // infinity running
         ],[2,9],[14])),
@@ -109,7 +106,6 @@ public sealed class Html5LibTreeConstruction {
         4, // infinity spinning
         ],[0,2,5,6,7,9],[])),
         ("webkit01.dat", ([
-            15, // tokenizer
             48, // infinity spinning
         ],[36,37,40,50,],[3,9,10,13,14,17,19,38,39,44])),
         ("webkit02.dat", ([

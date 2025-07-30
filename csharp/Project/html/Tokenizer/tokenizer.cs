@@ -228,6 +228,9 @@ public class Attribute: IEquatable<Attribute> {
 }
 
 public class Tokenizer(string content) {
+
+    private static readonly Lazy<Entities> entities = new(() => new Entities());
+
     private readonly string content = NormalizeNewLines(content);
     private int index = 0;
 
@@ -306,9 +309,14 @@ public class Tokenizer(string content) {
         return null;
     }
 
+    // https://html.spec.whatwg.org/multipage/parsing.html#charref-in-attribute
+    private bool ConsumedAsPartOfAnAttribute() {
+        return returnState is State.AttributeValueDoubleQuotedState or State.AttributeValueSingleQuotedState or State.AttributeValueUnquotesState;
+    }
+
     // https://html.spec.whatwg.org/multipage/parsing.html#flush-code-points-consumed-as-a-character-reference
     private void FlushCodePointsConsumedAsACharacterReference() {
-        if (returnState is State.AttributeValueDoubleQuotedState or State.AttributeValueSingleQuotedState or State.AttributeValueUnquotesState) {
+        if (ConsumedAsPartOfAnAttribute()) {
             currentAttribute.value += temporaryBuffer;
         } else {
             foreach (var temp in temporaryBuffer) {
@@ -420,7 +428,7 @@ public class Tokenizer(string content) {
                 State.CDATASectionEndState => CDATASectionEndState(),
                 State.CharacterReferenceState => CharacterReferenceState(),
                 State.NamedCharacterReferenceState => NamedCharacterReferenceState(),
-                State.AmbiguousAmpersandState => throw new NotImplementedException(),
+                State.AmbiguousAmpersandState => AmbiguousAmpersandState(),
                 State.NumericCharacterReferenceState => NumericCharacterReferenceState(),
                 State.HexadecimalCharacterReferenceStartState => HexadecimalCharacterReferenceStartState(),
                 State.DecimalCharacterReferenceStartState => DecimalCharacterReferenceStartState(),
@@ -459,7 +467,7 @@ public class Tokenizer(string content) {
         char? c = ConsumeNextInputCharacter();
         switch (c) {
             case '&':
-                returnState = State.DataState;
+                returnState = State.RCDATAState;
                 return SetState(State.CharacterReferenceState);
             case '<':
                 return SetState(State.RCDATALessTanSignState);
@@ -1860,7 +1868,65 @@ public class Tokenizer(string content) {
     // 13.2.5.73 Named character reference state
     // https://html.spec.whatwg.org/multipage/parsing.html#named-character-reference-state
     private Token? NamedCharacterReferenceState() {
-        throw new NotImplementedException();
+        // todo this implementation is hacky we mess with internal state in a crazy way
+        var start = index - 1;
+        var pos = start;
+        char? NextChar() {
+            if (content.Length > pos) {
+                return content[pos++];
+            }
+            return null;
+        }
+        var match = entities.Value.TryMatching(NextChar);
+        if (match is not null) {
+            var nextPos = start + match.Value.Key.Length - 1; // -1 because start start if after the & 
+            char? nextChar = content.Length > nextPos ? content[nextPos] : null;
+            if (ConsumedAsPartOfAnAttribute() && match.Value.Key[^1] != ';' &&
+                (nextChar is '=' || (nextChar is not null && char.IsAsciiLetterOrDigit((char)nextChar)))) {
+                FlushCodePointsConsumedAsACharacterReference();
+                SetState(returnState);
+                return currentTokens.Count > 0 ? currentTokens.Dequeue() : null;
+            } else {
+                if (match.Value.Key[^1] != ';') {
+                    AddParseError("missing-semicolon-after-character-reference");
+                }
+                temporaryBuffer = match.Value.Value.characters;
+                shouldReconsume = false;
+                ConsumeNextCharacters(match.Value.Key.Length - 1 - 1); // -1 for reconsume -1 for &
+                FlushCodePointsConsumedAsACharacterReference();
+                SetState(returnState);
+                return currentTokens.Count > 0 ? currentTokens.Dequeue() : null;
+            }
+        } else {
+            FlushCodePointsConsumedAsACharacterReference();
+            SetState(State.AmbiguousAmpersandState);
+            return currentTokens.Count > 0 ? currentTokens.Dequeue() : null;
+        }
+    }
+
+
+    // 13.2.5.74 Ambiguous ampersand state
+    // https://html.spec.whatwg.org/multipage/parsing.html#ambiguous-ampersand-state
+    private Token? AmbiguousAmpersandState() {
+        while (true) {
+            char? c = ConsumeNextInputCharacter();
+            switch (c) {
+                case not null when char.IsAsciiLetterOrDigit((char)c):
+                    if (ConsumedAsPartOfAnAttribute()) {
+                        currentAttribute.value += c;
+                    } else {
+                        return new Character((char)c);
+                    }
+                    break;
+                case ';':
+                    AddParseError("unknown-named-character-reference");
+                    Reconsume();
+                    return SetState(returnState);
+                default:
+                    Reconsume();
+                    return SetState(returnState);
+            }
+        }
     }
 
     // 13.2.5.75 Numeric character reference state

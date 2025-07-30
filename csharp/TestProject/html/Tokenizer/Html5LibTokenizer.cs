@@ -12,13 +12,13 @@ public sealed class Html5LibTreeConstruction {
 
     // files + expected errors
     private static (string, int[])[] files = [
-        ("test1.test", [49,52,53,54,55,56,61,62,63,64 ]), // NamedCharacterReferenceState not implemented
-        ("test2.test", [36]), // NamedCharacterReferenceState not implemented
+        ("entities.test", []),
+        ("test1.test", []),
+        ("test2.test", []),
         ("test3.test", [79]), // Errors are not in the same order
-        ("test4.test", [11, // NamedCharacterReferenceState not implemented
-                        34,35, // implementation problem utf16 and c#
+        ("test4.test", [34,35, // implementation problem utf16 and c#
                         60,61]), // no errors raised in lookahead
-        ("escapeFlag.test", [3]), // NamedCharacterReferenceState not implemented
+        ("escapeFlag.test", []),
     ];
 
     [TestMethod]
