@@ -22,7 +22,7 @@ public sealed class Html5LibTreeConstruction {
         ("test1.test", []),
         ("test2.test", []),
         ("test3.test", [79]), // Errors are not in the same order
-        ("test4.test", [60,61]), // no errors raised in lookahead
+        ("test4.test", [61]), // no errors raised in lookahead
         // ("unicodeChars.test", []), // todo
         // ("unicodeCharsProblematic.test", []), // todo doubleEscaped
         // ("xmlViolation.test", []),  // todo  xmlViolationTests instead of tests

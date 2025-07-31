@@ -294,6 +294,9 @@ public class Tokenizer(string content, bool debugPrint = false) {
             if (IsControl((char)currentCharacter) && !IsASCIIWhitespace((char)currentCharacter) && currentCharacter != '\0') {
                 AddParseError("control-character-in-input-stream");
             }
+            if (IsNonCharacter((double)currentCharacter)) {
+                AddParseError("noncharacter-in-input-stream");
+            }
         } else {
             index++;
             Col++;
