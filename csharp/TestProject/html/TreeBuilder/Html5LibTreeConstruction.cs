@@ -93,7 +93,7 @@ public sealed class Html5LibTreeConstruction {
         ("tests21.dat", ([19 // infinity spinning
         ],[],[2,3,4,7,8,9,13,16,17])),
         ("tests22.dat", ([0,1,2,3,4],[],[])), // adopting
-        ("tests23.dat", ([],[0,1,2],[])), // adopting
+        ("tests23.dat", ([],[],[])), // adopting
         ("tests24.dat", ([],[],[])),
         ("tests25.dat", ([],[],[])),
         ("tests26.dat", ([0,3, 4, // infinity running

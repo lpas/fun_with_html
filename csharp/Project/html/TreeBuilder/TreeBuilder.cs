@@ -3058,8 +3058,25 @@ public class TreeBuilder {
     // 13.2.4.3
     // https://html.spec.whatwg.org/multipage/parsing.html#push-onto-the-list-of-active-formatting-elements
     private void PushOntoTheListOfActiveFormattingElements(Element element, StartTag tag) {
-        // If there are already three elements in the list of active formatting elements after the last marker, if any, or anywhere in the list if there are no markers, that have the same tag name, namespace, and attributes as element, then remove the earliest such element from the list of active formatting elements. For these purposes, the attributes must be compared as they were when the elements were created by the parser; two elements have the same attributes if all their parsed attributes can be paired such that the two attributes in each pair have identical names, namespaces, and values (the order of the attributes does not matter).
-        // todo
+        // If there are already three elements in the list of active formatting elements after the last marker, if any, or anywhere in the list if there are no markers,
+        // that have the same tag name, namespace, and attributes as element, then remove the earliest such element from the list of active formatting elements.
+        // For these purposes, the attributes must be compared as they were when the elements were created by the parser; two elements have the same attributes if all their parsed attributes can be paired such
+        // that the two attributes in each pair have identical names, namespaces, and values (the order of the attributes does not matter).
+        // Note: This is the Noah's Ark clause. But with three per family instead of two.
+        var count = 0;
+        foreach (var item in Enumerable.Reverse(ListOfActiveFormattingElements)) {
+            if (item is not null) {
+                if (item.Value.elem.localName == element.localName
+                    && item.Value.elem.@namespace == element.@namespace
+                    && tag.Attributes.Count == item.Value.tag.Attributes.Count && !tag.Attributes.Except(item.Value.tag.Attributes).Any()) {
+                    count++;
+                    if (count == 3) {
+                        ListOfActiveFormattingElements.Remove(item);
+                        break;
+                    }
+                }
+            } else break;
+        }
         // Add element to the list of active formatting elements.
         ListOfActiveFormattingElements.Add((element, tag));
     }
