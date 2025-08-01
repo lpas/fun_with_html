@@ -10,7 +10,7 @@ public sealed class Html5LibTreeConstruction {
     private static string ProjectDirectory => Directory.GetParent(Environment.CurrentDirectory).Parent.Parent.Parent.Parent.FullName;
 
     private static (string, (int[] skipTests, int[] expectWrongTree, int[] expectWrongErrors))[] files = [
-        ("adoption01.dat", ([7,8,12,13,14,16,],[1,2,4,5,9,10,11],[0])),
+        ("adoption01.dat", ([7,8,12,13,14,16,],[1,2,4,5,10,11],[0])),
         ("adoption02.dat", ([0],[1,],[])),
         ("blocks.dat", ([],[],[])),
         ("comments01.dat", ([],[],[1,2,3,4,6,7,9,10,11,12,13])),
@@ -93,11 +93,11 @@ public sealed class Html5LibTreeConstruction {
         ("tests21.dat", ([19 // infinity spinning
         ],[],[2,3,4,7,8,9,13,16,17])),
         ("tests22.dat", ([0,1,2,3,4],[],[])), // adopting
-        ("tests23.dat", ([],[0,1,2,3,4],[])), // adopting
+        ("tests23.dat", ([],[0,1,2],[])), // adopting
         ("tests24.dat", ([],[],[])),
         ("tests25.dat", ([],[],[])),
         ("tests26.dat", ([0,3, 4, // infinity running
-        ],[2,9],[14])),
+        ],[2],[9,14])),
         ("tricky01.dat", ([1,8, // index out of range
         4, // infinity spinning
         ],[0,2,5,6,7,9],[])),

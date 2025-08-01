@@ -142,7 +142,7 @@ public class TreeBuilder {
 
     internal bool scriptingFlag = false;
 
-    private List<Element?> ListOfActiveFormattingElements = []; // null is a marker
+    private readonly List<(Element elem, StartTag tag)?> ListOfActiveFormattingElements = []; // null is a marker
 
     private bool fosterParenting = false;
 
@@ -1392,36 +1392,40 @@ public class TreeBuilder {
                 InsertionModeInBodyAnyOtherEndTag(tagToken);
                 break;
             case StartTag { name: "a" } tagToken:
-                // If the list of active formatting elements contains an a element between the end of the list and the last marker on the list (or the start of the list if there is no marker on the list), then this is a parse error; run the adoption agency algorithm for the token, then remove that element from the list of active formatting elements and the stack of open elements if the adoption agency algorithm didn't already remove it (it might not have if the element is not in table scope).
+                // If the list of active formatting elements contains an a element between the end of the list and the last marker on the list (or the start of the list if there is no marker on the list),
+                // then this is a parse error;
+                // run the adoption agency algorithm for the token,
+                // then remove that element from the list of active formatting elements and the stack of open elements
+                // if the adoption agency algorithm didn't already remove it (it might not have if the element is not in table scope).
                 var ttr1 = (string localName) => { // todo rename/move
-                    foreach (var elem in Enumerable.Reverse(ListOfActiveFormattingElements)) {
-                        if (elem is not null) {
-                            if (elem.localName == localName) {
-                                return elem;
+                    foreach (var item in Enumerable.Reverse(ListOfActiveFormattingElements)) {
+                        if (item is not null) {
+                            if (item.Value.elem.localName == localName) {
+                                return item;
                             }
                         } else break;
                     }
                     return null;
                 };
-                var elem = ttr1("a");
-                if (elem is not null) {
+                var item = ttr1("a");
+                if (item is not null) {
                     AddParseError("IN BODY a");
                     AdoptionAgencyAlgorithm(tagToken);
-                    ListOfActiveFormattingElements.Remove(elem);
-                    stackOfOpenElements.Remove(elem);
+                    ListOfActiveFormattingElements.Remove(item);
+                    stackOfOpenElements.Remove(item.Value.elem);
                 }
                 // EXAMPLE: In the non-conforming stream <a href="a">a<table><a href="b">b</table>x, the first a element would be closed upon seeing the second one, and the "x" character would be inside a link to "b", not to "a". This is despite the fact that the outer a element is not in table scope (meaning that a regular </a> end tag at the start of the table wouldn't close the outer a element). The result is that the two a elements are indirectly nested inside each other — non-conforming markup will often result in non-conforming DOMs when parsed.
                 // Reconstruct the active formatting elements, if any.
                 ReconstructTheActiveFormattingElements();
                 // Insert an HTML element for the token. Push onto the list of active formatting elements that element.
-                ListOfActiveFormattingElements.Push(InsertAnHTMLElement(tagToken));
+                PushOntoTheListOfActiveFormattingElements(InsertAnHTMLElement(tagToken), tagToken);
                 break;
 
             case StartTag { name: "b" or "big" or "code" or "em" or "font" or "i" or "s" or "small" or "strike" or "strong" or "tt" or "u" } tagToken:
                 // Reconstruct the active formatting elements, if any.
                 ReconstructTheActiveFormattingElements();
                 // Insert an HTML element for the token. Push onto the list of active formatting elements that element.
-                PushOntoTheListOfActiveFormattingElements(InsertAnHTMLElement(tagToken));
+                PushOntoTheListOfActiveFormattingElements(InsertAnHTMLElement(tagToken), tagToken);
                 break;
             case StartTag { name: "nobr" } tagToken:
                 // Reconstruct the active formatting elements, if any.
@@ -1433,7 +1437,7 @@ public class TreeBuilder {
                     ReconstructTheActiveFormattingElements();
                 }
                 // Insert an HTML element for the token. Push onto the list of active formatting elements that element.
-                ListOfActiveFormattingElements.Push(InsertAnHTMLElement(tagToken));
+                PushOntoTheListOfActiveFormattingElements(InsertAnHTMLElement(tagToken), tagToken);
                 break;
             case EndTag { name: "a" or "b" or "big" or "code" or "em" or "font" or "i" or "s" or "small" or "strike" or "strong" or "tt" or "u" } tagToken:
                 // Run the adoption agency algorithm for the token.
@@ -1721,7 +1725,7 @@ public class TreeBuilder {
             var subject = tagToken.name;
             // 2. If the current node is an HTML element whose tag name is subject, and the current node is not in the list of active formatting elements,
             // then pop the current node off the stack of open elements and return.
-            if (currentNode is Element e && e.localName == subject && !ListOfActiveFormattingElements.Contains(currentNode)) {
+            if (currentNode is Element { @namespace: Namespaces.HTML } e && e.localName == subject && !ListOfActiveFormattingElements.Any(item => item?.elem == currentNode)) {
                 stackOfOpenElements.Pop();
                 return;
             }
@@ -1734,15 +1738,15 @@ public class TreeBuilder {
                 // 2. Increment outerLoopCounter by 1.
                 outerLoopCounter++;
                 // 3. Let formattingElement be the last element in the list of active formatting elements that:
-                Element? formattingElement = null;
+                (Element elem, StartTag tag)? formattingElement = null;
                 // * is between the end of the list and the last marker in the list, if any, or the start of the list otherwise, and
                 // * has the tag name subject.
                 var formattingElementPosInListOfActiveFormattingElements = 0;
                 for (var i = ListOfActiveFormattingElements.Count - 1; i >= 0; i--) {
-                    var element = ListOfActiveFormattingElements[i];
-                    if (element is null) break;
-                    if (element.localName == subject) {
-                        formattingElement = element;
+                    var item = ListOfActiveFormattingElements[i];
+                    if (item is null) break;
+                    if (item?.elem.localName == subject) {
+                        formattingElement = item;
                         formattingElementPosInListOfActiveFormattingElements = i;
                         break;
                     }
@@ -1753,18 +1757,18 @@ public class TreeBuilder {
                     return;
                 }
                 // 4. If formattingElement is not in the stack of open elements, then this is a parse error; remove the element from the list, and return.
-                if (!stackOfOpenElements.Contains(formattingElement)) {
+                if (!stackOfOpenElements.Contains(formattingElement.Value.elem)) {
                     AddParseError("AdoptionAgencyAlgorithm: 4.4");
                     ListOfActiveFormattingElements.Remove(formattingElement);
                     return;
                 }
                 // 5. If formattingElement is in the stack of open elements, but the element is not in scope, then this is a parse error; return.
-                if (!HasAElementInScope(formattingElement.localName)) {
+                if (!HasAElementInScope(formattingElement.Value.elem.localName)) {
                     AddParseError("AdoptionAgencyAlgorithm: HasAElementInScope");
                     return;
                 }
                 // 6. If formattingElement is not the current node, this is a parse error. (But do not return.)
-                if (formattingElement != currentNode) {
+                if (formattingElement.Value.elem != currentNode) {
                     AddParseError("adoption-agency-1.3");
                 }
                 // 7. Let furthestBlock be the topmost node in the stack of open elements that is lower in the stack than formattingElement,
@@ -1773,7 +1777,7 @@ public class TreeBuilder {
                 var furthestBlockPosInStackOfOpenElements = 0;
                 for (var i = stackOfOpenElements.Count - 1; i >= 0; i--) {
                     var element = stackOfOpenElements[i];
-                    if (element == formattingElement) break;
+                    if (element == formattingElement.Value.elem) break;
                     if (specialListElements.Contains(element.localName)) {
                         furthestBlock = element;
                         furthestBlockPosInStackOfOpenElements = i;
@@ -1782,12 +1786,12 @@ public class TreeBuilder {
                 // 8. If there is no furthestBlock, then the UA must first pop all the nodes from the bottom of the stack of open elements,
                 // from the current node up to and including formattingElement, then remove formattingElement from the list of active formatting elements, and finally return.
                 if (furthestBlock == null) {
-                    while (stackOfOpenElements.Pop() != formattingElement) { }
+                    while (stackOfOpenElements.Pop() != formattingElement.Value.elem) { }
                     ListOfActiveFormattingElements.Remove(formattingElement);
                     return;
                 }
                 // 9. Let commonAncestor be the element immediately above formattingElement in the stack of open elements.
-                Element commonAncestor = stackOfOpenElements[stackOfOpenElements.IndexOf(formattingElement) - 1];
+                Element commonAncestor = stackOfOpenElements[stackOfOpenElements.IndexOf(formattingElement.Value.elem) - 1];
                 // 10. Let a bookmark note the position of formattingElement in the list of active formatting elements relative to the elements on either side of it in the list.
                 var bookmark = formattingElementPosInListOfActiveFormattingElements;
                 // 11. Let node and lastNode be furthestBlock.
@@ -1804,22 +1808,24 @@ public class TreeBuilder {
                     // (e.g. because it got removed by this algorithm), the element that was immediately above node in the stack of open elements before node was removed.
                     node = stackOfOpenElements[--nodePosInStackOfOpenElements];
                     // 3. If node is formattingElement, then break.
-                    if (node == formattingElement) break;
-                    // 4. If innerLoopCounter is greater than 3 and node is in the list of active formatting elements, then remove node from the list of active formatting elements.
-                    if (innerLoopCounter > 3 && ListOfActiveFormattingElements.Contains(node)) {
-                        ListOfActiveFormattingElements.Remove(node);
+                    if (node == formattingElement.Value.elem) break;
+                    // 4. If innerLoopCounter is greater than 3 and node is in the list of active formatting elements, then remove node from the list of active formatting elements.                    
+                    var index = ListOfActiveFormattingElements.FindIndex(item => item?.elem == node);
+                    if (innerLoopCounter > 3 && index != -1) {
+                        ListOfActiveFormattingElements.RemoveAt(index);
+                        index = -1;
                     }
                     // 5. If node is not in the list of active formatting elements, then remove node from the stack of open elements and continue.
-                    if (!ListOfActiveFormattingElements.Contains(node)) {
+                    if (index == -1) {
                         stackOfOpenElements.Remove(node);
                         continue;
                     }
                     // 6. Create an element for the token for which the element node was created, in the HTML namespace, with commonAncestor as the intended parent;
                     // replace the entry for node in the list of active formatting elements with an entry for the new element, 
                     // replace the entry for node in the stack of open elements with an entry for the new element, and let node be the new element.
-                    var element = CreateAnElementForAToken(new StartTag(node.localName), Namespaces.HTML, commonAncestor); // todo this is hacky we need the real token;
-                    var index = ListOfActiveFormattingElements.IndexOf(node);
-                    ListOfActiveFormattingElements[index] = element;
+                    var nodeTag = ListOfActiveFormattingElements[index]!.Value.tag;
+                    var element = CreateAnElementForAToken(nodeTag, Namespaces.HTML, commonAncestor);
+                    ListOfActiveFormattingElements[index] = (element, nodeTag);
                     stackOfOpenElements[nodePosInStackOfOpenElements] = element;
                     node = element;
                     // 7. If lastNode is furthestBlock, then move the aforementioned bookmark to be immediately after the new node in the list of active formatting elements.
@@ -1837,19 +1843,20 @@ public class TreeBuilder {
                 var adjustedInsertionLocation = AppropriatePlaceForInsertingANode(commonAncestor);
                 InsertNode(adjustedInsertionLocation, lastNode);
                 // 15. Create an element for the token for which formattingElement was created, in the HTML namespace, with furthestBlock as the intended parent.
-                var elem = CreateAnElementForAToken(new StartTag(formattingElement.localName), Namespaces.HTML, furthestBlock);
+                var elem = CreateAnElementForAToken(formattingElement.Value.tag, Namespaces.HTML, furthestBlock);
                 // 16. Take all of the child nodes of furthestBlock and append them to the element created in the last step.
                 elem.childNodes = [.. furthestBlock.childNodes];
+                elem.childNodes.ForEach((child) => child.parent = elem);
                 furthestBlock.childNodes.Clear();
                 // 17. Append that new element to furthestBlock.
                 AppendNode(furthestBlock, elem);
                 // 18. Remove formattingElement from the list of active formatting elements,
                 // and insert the new element into the list of active formatting elements at the position of the aforementioned bookmark.
-                ListOfActiveFormattingElements[bookmark] = elem;
+                ListOfActiveFormattingElements[bookmark] = (elem, formattingElement.Value.tag);
                 ListOfActiveFormattingElements.Remove(formattingElement);
                 // 19. Remove formattingElement from the stack of open elements,
                 // and insert the new element into the stack of open elements immediately below the position of furthestBlock in that stack.
-                stackOfOpenElements.Remove(formattingElement);
+                stackOfOpenElements.Remove(formattingElement.Value.elem);
                 var indexA = stackOfOpenElements.IndexOf(furthestBlock);
                 stackOfOpenElements.Insert(indexA + 1, elem);
                 return;
@@ -3050,11 +3057,11 @@ public class TreeBuilder {
 
     // 13.2.4.3
     // https://html.spec.whatwg.org/multipage/parsing.html#push-onto-the-list-of-active-formatting-elements
-    private void PushOntoTheListOfActiveFormattingElements(Element element) {
+    private void PushOntoTheListOfActiveFormattingElements(Element element, StartTag tag) {
         // If there are already three elements in the list of active formatting elements after the last marker, if any, or anywhere in the list if there are no markers, that have the same tag name, namespace, and attributes as element, then remove the earliest such element from the list of active formatting elements. For these purposes, the attributes must be compared as they were when the elements were created by the parser; two elements have the same attributes if all their parsed attributes can be paired such that the two attributes in each pair have identical names, namespaces, and values (the order of the attributes does not matter).
         // todo
         // Add element to the list of active formatting elements.
-        ListOfActiveFormattingElements.Add(element);
+        ListOfActiveFormattingElements.Add((element, tag));
     }
 
     // 13.2.4.3
@@ -3062,8 +3069,9 @@ public class TreeBuilder {
     private void ReconstructTheActiveFormattingElements() {
         // 1. If there are no entries in the list of active formatting elements, then there is nothing to reconstruct; stop this algorithm.
         if (ListOfActiveFormattingElements.Count == 0) return;
-        // 2. If the last (most recently added) entry in the list of active formatting elements is a marker, or if it is an element that is in the stack of open elements, then there is nothing to reconstruct; stop this algorithm.        
-        if (ListOfActiveFormattingElements[^1] == null || stackOfOpenElements.Contains(ListOfActiveFormattingElements[^1]!)) return;
+        // 2. If the last (most recently added) entry in the list of active formatting elements is a marker, or if it is an element that is in the stack of open elements,
+        // then there is nothing to reconstruct; stop this algorithm.        
+        if (ListOfActiveFormattingElements[^1] is null || stackOfOpenElements.Contains(ListOfActiveFormattingElements[^1]!.Value.elem)) return;
         // 3. Let entry be the last (most recently added) element in the list of active formatting elements.
         var index = ListOfActiveFormattingElements.Count - 1;
         var entry = ListOfActiveFormattingElements[index];
@@ -3074,7 +3082,7 @@ public class TreeBuilder {
         // 5. Let entry be the entry one earlier than entry in the list of active formatting elements.
         entry = ListOfActiveFormattingElements[--index];
         // 6. If entry is neither a marker nor an element that is also in the stack of open elements, go to the step labeled rewind.
-        if (entry != null && !stackOfOpenElements.Contains(entry)) {
+        if (entry is not null && !stackOfOpenElements.Contains(entry.Value.elem)) {
             goto rewind;
         }
     // 7. Advance: Let entry be the element one later than entry in the list of active formatting elements.
@@ -3082,9 +3090,9 @@ public class TreeBuilder {
         entry = ListOfActiveFormattingElements[++index];
     // 8. Create: Insert an HTML element for the token for which the element entry was created, to obtain new element.
     create:
-        var elem = InsertAnHTMLElement(new StartTag(entry.localName)); // todo this is wrong we should have the token in the list of elements
+        var elem = InsertAnHTMLElement(entry.Value.tag);
         // 9. Replace the entry for entry in the list with an entry for new element.
-        ListOfActiveFormattingElements[index] = elem;
+        ListOfActiveFormattingElements[index] = (elem, entry.Value.tag);
         // 10. If the entry for new element in the list of active formatting elements is not the last entry in the list, return to the step labeled advance.
         if (index != ListOfActiveFormattingElements.Count - 1)
             goto advance;
