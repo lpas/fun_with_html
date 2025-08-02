@@ -3035,7 +3035,7 @@ public class TreeBuilder {
                     break;
                 // 12. If node is a head element and last is false, then switch the insertion mode to "in head" and return.
                 case Element { localName: "head" } when last is false:
-                    insertionMode = InsertionMode.InColumnGroup;
+                    insertionMode = InsertionMode.InHead;
                     return;
                 // 13. If node is a body element, then switch the insertion mode to "in body" and return.
                 case Element { localName: "body" }:

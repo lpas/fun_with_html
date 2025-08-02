@@ -43,7 +43,7 @@ public sealed class Html5LibTreeConstruction {
         ("template.dat", ([
             21,22,90,100, // infinity spinning
             91, 98, 99, 110, // index out of bounds
-        ],[1,2,3,4,10,11,12, 20,37,40,41,44,64,65,66,67,68,79,80,81,82,83,84,85,86,87,88,89,92,93,94,95,96,97,98,99,101,107,109,110,111],
+        ],[10,11,12,37,44,67,68,79,80,82,83,84,85,86,87,88,89,92,93,94,98,99,101,107,110],
         [106])),
         // tests_innerHTML_1
         ("tests1.dat", ([29, 30, 57, 99, // tree building has problems infinity running tests
@@ -79,7 +79,7 @@ public sealed class Html5LibTreeConstruction {
         ("tests17.dat", ([],[0,1,],[])),
         ("tests18.dat", ([
             28, 29, //  infinity running
-        ],[7,8,9,12,14,15,23,24,],[])),
+        ],[7,8,9,12,14,23,24,],[])),
         ("tests19.dat", ([
             14, 15, 16, 17, 97, 98, // infinity running
             90, 91, 92, // adopting index out of bounds
