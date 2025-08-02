@@ -1962,7 +1962,7 @@ public class TreeBuilder {
         };
 
         switch (token) {
-            case Character when currentNode is Element { localName: "table" or "tbody" or "tempalte" or "tfoot" or "thead" or "tr" }:
+            case Character when currentNode is Element { localName: "table" or "tbody" or "template" or "tfoot" or "thead" or "tr" }:
                 // Let the pending table character tokens be an empty list of tokens.
                 pendingTableCharacterTokens = [];
                 // Set the original insertion mode to the current insertion mode.
