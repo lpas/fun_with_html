@@ -2977,22 +2977,33 @@ public class TreeBuilder {
                 // 4. If node is a select element, run these substeps:
                 case Element { localName: "select" }:
                     // 1. If last is true, jump to the step below labeled done.
-                    // todo
+                    if (last == true) {
+                        goto done;
+                    }
                     // 2. Let ancestor be node.
-                    // todo
+                    var ancestor = node;
                     // 3. Loop: If ancestor is the first node in the stack of open elements, jump to the step below labeled done.
-                    // todo
-                    // 4. Let ancestor be the node before ancestor in the stack of open elements.
-                    // todo
-                    // 5. If ancestor is a template node, jump to the step below labeled done.
-                    // todo
-                    // 6. If ancestor is a table node, switch the insertion mode to "in select in table" and return.
-                    // todo
-                    // 7. Jump back to the step labeled loop.
-                    // todo
-                    // 8. Done: Switch the insertion mode to "in select" and return.
-                    // todo
-                    break;
+                    while (true) {
+                        if (ancestor == stackOfOpenElements[0]) {
+                            goto done;
+                        }
+                        // 4. Let ancestor be the node before ancestor in the stack of open elements.
+                        ancestor = stackOfOpenElements[stackOfOpenElements.IndexOf(ancestor) - 1];
+                        // 5. If ancestor is a template node, jump to the step below labeled done.
+                        if (ancestor is Element { localName: "template" }) {
+                            goto done;
+                        }
+                        // 6. If ancestor is a table node, switch the insertion mode to "in select in table" and return.
+                        if (ancestor is Element { localName: "table" }) {
+                            insertionMode = InsertionMode.InSelectInTable;
+                            return;
+                        }
+                        // 7. Jump back to the step labeled loop.
+                    }
+                // 8. Done: Switch the insertion mode to "in select" and return.
+                done:
+                    insertionMode = InsertionMode.InSelect;
+                    return;
 
                 // 5. If node is a td or th element and last is false, then switch the insertion mode to "in cell" and return.
                 case Element { localName: "td" or "th" }:
