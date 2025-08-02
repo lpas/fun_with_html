@@ -43,7 +43,7 @@ public sealed class Html5LibTreeConstruction {
         ("template.dat", ([
             21,22,90,100, // infinity spinning
             91, 98, 99, 110, // index out of bounds
-        ],[10,11,12,37,44,67,68,79,80,82,83,84,85,86,87,88,89,92,93,94,98,99,101,107,110],
+        ],[10,11,12,37,44,67,68,79,80,82,83,84,85,86,87,88,89,92,93,94,98,99,107,110],
         [106])),
         // tests_innerHTML_1
         ("tests1.dat", ([29, 30, 57, 99, // tree building has problems infinity running tests
@@ -61,10 +61,10 @@ public sealed class Html5LibTreeConstruction {
         ],[25,47,48,49,50,51],[4, 5])),
         ("tests7.dat", ([],[1, 7,8,11, 12, 19, 20, 21, 22, 23, 30, 31, 32],[])),
         ("tests8.dat", ([],[4, 5, 6, 7,8,9,],[])),
-        ("tests9.dat", ([],[3,6,7,8,9,10,16,17,18,23,24,
+        ("tests9.dat", ([],[3,6,7,8,9,10,16,18,23,24,
             25,26 // todo example of tree compare math attributes
             ],[])),
-        ("tests10.dat", ([26,38],[5,6,7,8,9,15,16,17,22,23,24,25,30,31,34,35,40,42,44,46,48,50,51,52,53,],[1])),
+        ("tests10.dat", ([26,38],[5,6,7,8,9,15,17,22,23,24,25,30,31,34,35,40,42,44,46,48,50,51,52,53,],[1])),
         ("tests11.dat", ([],[],[])),
         ("tests12.dat", ([],[0,1],[])),
         // tests13.dat is missing

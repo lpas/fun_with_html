@@ -2666,8 +2666,8 @@ public class TreeBuilder {
                 }
                 break;
             default:
-                // Parse error. Ignore the token.
-                AddParseError("in-select-unexpected-token-ignored");
+                // Process the token using the rules for the "in select" insertion mode.
+                InsertionModeInSelect();
                 break;
         }
     }
