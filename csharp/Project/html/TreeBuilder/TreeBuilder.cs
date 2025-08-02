@@ -3235,7 +3235,7 @@ public class TreeBuilder {
             return;
         }
         // If there is a Text node immediately before the adjusted insertion location, then append data to that Text node's data.
-        if (adjustedInsertionLocation.elem.childNodes.Count > 0 && adjustedInsertionLocation.elem.childNodes[adjustedInsertionLocation.childPos - 1] is Text lastChild) {
+        if (adjustedInsertionLocation.elem.childNodes.Count > 0 && adjustedInsertionLocation.childPos > 0 && adjustedInsertionLocation.elem.childNodes[adjustedInsertionLocation.childPos - 1] is Text lastChild) {
             lastChild.data += token.data;
         } else {
             // Otherwise, create a new Text node whose data is data and whose node document is the same as that of the element in which the adjusted insertion location finds itself, and insert the newly created node at the adjusted insertion location.                
@@ -3391,7 +3391,7 @@ public class TreeBuilder {
                 var lastTemplateIndex = stackOfOpenElements.FindLastIndex((element) => element.localName == "template");
                 var lastTempalte = lastTemplateIndex != -1 ? stackOfOpenElements[lastTemplateIndex] : null;
                 // 2. Let last table be the last table element in the stack of open elements, if any.
-                var lastTableIndex = stackOfOpenElements.FindLastIndex((element) => element.localName == "template");
+                var lastTableIndex = stackOfOpenElements.FindLastIndex((element) => element.localName == "table");
                 var lastTable = lastTableIndex != -1 ? stackOfOpenElements[lastTableIndex] : null;
                 // 3. If there is a last template and either there is no last table, or there is one, but last template is lower (more recently added) than last table in the stack of open elements, 
                 // then: let adjusted insertion location be inside last template's template contents, after its last child (if any), and abort these steps.
