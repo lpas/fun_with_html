@@ -1397,7 +1397,7 @@ public class TreeBuilder {
                 // run the adoption agency algorithm for the token,
                 // then remove that element from the list of active formatting elements and the stack of open elements
                 // if the adoption agency algorithm didn't already remove it (it might not have if the element is not in table scope).
-                var ttr1 = (string localName) => { // todo rename/move
+                (Element elem, StartTag tag)? GetFormattingElement(string localName) {
                     foreach (var item in Enumerable.Reverse(ListOfActiveFormattingElements)) {
                         if (item is not null) {
                             if (item.Value.elem.localName == localName) {
@@ -1406,8 +1406,8 @@ public class TreeBuilder {
                         } else break;
                     }
                     return null;
-                };
-                var item = ttr1("a");
+                }
+                var item = GetFormattingElement("a");
                 if (item is not null) {
                     AddParseError("IN BODY a");
                     AdoptionAgencyAlgorithm(tagToken);
