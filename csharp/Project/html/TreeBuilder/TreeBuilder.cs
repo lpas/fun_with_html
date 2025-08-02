@@ -1675,9 +1675,9 @@ public class TreeBuilder {
 
         void InsertionModeInBodyAnyOtherEndTag(Tag tagToken) {
             // 1. Initialize node to be the current node (the bottommost node of the stack).
-            var node = currentNode;
             // 2. Loop: If node is an HTML element with the same tag name as the token, then:
-            while (true) {
+            for (var i = stackOfOpenElements.Count - 1; i >= 0; i--) {
+                var node = stackOfOpenElements[i];
                 if (node?.localName == tagToken.name) {
                     // 1. Generate implied end tags, except for HTML elements with the same tag name as the token.
                     GenerateImpliedEndTags(tagToken.name);
@@ -1699,7 +1699,7 @@ public class TreeBuilder {
                     }
                 }
                 // 4. Set node to the previous entry in the stack of open elements.
-                node = currentNode;
+                // we do this up top in the loop
                 // 5. Return to the step labeled loop.
             }
         }
@@ -1813,6 +1813,7 @@ public class TreeBuilder {
                     var index = ListOfActiveFormattingElements.FindIndex(item => item?.elem == node);
                     if (innerLoopCounter > 3 && index != -1) {
                         ListOfActiveFormattingElements.RemoveAt(index);
+                        if (index < bookmark) bookmark--;
                         index = -1;
                     }
                     // 5. If node is not in the list of active formatting elements, then remove node from the stack of open elements and continue.
@@ -1826,7 +1827,7 @@ public class TreeBuilder {
                     var nodeTag = ListOfActiveFormattingElements[index]!.Value.tag;
                     var element = CreateAnElementForAToken(nodeTag, Namespaces.HTML, commonAncestor);
                     ListOfActiveFormattingElements[index] = (element, nodeTag);
-                    stackOfOpenElements[nodePosInStackOfOpenElements] = element;
+                    stackOfOpenElements[nodePosInStackOfOpenElements + 1] = element;
                     node = element;
                     // 7. If lastNode is furthestBlock, then move the aforementioned bookmark to be immediately after the new node in the list of active formatting elements.
                     if (lastNode == furthestBlock) {
@@ -1852,8 +1853,12 @@ public class TreeBuilder {
                 AppendNode(furthestBlock, elem);
                 // 18. Remove formattingElement from the list of active formatting elements,
                 // and insert the new element into the list of active formatting elements at the position of the aforementioned bookmark.
-                ListOfActiveFormattingElements[bookmark] = (elem, formattingElement.Value.tag);
-                ListOfActiveFormattingElements.Remove(formattingElement);
+                var formattingIndex = ListOfActiveFormattingElements.IndexOf(formattingElement);
+                if (formattingIndex != -1) {
+                    if (formattingIndex < bookmark) bookmark--;
+                    ListOfActiveFormattingElements.RemoveAt(formattingIndex);
+                }
+                ListOfActiveFormattingElements.Insert(bookmark, (elem, formattingElement.Value.tag));
                 // 19. Remove formattingElement from the stack of open elements,
                 // and insert the new element into the stack of open elements immediately below the position of furthestBlock in that stack.
                 stackOfOpenElements.Remove(formattingElement.Value.elem);
