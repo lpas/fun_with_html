@@ -136,7 +136,7 @@ public class TestReader(IEnumerable<string> iter) {
         while (stack.Count > 0) {
             var (node, depth) = stack.Pop();
             yield return (node, depth);
-            if (node is Element { localName: "template" }) {
+            if (node is Element { localName: "template", @namespace: Namespaces.HTML }) {
                 var templateContent = new TemplateContent {
                     childNodes = node.childNodes
                 };

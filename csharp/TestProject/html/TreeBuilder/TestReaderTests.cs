@@ -192,7 +192,7 @@ Test
         var head = new Element(document, "head");
         var body = new Element(document, "body");
         html.childNodes.AddRange([head, body]);
-        var template = new Element(document, "template");
+        var template = new Element(document, "template", Namespaces.HTML);
         body.childNodes.Add(template);
         var text = new Text(document, "Hello");
         template.childNodes.Add(text);
