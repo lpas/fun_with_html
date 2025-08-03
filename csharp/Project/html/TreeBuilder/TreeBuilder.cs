@@ -2138,7 +2138,7 @@ public class TreeBuilder {
                 // If any of the tokens in the pending table character tokens list are character tokens that are not ASCII whitespace,
                 // then this is a parse error: reprocess the character tokens in the pending table character tokens list using
                 // the rules given in the "anything else" entry in the "in table" insertion mode.
-                if (pendingTableCharacterTokens.Any((item) => item.data is not '\u0009' or '\u000A' or '\u000C' or '\u000D' or '\u0020')) {
+                if (pendingTableCharacterTokens.Any((item) => item.data is not ('\u0009' or '\u000A' or '\u000C' or '\u000D' or '\u0020'))) {
                     AddParseError("InTableText");
                     // todo copied code
                     var currentToken = token;
