@@ -730,11 +730,11 @@ public class TreeBuilder {
                 // Switch the insertion mode to "in head noscript".
                 insertionMode = InsertionMode.InHeadNoscript;
                 break;
-            case StartTag { name: "script" }: {
+            case StartTag { name: "script" } startTag: {
                     // 1. Let the adjusted insertion location be the appropriate place for inserting a node.
                     var adjustedInsertionLocation = AppropriatePlaceForInsertingANode();
                     // 2. Create an element for the token in the HTML namespace, with the intended parent being the element in which the adjusted insertion location finds itself.
-                    var element = CreateAnElement(document, "script", Namespaces.HTML);
+                    var element = CreateAnElementForAToken(startTag, Namespaces.HTML, adjustedInsertionLocation.elem);
                     // 3. Set the element's parser document to the Document, and set the element's force async to false.
                     // todo
                     // NOTE: This ensures that, if the script is external, any document.write() calls in the script will execute in-line, instead of blowing the document away, as would happen in most other cases. It also prevents the script from executing until the end tag is seen.
