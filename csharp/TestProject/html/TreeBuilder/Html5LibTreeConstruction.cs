@@ -37,7 +37,7 @@ public sealed class Html5LibTreeConstruction {
         ("search-element.dat", ([],[],[])),
         ("svg.dat", ([],[],[])),
         ("tables01.dat", ([],[],[3])),
-        ("template.dat", ([98 ,99],[12,37,67,68,79,80,82,83,84,85,86,87,88,89,90,91,92,93,94,98,99,107,110],
+        ("template.dat", ([],[12,37,67,68,79,80,82,83,84,85,86,87,88,89,90,91,92,93,94,98,99,107,110],
         [106])),
         // tests_innerHTML_1
         ("tests1.dat", ([],

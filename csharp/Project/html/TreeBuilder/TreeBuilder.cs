@@ -829,11 +829,11 @@ public class TreeBuilder {
                     // 1. Generate all implied end tags thoroughly.
                     GenerateAllImpliedEndTagsThoroughly();
                     // 2. If the current node is not a template element, then this is a parse error.
-                    if (currentNode is not Element { localName: "template" }) {
+                    if (currentNode is not Element { localName: "template", @namespace: Namespaces.HTML }) {
                         AddParseError("in-head-expected-template-as-current-node");
                     }
                     // 3. Pop elements from the stack of open elements until a template element has been popped from the stack.
-                    while (stackOfOpenElements.Pop() is not Element { localName: "template" }) { }
+                    while (stackOfOpenElements.Pop() is not Element { localName: "template", @namespace: Namespaces.HTML }) { }
                     // 4. Clear the list of active formatting elements up to the last marker.
                     ClearTheListOfACtiveFormattingElementsUpToTheLastMarker();
                     // 5. Pop the current template insertion mode off the stack of template insertion modes.
@@ -1036,7 +1036,7 @@ public class TreeBuilder {
                 // Parse error.
                 AddParseError("in-body-unexpected-frameset-tag");
                 // If the stack of open elements has only one node on it, or if the second element on the stack of open elements is not a body element, then ignore the token. (fragment case or there is a template element on the stack)
-                if (stackOfOpenElements.Count == 1 || stackOfOpenElements[1] is not not Element { localName: "body" }) {
+                if (stackOfOpenElements.Count == 1 || stackOfOpenElements[1] is not not Element { localName: "body", @namespace: Namespaces.HTML }) {
                     break;
                 }
                 // If the frameset-ok flag is set to "not ok", ignore the token.
@@ -1060,7 +1060,7 @@ public class TreeBuilder {
                     } else {
                         // Otherwise, follow these steps:
                         // 1. If there is a node in the stack of open elements that is not either a dd element, a dt element, an li element, an optgroup element, an option element, a p element, an rb element, an rp element, an rt element, an rtc element, a tbody element, a td element, a tfoot element, a th element, a thead element, a tr element, the body element, or the html element, then this is a parse error.
-                        if (stackOfOpenElements.Any((elem) => elem is not Element { localName: "dd" or "dt" or "li" or "optgroup" or "option" or "p" or "rb" or "rp" or "rt" or "rtc" or "tbody" or "td" or "tfoot" or "th" or "thead" or "tr" or "body" or "html" })) {
+                        if (stackOfOpenElements.Any((elem) => elem is not Element { localName: "dd" or "dt" or "li" or "optgroup" or "option" or "p" or "rb" or "rp" or "rt" or "rtc" or "tbody" or "td" or "tfoot" or "th" or "thead" or "tr" or "body" or "html", @namespace: Namespaces.HTML })) {
                             AddParseError("expected-closing-tag-but-got-eof");
                         }
                         // 2. Stop parsing.
@@ -1075,7 +1075,7 @@ public class TreeBuilder {
                     break;
                 }
                 // Otherwise, if there is a node in the stack of open elements that is not either a dd element, a dt element, an li element, an optgroup element, an option element, a p element, an rb element, an rp element, an rt element, an rtc element, a tbody element, a td element, a tfoot element, a th element, a thead element, a tr element, the body element, or the html element, then this is a parse error.
-                if (stackOfOpenElements.Any((elem) => elem is not Element { localName: "dd" or "dt" or "li" or "optgroup" or "option" or "p" or "rb" or "rp" or "rt" or "rtc" or "tbody" or "td" or "tfoot" or "th" or "thead" or "tr" or "body" or "html" })) {
+                if (stackOfOpenElements.Any((elem) => elem is not Element { localName: "dd" or "dt" or "li" or "optgroup" or "option" or "p" or "rb" or "rp" or "rt" or "rtc" or "tbody" or "td" or "tfoot" or "th" or "thead" or "tr" or "body" or "html", @namespace: Namespaces.HTML })) {
                     AddParseError("IN BODY END-Tag body Otherwise");
                 }
                 // Switch the insertion mode to "after body".
@@ -1088,7 +1088,7 @@ public class TreeBuilder {
                     break;
                 }
                 // Otherwise, if there is a node in the stack of open elements that is not either a dd element, a dt element, an li element, an optgroup element, an option element, a p element, an rb element, an rp element, an rt element, an rtc element, a tbody element, a td element, a tfoot element, a th element, a thead element, a tr element, the body element, or the html element, then this is a parse error.
-                if (stackOfOpenElements.Any((elem) => elem is not Element { localName: "dd" or "dt" or "li" or "optgroup" or "option" or "p" or "rb" or "rp" or "rt" or "rtc" or "tbody" or "td" or "tfoot" or "th" or "thead" or "tr" or "body" or "html" })) {
+                if (stackOfOpenElements.Any((elem) => elem is not Element { localName: "dd" or "dt" or "li" or "optgroup" or "option" or "p" or "rb" or "rp" or "rt" or "rtc" or "tbody" or "td" or "tfoot" or "th" or "thead" or "tr" or "body" or "html", @namespace: Namespaces.HTML })) {
                     AddParseError("IN BODY END-Tag html");
                 }
                 // Switch the insertion mode to "after body".
@@ -1115,7 +1115,7 @@ public class TreeBuilder {
                     CloseAPElement();
                 }
                 // If the current node is an HTML element whose tag name is one of "h1", "h2", "h3", "h4", "h5", or "h6", then this is a parse error; pop the current node off the stack of open elements.
-                if (currentNode is Element { localName: "h1" or "h2" or "h3" or "h4" or "h5" or "h6" }) {
+                if (currentNode is Element { localName: "h1" or "h2" or "h3" or "h4" or "h5" or "h6", @namespace: Namespaces.HTML }) {
                     AddParseError("unexpected-start-tag");
                     stackOfOpenElements.Pop();
                 }
@@ -1159,15 +1159,15 @@ public class TreeBuilder {
                     // 3. Loop: If node is an li element, then run these substeps:
                     for (var i = stackOfOpenElements.Count - 1; i > 0; i--) {
                         var node = stackOfOpenElements[i];
-                        if (node is Element { localName: "li" }) {
+                        if (node is Element { localName: "li", @namespace: Namespaces.HTML }) {
                             // 1. Generate implied end tags, except for li elements.
                             GenerateImpliedEndTags("li");
                             // 2. If the current node is not an li element, then this is a parse error.
-                            if (currentNode is not Element { localName: "li" }) {
+                            if (currentNode is not Element { localName: "li", @namespace: Namespaces.HTML }) {
                                 AddParseError("insertionMode in body: LI");
                             }
                             // 3. Pop elements from the stack of open elements until an li element has been popped from the stack.
-                            while (stackOfOpenElements.Pop() is not Element { localName: "li" }) { }
+                            while (stackOfOpenElements.Pop() is not Element { localName: "li", @namespace: Namespaces.HTML }) { }
                             // 4. Jump to the step labeled done below.
                             break;
                         }
@@ -1194,28 +1194,28 @@ public class TreeBuilder {
                     // 3. Loop: If node is a dd element, then run these substeps:
                     for (var i = stackOfOpenElements.Count - 1; i > 0; i--) {
                         var node = stackOfOpenElements[i];
-                        if (node is Element { localName: "dd" }) {
+                        if (node is Element { localName: "dd", @namespace: Namespaces.HTML }) {
                             // 1. Generate implied end tags, except for dd elements.
                             GenerateImpliedEndTags("dd");
                             // 2. If the current node is not a dd element, then this is a parse error.
-                            if (currentNode is not Element { localName: "dd" }) {
+                            if (currentNode is not Element { localName: "dd", @namespace: Namespaces.HTML }) {
                                 AddParseError("in-body-dd-unexpected-current-node");
                             }
                             // 3. Pop elements from the stack of open elements until a dd element has been popped from the stack.
-                            while (stackOfOpenElements.Pop() is not Element { localName: "dd" }) { }
+                            while (stackOfOpenElements.Pop() is not Element { localName: "dd", @namespace: Namespaces.HTML }) { }
                             // 4. Jump to the step labeled done below.
                             break;
                         }
                         // 4. If node is a dt element, then run these substeps:
-                        if (node is Element { localName: "dt" }) {
+                        if (node is Element { localName: "dt", @namespace: Namespaces.HTML }) {
                             // 1. Generate implied end tags, except for dt elements.
                             GenerateImpliedEndTags("dt");
                             // 2. If the current node is not a dt element, then this is a parse error.
-                            if (currentNode is not Element { localName: "dt" }) {
+                            if (currentNode is not Element { localName: "dt", @namespace: Namespaces.HTML }) {
                                 AddParseError("in-body-dd-unexpected-current-node");
                             }
                             // 3. Pop elements from the stack of open elements until a dt element has been popped from the stack.
-                            while (stackOfOpenElements.Pop() is not Element { localName: "dt" }) { }
+                            while (stackOfOpenElements.Pop() is not Element { localName: "dt", @namespace: Namespaces.HTML }) { }
                             // 4. Jump to the step labeled done below.
                             break;
                         }
@@ -1599,7 +1599,7 @@ public class TreeBuilder {
                 break;
             case StartTag { name: "optgroup" or "option" } tagToken:
                 // If the current node is an option element, then pop the current node off the stack of open elements.
-                if (currentNode is Element { localName: "option" }) {
+                if (currentNode is Element { localName: "option", @namespace: Namespaces.HTML }) {
                     stackOfOpenElements.Pop();
                 }
                 // Reconstruct the active formatting elements, if any.
@@ -1611,7 +1611,7 @@ public class TreeBuilder {
                 // If the stack of open elements has a ruby element in scope, then generate implied end tags. If the current node is not now a ruby element, this is a parse error.
                 if (HasAElementInScope("ruby")) {
                     GenerateImpliedEndTags();
-                    if (currentNode is not Element { localName: "ruby" }) {
+                    if (currentNode is not Element { localName: "ruby", @namespace: Namespaces.HTML }) {
                         AddParseError("in-body-rb-rtc-unexpected-current-node");
                     }
                 }
@@ -1622,7 +1622,7 @@ public class TreeBuilder {
                 // If the stack of open elements has a ruby element in scope, then generate implied end tags, except for rtc elements. If the current node is not now a rtc element or a ruby element, this is a parse error.
                 if (HasAElementInScope("ruby")) {
                     GenerateImpliedEndTags("rtc");
-                    if (currentNode is not Element { localName: "rtc" or "ruby" }) {
+                    if (currentNode is not Element { localName: "rtc" or "ruby", @namespace: Namespaces.HTML }) {
                         AddParseError("in-body-rp-rt-unexpected-current-node");
                     }
                 }
@@ -1709,7 +1709,7 @@ public class TreeBuilder {
             // Generate implied end tags, except for p elements.
             GenerateImpliedEndTags("p");
             // If the current node is not a p element, then this is a parse error.
-            if (currentNode is not Element { localName: "p" }) {
+            if (currentNode is not Element { localName: "p", @namespace: Namespaces.HTML }) {
                 AddParseError("CLOSEAPELEMENT not p");
             }
             // Pop elements from the stack of open elements until a p element has been popped from the stack.
@@ -1881,7 +1881,7 @@ public class TreeBuilder {
                 // Parse error.
                 AddParseError("Text mode EOF");
                 // If the current node is a script element, then set its already started to true.
-                if (currentNode is Element { localName: "script" }) {
+                if (currentNode is Element { localName: "script", @namespace: Namespaces.HTML }) {
                     // todo set already started
                 }
                 // Pop the current node off the stack of open elements.
@@ -1967,7 +1967,7 @@ public class TreeBuilder {
         };
 
         switch (token) {
-            case Character when currentNode is Element { localName: "table" or "tbody" or "template" or "tfoot" or "thead" or "tr" }:
+            case Character when currentNode is Element { localName: "table" or "tbody" or "template" or "tfoot" or "thead" or "tr", @namespace: Namespaces.HTML }:
                 // Let the pending table character tokens be an empty list of tokens.
                 pendingTableCharacterTokens = [];
                 // Set the original insertion mode to the current insertion mode.
@@ -2034,7 +2034,7 @@ public class TreeBuilder {
                 } else {
                     // Otherwise:
                     // Pop elements from this stack until a table element has been popped from the stack.
-                    while (stackOfOpenElements.Pop() is not Element { localName: "table" }) ;
+                    while (stackOfOpenElements.Pop() is not Element { localName: "table", @namespace: Namespaces.HTML }) ;
                     // Reset the insertion mode appropriately.
                     ResetTheInsertionModeAppropriately();
                     // Reprocess the token.
@@ -2158,12 +2158,12 @@ public class TreeBuilder {
                     // Generate implied end tags.
                     GenerateImpliedEndTags();
                     // Now, if the current node is not a caption element, then this is a parse error.
-                    if (currentNode is not Element { localName: "caption" }) {
+                    if (currentNode is not Element { localName: "caption", @namespace: Namespaces.HTML }) {
                         AddParseError("in-caption-is-not-caption");
                     }
                     // Pop elements from this stack until a caption element has been popped from the stack.
                     while (true) {
-                        if (stackOfOpenElements.Pop() is Element { localName: "caption" }) break;
+                        if (stackOfOpenElements.Pop() is Element { localName: "caption", @namespace: Namespaces.HTML }) break;
                     }
                     // Clear the list of active formatting elements up to the last marker.
                     ClearTheListOfACtiveFormattingElementsUpToTheLastMarker();
@@ -2181,11 +2181,11 @@ public class TreeBuilder {
                     // Generate implied end tags.
                     GenerateImpliedEndTags();
                     // Now, if the current node is not a caption element, then this is a parse error.
-                    if (currentNode is not Element { localName: "caption" }) {
+                    if (currentNode is not Element { localName: "caption", @namespace: Namespaces.HTML }) {
                         AddParseError("in-caption-current-node-not-caption");
                     }
                     // Pop elements from this stack until a caption element has been popped from the stack.
-                    while (stackOfOpenElements.Pop() is not Element { localName: "caption" }) { }
+                    while (stackOfOpenElements.Pop() is not Element { localName: "caption", @namespace: Namespaces.HTML }) { }
                     // Clear the list of active formatting elements up to the last marker.
                     ClearTheListOfACtiveFormattingElementsUpToTheLastMarker();
                     // Switch the insertion mode to "in table".
@@ -2234,7 +2234,7 @@ public class TreeBuilder {
                 break;
             case EndTag { name: "colgroup" }:
                 // If the current node is not a colgroup element, then this is a parse error; ignore the token.
-                if (currentNode is not Element { localName: "colgroup" }) {
+                if (currentNode is not Element { localName: "colgroup", @namespace: Namespaces.HTML }) {
                     AddParseError("in-column-group-unexpected-end-tag-ignored");
                 } else {
                     // Otherwise, pop the current node from the stack of open elements. Switch the insertion mode to "in table".
@@ -2257,7 +2257,7 @@ public class TreeBuilder {
                 break;
             default:
                 // If the current node is not a colgroup element, then this is a parse error; ignore the token.
-                if (currentNode is not Element { localName: "colgroup" }) {
+                if (currentNode is not Element { localName: "colgroup", @namespace: Namespaces.HTML }) {
                     AddParseError("InColumnGroup - default");
                 } else {
                     // Otherwise, pop the current node from the stack of open elements.
@@ -2441,7 +2441,7 @@ public class TreeBuilder {
             // Generate implied end tags.
             GenerateImpliedEndTags();
             // If the current node is not now a td element or a th element, then this is a parse error.
-            if (currentNode is not Element { localName: "td" or "th" }) {
+            if (currentNode is not Element { localName: "td" or "th", @namespace: Namespaces.HTML }) {
                 AddParseError("unexpected-cell-end-tag");
             }
             // Pop elements from the stack of open elements until a td element or a th element has been popped from the stack.
@@ -2529,7 +2529,7 @@ public class TreeBuilder {
                 break;
             case StartTag { name: "option" } tagToken:
                 // If the current node is an option element, pop that node from the stack of open elements.
-                if (currentNode is Element { localName: "option" }) {
+                if (currentNode is Element { localName: "option", @namespace: Namespaces.HTML }) {
                     stackOfOpenElements.Pop();
                 }
                 // Insert an HTML element for the token.
@@ -2537,17 +2537,17 @@ public class TreeBuilder {
                 break;
             case StartTag { name: "optgroup" } tagToken:
                 // If the current node is an option element, pop that node from the stack of open elements.
-                if (currentNode is Element { localName: "option" }) stackOfOpenElements.Pop();
+                if (currentNode is Element { localName: "option", @namespace: Namespaces.HTML }) stackOfOpenElements.Pop();
                 // If the current node is an optgroup element, pop that node from the stack of open elements.
-                if (currentNode is Element { localName: "optgroup" }) stackOfOpenElements.Pop();
+                if (currentNode is Element { localName: "optgroup", @namespace: Namespaces.HTML }) stackOfOpenElements.Pop();
                 // Insert an HTML element for the token.
                 InsertAnHTMLElement(tagToken);
                 break;
             case StartTag { name: "hr" } tagToken:
                 // If the current node is an option element, pop that node from the stack of open elements.
-                if (currentNode is Element { localName: "option" }) stackOfOpenElements.Pop();
+                if (currentNode is Element { localName: "option", @namespace: Namespaces.HTML }) stackOfOpenElements.Pop();
                 // If the current node is an optgroup element, pop that node from the stack of open elements.
-                if (currentNode is Element { localName: "optgroup" }) stackOfOpenElements.Pop();
+                if (currentNode is Element { localName: "optgroup", @namespace: Namespaces.HTML }) stackOfOpenElements.Pop();
                 // Insert an HTML element for the token. Immediately pop the current node off the stack of open elements.
                 InsertAnHTMLElement(tagToken);
                 stackOfOpenElements.Pop();
@@ -2556,9 +2556,9 @@ public class TreeBuilder {
                 break;
             case EndTag { name: "optgroup" }:
                 // First, if the current node is an option element, and the node immediately before it in the stack of open elements is an optgroup element, then pop the current node from the stack of open elements.
-                if (currentNode is Element { localName: "option" } && stackOfOpenElements[^2] is Element { localName: "optgroup" }) stackOfOpenElements.Pop();
+                if (currentNode is Element { localName: "option", @namespace: Namespaces.HTML } && stackOfOpenElements[^2] is Element { localName: "optgroup", @namespace: Namespaces.HTML }) stackOfOpenElements.Pop();
                 // If the current node is an optgroup element, then pop that node from the stack of open elements. Otherwise, this is a parse error; ignore the token.
-                if (currentNode is Element { localName: "optgroup" }) {
+                if (currentNode is Element { localName: "optgroup", @namespace: Namespaces.HTML }) {
                     stackOfOpenElements.Pop();
                 } else {
                     AddParseError("in-select-unexpected-optgroup-endtag");
@@ -2566,7 +2566,7 @@ public class TreeBuilder {
                 break;
             case EndTag { name: "option" }:
                 // If the current node is an option element, then pop that node from the stack of open elements. Otherwise, this is a parse error; ignore the token.
-                if (currentNode is Element { localName: "option" }) {
+                if (currentNode is Element { localName: "option", @namespace: Namespaces.HTML }) {
                     stackOfOpenElements.Pop();
                 } else {
                     AddParseError("IN SELECT - END OPTION");
@@ -2580,7 +2580,7 @@ public class TreeBuilder {
                     // Otherwise:
                     // Pop elements from the stack of open elements until a select element has been popped from the stack.
                     while (true) {
-                        if (stackOfOpenElements.Pop() is Element { localName: "select" }) {
+                        if (stackOfOpenElements.Pop() is Element { localName: "select", @namespace: Namespaces.HTML }) {
                             break;
                         }
                     }
@@ -2599,7 +2599,7 @@ public class TreeBuilder {
                     // Otherwise:
                     // 1. Pop elements from the stack of open elements until a select element has been popped from the stack.
                     while (true) {
-                        if (stackOfOpenElements.Pop() is Element { localName: "select" }) {
+                        if (stackOfOpenElements.Pop() is Element { localName: "select", @namespace: Namespaces.HTML }) {
                             break;
                         }
                     }
@@ -2617,7 +2617,7 @@ public class TreeBuilder {
                 } else {
                     // Otherwise:
                     // Pop elements from the stack of open elements until a select element has been popped from the stack.
-                    while (stackOfOpenElements.Pop() is not Element { localName: "select" }) { }
+                    while (stackOfOpenElements.Pop() is not Element { localName: "select", @namespace: Namespaces.HTML }) { }
                     // Reset the insertion mode appropriately.
                     ResetTheInsertionModeAppropriately();
                     // Reprocess the token.
@@ -2648,7 +2648,7 @@ public class TreeBuilder {
                 // Parse error.
                 AddParseError("select-in-table-unexpected-start-tag");
                 // Pop elements from the stack of open elements until a select element has been popped from the stack.
-                while (stackOfOpenElements.Pop() is not Element { localName: "select" }) { }
+                while (stackOfOpenElements.Pop() is not Element { localName: "select", @namespace: Namespaces.HTML }) { }
                 // Reset the insertion mode appropriately.
                 ResetTheInsertionModeAppropriately();
                 // Reprocess the token.
@@ -2663,7 +2663,7 @@ public class TreeBuilder {
                 } else {
                     // Otherwise:
                     // 1. Pop elements from the stack of open elements until a select element has been popped from the stack.
-                    while (stackOfOpenElements.Pop() is not Element { localName: "select" }) { }
+                    while (stackOfOpenElements.Pop() is not Element { localName: "select", @namespace: Namespaces.HTML }) { }
                     // 2. Reset the insertion mode appropriately.
                     ResetTheInsertionModeAppropriately();
                     // 3. Reprocess the token.
@@ -2749,7 +2749,7 @@ public class TreeBuilder {
                     // Otherwise, this is a parse error.
                     AddParseError("in-template-eof");
                     // Pop elements from the stack of open elements until a template element has been popped from the stack.
-                    while (stackOfOpenElements.Pop() is not Element { localName: "template" }) { }
+                    while (stackOfOpenElements.Pop() is not Element { localName: "template", @namespace: Namespaces.HTML }) { }
                     // Clear the list of active formatting elements up to the last marker.
                     ClearTheListOfACtiveFormattingElementsUpToTheLastMarker();
                     // Pop the current template insertion mode off the stack of template insertion modes.
@@ -2980,7 +2980,7 @@ public class TreeBuilder {
             }
             switch (node) {
                 // 4. If node is a select element, run these substeps:
-                case Element { localName: "select" }:
+                case Element { localName: "select", @namespace: Namespaces.HTML }:
                     // 1. If last is true, jump to the step below labeled done.
                     if (last == true) {
                         goto done;
@@ -2995,11 +2995,11 @@ public class TreeBuilder {
                         // 4. Let ancestor be the node before ancestor in the stack of open elements.
                         ancestor = stackOfOpenElements[stackOfOpenElements.IndexOf(ancestor) - 1];
                         // 5. If ancestor is a template node, jump to the step below labeled done.
-                        if (ancestor is Element { localName: "template" }) {
+                        if (ancestor is Element { localName: "template", @namespace: Namespaces.HTML }) {
                             goto done;
                         }
                         // 6. If ancestor is a table node, switch the insertion mode to "in select in table" and return.
-                        if (ancestor is Element { localName: "table" }) {
+                        if (ancestor is Element { localName: "table", @namespace: Namespaces.HTML }) {
                             insertionMode = InsertionMode.InSelectInTable;
                             return;
                         }
@@ -3011,46 +3011,46 @@ public class TreeBuilder {
                     return;
 
                 // 5. If node is a td or th element and last is false, then switch the insertion mode to "in cell" and return.
-                case Element { localName: "td" or "th" }:
+                case Element { localName: "td" or "th", @namespace: Namespaces.HTML }:
                     insertionMode = InsertionMode.InCell;
                     return;
                 // 6. If node is a tr element, then switch the insertion mode to "in row" and return.
-                case Element { localName: "tr" }:
+                case Element { localName: "tr", @namespace: Namespaces.HTML }:
                     insertionMode = InsertionMode.InRow;
                     return;
                 // 7. If node is a tbody, thead, or tfoot element, then switch the insertion mode to "in table body" and return.
-                case Element { localName: "tbody" or "thead" or "tfoot" }:
+                case Element { localName: "tbody" or "thead" or "tfoot", @namespace: Namespaces.HTML }:
                     insertionMode = InsertionMode.InTableBody;
                     return;
                 // 8. If node is a caption element, then switch the insertion mode to "in caption" and return.
-                case Element { localName: "caption" }:
+                case Element { localName: "caption", @namespace: Namespaces.HTML }:
                     insertionMode = InsertionMode.InCaption;
                     return;
                 // 9. If node is a colgroup element, then switch the insertion mode to "in column group" and return.
-                case Element { localName: "colgroup" }:
+                case Element { localName: "colgroup", @namespace: Namespaces.HTML }:
                     insertionMode = InsertionMode.InColumnGroup;
                     return;
                 // 10. If node is a table element, then switch the insertion mode to "in table" and return.
-                case Element { localName: "table" }:
+                case Element { localName: "table", @namespace: Namespaces.HTML }:
                     insertionMode = InsertionMode.InTable;
                     return;
                 // 11. If node is a template element, then switch the insertion mode to the current template insertion mode and return.
-                case Element { localName: "template" }:
+                case Element { localName: "template", @namespace: Namespaces.HTML }:
                     insertionMode = stackOfTemplateInsertionModes[^1];
                     break;
                 // 12. If node is a head element and last is false, then switch the insertion mode to "in head" and return.
-                case Element { localName: "head" } when last is false:
+                case Element { localName: "head", @namespace: Namespaces.HTML } when last is false:
                     insertionMode = InsertionMode.InHead;
                     return;
                 // 13. If node is a body element, then switch the insertion mode to "in body" and return.
-                case Element { localName: "body" }:
+                case Element { localName: "body", @namespace: Namespaces.HTML }:
                     insertionMode = InsertionMode.InBody;
                     return;
                 // 14. If node is a frameset element, then switch the insertion mode to "in frameset" and return. (fragment case)
-                case Element { localName: "frameset" }:
+                case Element { localName: "frameset", @namespace: Namespaces.HTML }:
                     throw new NotImplementedException();
                 // 15. If node is an html element, run these substeps:
-                case Element { localName: "html" }:
+                case Element { localName: "html", @namespace: Namespaces.HTML }:
                     // 1. If the head element pointer is null, switch the insertion mode to "before head" and return. (fragment case)
                     if (headElementPointer is null) {
                         insertionMode = InsertionMode.BeforeHead;
@@ -3155,7 +3155,7 @@ public class TreeBuilder {
         // When the steps below require the UA to generate all implied end tags thoroughly, then, while the current node is a caption element, a colgroup element,
         // a dd element, a dt element, an li element, an optgroup element, an option element, a p element, an rb element, an rp element, an rt element, an rtc element,
         //  a tbody element, a td element, a tfoot element, a th element, a thead element, or a tr element, the UA must pop the current node off the stack of open elements.
-        while (currentNode is Element { localName: "caption" or "colgroup" or "dd" or "dt" or "li" or "optgroup" or "option" or "p" or "rb" or "rp" or "rt" or "rtc" or "tbody" or "td" or "tfoot" or "th" or "thead" or "tr" }) {
+        while (currentNode is Element { localName: "caption" or "colgroup" or "dd" or "dt" or "li" or "optgroup" or "option" or "p" or "rb" or "rp" or "rt" or "rtc" or "tbody" or "td" or "tfoot" or "th" or "thead" or "tr", @namespace: Namespaces.HTML }) {
             stackOfOpenElements.Pop();
         }
     }
@@ -3356,7 +3356,7 @@ public class TreeBuilder {
     }
 
     // https://html.spec.whatwg.org/multipage/parsing.html#insert-an-element-at-the-adjusted-insertion-location
-    private void InsertAnElementAtTheAdjustedInsertionLocation(Element element) {
+    private void InsertAnElementAtTheAdjustedInsertionLocation(Element element) { // todo 
         // 1. Let the adjusted insertion location be the appropriate place for inserting a node.
         var adjustedInsertionLocation = AppropriatePlaceForInsertingANode();
         // 2. If it is not possible to insert element at the adjusted insertion location, abort these steps.
@@ -3390,7 +3390,7 @@ public class TreeBuilder {
         (Node, int) DetermineTheAdjustedInsertionLocation(Element target) {
             // If foster parenting is enabled and target is a table, tbody, tfoot, thead, or tr element
             // NOTE: Foster parenting happens when content is misnested in tables.
-            if (fosterParenting && target is Element { localName: "table" or "tbody" or "tfoot" or "thead" or "tr" }) {
+            if (fosterParenting && target is Element { localName: "table" or "tbody" or "tfoot" or "thead" or "tr", @namespace: Namespaces.HTML }) {
                 // Run these substeps:
                 // 1. Let last template be the last template element in the stack of open elements, if any.
                 var lastTemplateIndex = stackOfOpenElements.FindLastIndex((element) => element.localName == "template");
