@@ -31,7 +31,7 @@ public sealed class Html5LibTreeConstruction {
         // pending-spec-changes-plain-text-unsafe
         // pending-spec-changes
         ("plain-text-unsafe.dat", ([],[0,1,2,4,5,18,19,21,22 ],[3,6,7,8,9,11,12,13,14,15,16,17,20,26,27,28,29,30,31,32])),
-        ("quirks01.dat", ([],[2],[])),
+        ("quirks01.dat", ([],[],[])),
         // ruby.dat 
         ("scriptdata01.dat", ([],[5,15,16,17,19,20,21,22,23,24,],[3,4,6])),
         ("search-element.dat", ([],[],[])),

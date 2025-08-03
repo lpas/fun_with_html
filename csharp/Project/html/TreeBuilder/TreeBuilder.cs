@@ -424,13 +424,15 @@ public class TreeBuilder {
                 // The force-quirks flag is set to on.
                 doctype.forceQuirks
                 // The name is not "html".
-                || doctype.name is not "html"
+                || !string.Equals(doctype.name, "html", StringComparison.OrdinalIgnoreCase)
                 // The public identifier is set to: "-//W3O//DTD W3 HTML Strict 3.0//EN//"
                 // The public identifier is set to: "-/W3C/DTD HTML 4.0 Transitional/EN"
                 // The public identifier is set to: "HTML"
-                || doctype.publicId is "-//W3O//DTD W3 HTML Strict 3.0//EN//" or "-/W3C/DTD HTML 4.0 Transitional/EN" or "HTML"
+                || string.Equals(doctype.publicId, "-//W3O//DTD W3 HTML Strict 3.0//EN//", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(doctype.publicId, "-/W3C/DTD HTML 4.0 Transitional/EN", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(doctype.publicId, "HTML", StringComparison.OrdinalIgnoreCase)
                 // The system identifier is set to: "http://www.ibm.com/data/dtd/v11/ibmxhtml1-transitional.dtd"
-                || doctype.systemId is "http://www.ibm.com/data/dtd/v11/ibmxhtml1-transitional.dtd"
+                || string.Equals(doctype.systemId, "http://www.ibm.com/data/dtd/v11/ibmxhtml1-transitional.dtd", StringComparison.OrdinalIgnoreCase)
                 // The public identifier starts with: "+//Silmaril//dtd html Pro v0r11 19970101//"
                 // The public identifier starts with: "-//AS//DTD HTML 3.0 asWedit + extensions//"
                 // The public identifier starts with: "-//AdvaSoft Ltd//DTD HTML 3.0 asWedit + extensions//"
@@ -487,68 +489,70 @@ public class TreeBuilder {
                 // The public identifier starts with: "-//WebTechs//DTD Mozilla HTML 2.0//"
                 // The public identifier starts with: "-//WebTechs//DTD Mozilla HTML//"
                 || doctype.publicId is not null && (
-                    doctype.publicId.StartsWith("+//Silmaril//dtd html Pro v0r11 19970101//")
-                    || doctype.publicId.StartsWith("-//AS//DTD HTML 3.0 asWedit + extensions//")
-                    || doctype.publicId.StartsWith("-//AdvaSoft Ltd//DTD HTML 3.0 asWedit + extensions//")
-                    || doctype.publicId.StartsWith("-//IETF//DTD HTML 2.0 Level 1//")
-                    || doctype.publicId.StartsWith("-//IETF//DTD HTML 2.0 Level 2//")
-                    || doctype.publicId.StartsWith("-//IETF//DTD HTML 2.0 Strict Level 1//")
-                    || doctype.publicId.StartsWith("-//IETF//DTD HTML 2.0 Strict Level 2//")
-                    || doctype.publicId.StartsWith("-//IETF//DTD HTML 2.0 Strict//")
-                    || doctype.publicId.StartsWith("-//IETF//DTD HTML 2.0//")
-                    || doctype.publicId.StartsWith("-//IETF//DTD HTML 2.1E//")
-                    || doctype.publicId.StartsWith("-//IETF//DTD HTML 3.0//")
-                    || doctype.publicId.StartsWith("-//IETF//DTD HTML 3.2 Final//")
-                    || doctype.publicId.StartsWith("-//IETF//DTD HTML 3.2//")
-                    || doctype.publicId.StartsWith("-//IETF//DTD HTML 3//")
-                    || doctype.publicId.StartsWith("-//IETF//DTD HTML Level 0//")
-                    || doctype.publicId.StartsWith("-//IETF//DTD HTML Level 1//")
-                    || doctype.publicId.StartsWith("-//IETF//DTD HTML Level 2//")
-                    || doctype.publicId.StartsWith("-//IETF//DTD HTML Level 3//")
-                    || doctype.publicId.StartsWith("-//IETF//DTD HTML Strict Level 0//")
-                    || doctype.publicId.StartsWith("-//IETF//DTD HTML Strict Level 1//")
-                    || doctype.publicId.StartsWith("-//IETF//DTD HTML Strict Level 2//")
-                    || doctype.publicId.StartsWith("-//IETF//DTD HTML Strict Level 3//")
-                    || doctype.publicId.StartsWith("-//IETF//DTD HTML Strict//")
-                    || doctype.publicId.StartsWith("-//IETF//DTD HTML//")
-                    || doctype.publicId.StartsWith("-//Metrius//DTD Metrius Presentational//")
-                    || doctype.publicId.StartsWith("-//Microsoft//DTD Internet Explorer 2.0 HTML Strict//")
-                    || doctype.publicId.StartsWith("-//Microsoft//DTD Internet Explorer 2.0 HTML//")
-                    || doctype.publicId.StartsWith("-//Microsoft//DTD Internet Explorer 2.0 Tables//")
-                    || doctype.publicId.StartsWith("-//Microsoft//DTD Internet Explorer 3.0 HTML Strict//")
-                    || doctype.publicId.StartsWith("-//Microsoft//DTD Internet Explorer 3.0 HTML//")
-                    || doctype.publicId.StartsWith("-//Microsoft//DTD Internet Explorer 3.0 Tables//")
-                    || doctype.publicId.StartsWith("-//Netscape Comm. Corp.//DTD HTML//")
-                    || doctype.publicId.StartsWith("-//Netscape Comm. Corp.//DTD Strict HTML//")
-                    || doctype.publicId.StartsWith("-//O'Reilly and Associates//DTD HTML 2.0//")
-                    || doctype.publicId.StartsWith("-//O'Reilly and Associates//DTD HTML Extended 1.0//")
-                    || doctype.publicId.StartsWith("-//O'Reilly and Associates//DTD HTML Extended Relaxed 1.0//")
-                    || doctype.publicId.StartsWith("-//SQ//DTD HTML 2.0 HoTMetaL + extensions//")
-                    || doctype.publicId.StartsWith("-//SoftQuad Software//DTD HoTMetaL PRO 6.0::19990601::extensions to HTML 4.0//")
-                    || doctype.publicId.StartsWith("-//SoftQuad//DTD HoTMetaL PRO 4.0::19971010::extensions to HTML 4.0//")
-                    || doctype.publicId.StartsWith("-//Spyglass//DTD HTML 2.0 Extended//")
-                    || doctype.publicId.StartsWith("-//Sun Microsystems Corp.//DTD HotJava HTML//")
-                    || doctype.publicId.StartsWith("-//Sun Microsystems Corp.//DTD HotJava Strict HTML//")
-                    || doctype.publicId.StartsWith("-//W3C//DTD HTML 3 1995-03-24//")
-                    || doctype.publicId.StartsWith("-//W3C//DTD HTML 3.2 Draft//")
-                    || doctype.publicId.StartsWith("-//W3C//DTD HTML 3.2 Final//")
-                    || doctype.publicId.StartsWith("-//W3C//DTD HTML 3.2//")
-                    || doctype.publicId.StartsWith("-//W3C//DTD HTML 3.2S Draft//")
-                    || doctype.publicId.StartsWith("-//W3C//DTD HTML 4.0 Frameset//")
-                    || doctype.publicId.StartsWith("-//W3C//DTD HTML 4.0 Transitional//")
-                    || doctype.publicId.StartsWith("-//W3C//DTD HTML Experimental 19960712//")
-                    || doctype.publicId.StartsWith("-//W3C//DTD HTML Experimental 970421//")
-                    || doctype.publicId.StartsWith("-//W3C//DTD W3 HTML//")
-                    || doctype.publicId.StartsWith("-//W3O//DTD W3 HTML 3.0//")
-                    || doctype.publicId.StartsWith("-//WebTechs//DTD Mozilla HTML 2.0//")
-                    || doctype.publicId.StartsWith("-//WebTechs//DTD Mozilla HTML//")
+                    doctype.publicId.StartsWith("+//Silmaril//dtd html Pro v0r11 19970101//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//AS//DTD HTML 3.0 asWedit + extensions//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//AdvaSoft Ltd//DTD HTML 3.0 asWedit + extensions//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//IETF//DTD HTML 2.0 Level 1//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//IETF//DTD HTML 2.0 Level 2//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//IETF//DTD HTML 2.0 Strict Level 1//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//IETF//DTD HTML 2.0 Strict Level 2//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//IETF//DTD HTML 2.0 Strict//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//IETF//DTD HTML 2.0//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//IETF//DTD HTML 2.1E//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//IETF//DTD HTML 3.0//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//IETF//DTD HTML 3.2 Final//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//IETF//DTD HTML 3.2//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//IETF//DTD HTML 3//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//IETF//DTD HTML Level 0//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//IETF//DTD HTML Level 1//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//IETF//DTD HTML Level 2//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//IETF//DTD HTML Level 3//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//IETF//DTD HTML Strict Level 0//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//IETF//DTD HTML Strict Level 1//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//IETF//DTD HTML Strict Level 2//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//IETF//DTD HTML Strict Level 3//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//IETF//DTD HTML Strict//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//IETF//DTD HTML//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//Metrius//DTD Metrius Presentational//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//Microsoft//DTD Internet Explorer 2.0 HTML Strict//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//Microsoft//DTD Internet Explorer 2.0 HTML//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//Microsoft//DTD Internet Explorer 2.0 Tables//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//Microsoft//DTD Internet Explorer 3.0 HTML Strict//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//Microsoft//DTD Internet Explorer 3.0 HTML//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//Microsoft//DTD Internet Explorer 3.0 Tables//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//Netscape Comm. Corp.//DTD HTML//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//Netscape Comm. Corp.//DTD Strict HTML//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//O'Reilly and Associates//DTD HTML 2.0//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//O'Reilly and Associates//DTD HTML Extended 1.0//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//O'Reilly and Associates//DTD HTML Extended Relaxed 1.0//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//SQ//DTD HTML 2.0 HoTMetaL + extensions//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//SoftQuad Software//DTD HoTMetaL PRO 6.0::19990601::extensions to HTML 4.0//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//SoftQuad//DTD HoTMetaL PRO 4.0::19971010::extensions to HTML 4.0//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//Spyglass//DTD HTML 2.0 Extended//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//Sun Microsystems Corp.//DTD HotJava HTML//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//Sun Microsystems Corp.//DTD HotJava Strict HTML//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//W3C//DTD HTML 3 1995-03-24//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//W3C//DTD HTML 3.2 Draft//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//W3C//DTD HTML 3.2 Final//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//W3C//DTD HTML 3.2//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//W3C//DTD HTML 3.2S Draft//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//W3C//DTD HTML 4.0 Frameset//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//W3C//DTD HTML 4.0 Transitional//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//W3C//DTD HTML Experimental 19960712//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//W3C//DTD HTML Experimental 970421//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//W3C//DTD W3 HTML//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//W3O//DTD W3 HTML 3.0//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//WebTechs//DTD Mozilla HTML 2.0//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//WebTechs//DTD Mozilla HTML//", StringComparison.OrdinalIgnoreCase)
                     // The system identifier is missing and the public identifier starts with: "-//W3C//DTD HTML 4.01 Frameset//"
                     // The system identifier is missing and the public identifier starts with: "-//W3C//DTD HTML 4.01 Transitional//"
                     || doctype.systemId is null && (
-                        doctype.publicId.StartsWith("-//W3C//DTD HTML 4.01 Frameset//")
-                        || doctype.publicId.StartsWith("-//W3C//DTD HTML 4.01 Transitional//")
+                        doctype.publicId.StartsWith("-//W3C//DTD HTML 4.01 Frameset//", StringComparison.OrdinalIgnoreCase)
+                        || doctype.publicId.StartsWith("-//W3C//DTD HTML 4.01 Transitional//", StringComparison.OrdinalIgnoreCase)
                     )
                 );
+            // The system identifier and public identifier strings must be compared to the values given in the lists above in an ASCII case-insensitive manner. 
+            // A system identifier whose value is the empty string is not considered missing for the purposes of the conditions above.            
         }
 
         bool isLimitedQuirksMode(DOCTYPE doctype) {
@@ -557,14 +561,15 @@ public class TreeBuilder {
             return
                 // The public identifier starts with: "-//W3C//DTD XHTML 1.0 Frameset//"
                 // The public identifier starts with: "-//W3C//DTD XHTML 1.0 Transitional//"
-                doctype.publicId.StartsWith("-//W3C//DTD XHTML 1.0 Frameset//")
-                || doctype.publicId.StartsWith("-//W3C//DTD XHTML 1.0 Transitional//")
+                doctype.publicId.StartsWith("-//W3C//DTD XHTML 1.0 Frameset//", StringComparison.OrdinalIgnoreCase)
+                || doctype.publicId.StartsWith("-//W3C//DTD XHTML 1.0 Transitional//", StringComparison.OrdinalIgnoreCase)
                 // The system identifier is not missing and the public identifier starts with: "-//W3C//DTD HTML 4.01 Frameset//"
                 // The system identifier is not missing and the public identifier starts with: "-//W3C//DTD HTML 4.01 Transitional//"
                 || doctype.systemId is not null && (
-                    doctype.publicId.StartsWith("-//W3C//DTD HTML 4.01 Frameset//")
-                    || doctype.publicId.StartsWith("-//W3C//DTD HTML 4.01 Transitional//"));
-
+                    doctype.publicId.StartsWith("-//W3C//DTD HTML 4.01 Frameset//", StringComparison.OrdinalIgnoreCase)
+                    || doctype.publicId.StartsWith("-//W3C//DTD HTML 4.01 Transitional//", StringComparison.OrdinalIgnoreCase));
+            // The system identifier and public identifier strings must be compared to the values given in the lists above in an ASCII case-insensitive manner. 
+            // A system identifier whose value is the empty string is not considered missing for the purposes of the conditions above.            
         }
 
     }
