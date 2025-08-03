@@ -146,7 +146,7 @@ public class TreeBuilder {
 
     private bool fosterParenting = false;
 
-    private HashSet<ParseError> parseErrors = [];
+    private List<ParseError> parseErrors = [];
 
     private Tokenizer.Tokenizer tokenizer;
     private bool framesetOk = false;
