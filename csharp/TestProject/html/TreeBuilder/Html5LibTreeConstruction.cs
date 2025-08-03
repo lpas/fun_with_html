@@ -52,12 +52,12 @@ public sealed class Html5LibTreeConstruction {
         ("tests6.dat", ([],[47,48,49,50,51],[4, 5, 25])),
         ("tests7.dat", ([],[8,11, 12, 20, 21, 32],[30, 31])),
         ("tests8.dat", ([],[8,9,],[])),
-        ("tests9.dat", ([],[3,23,24,
+        ("tests9.dat", ([],[23,24,
             25,26 // todo example of tree compare math attributes
             ],[])),
-        ("tests10.dat", ([],[22,23,24,25,30,31,34,35,42,44,46,48,50,51,52,53,],[1])),
+        ("tests10.dat", ([],[22,23,24,25,30,31,34,35,42,44,46,48,50,],[1])),
         ("tests11.dat", ([],[],[])),
-        ("tests12.dat", ([],[0,1],[])),
+        ("tests12.dat", ([],[0],[])),
         // tests13.dat is missing
         ("tests14.dat", ([],[],[])),
         ("tests15.dat", ([],[10,11,12],[6,7,8,9])),
@@ -69,7 +69,7 @@ public sealed class Html5LibTreeConstruction {
         ("tests17.dat", ([],[],[])),
         ("tests18.dat", ([],[],[23,24])),
         ("tests19.dat", ([],[15,25, 30, 31, 32, 33, 34, 45, 47, 72, 73, 74, 76, 79, 82, 90,91,92,94],[24,26,83])),
-        ("tests20.dat", ([],[54,55,56,57,63],[])),
+        ("tests20.dat", ([],[],[])),
         ("tests21.dat", ([],[],[2,3,4,7,8,9,13,16,17])),
         ("tests22.dat", ([],[0,1,2,3,4],[])), // adopting
         ("tests23.dat", ([],[],[])), // adopting

@@ -298,10 +298,11 @@ public class TreeBuilder {
 
     // https://w3c.github.io/mathml-core/#dfn-annotation-xml
     private static bool IsAMathMLAnnotationXmlElement(Element? elem) {
-        return false; // todo
+        return elem is Element { localName: "annotation-xml", @namespace: Namespaces.MATH };
     }
     // https://html.spec.whatwg.org/multipage/parsing.html#mathml-text-integration-point
     private static bool IsAMathMlTextIntegrationPoint(Element? elem) {
+        if (elem is null) return false;
         // A node is a MathML text integration point if it is one of the following elements:
         // A MathML mi element
         // A MathML mo element
@@ -312,13 +313,21 @@ public class TreeBuilder {
     }
     // https://html.spec.whatwg.org/multipage/parsing.html#html-integration-point
     private static bool IsAnHTMLIntegrationPoint(Element? elem) {
+        if (elem is null) return false;
         // A node is an HTML integration point if it is one of the following elements:
         // A MathML annotation-xml element whose start tag token had an attribute with the name "encoding" whose value was an ASCII case-insensitive match for the string "text/html"
         // A MathML annotation-xml element whose start tag token had an attribute with the name "encoding" whose value was an ASCII case-insensitive match for the string "application/xhtml+xml"
         // An SVG foreignObject element
         // An SVG desc element
         // An SVG title element
-        // todo math annotation cases
+        if (IsAMathMLAnnotationXmlElement(elem) && elem.attributes.Any(item => item.Key == "encoding"
+            && (
+                string.Equals(item.Value, "text/html", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(item.Value, "application/xhtml+xml", StringComparison.OrdinalIgnoreCase)
+            ))) {
+            return true;
+        }
+
         return elem is Element { @namespace: Namespaces.SVG, localName: "foreignObject" or "desc" or "title" };
     }
 
