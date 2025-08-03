@@ -3033,7 +3033,7 @@ public class TreeBuilder {
                 // 11. If node is a template element, then switch the insertion mode to the current template insertion mode and return.
                 case Element { localName: "template", @namespace: Namespaces.HTML }:
                     insertionMode = stackOfTemplateInsertionModes[^1];
-                    break;
+                    return;
                 // 12. If node is a head element and last is false, then switch the insertion mode to "in head" and return.
                 case Element { localName: "head", @namespace: Namespaces.HTML } when last is false:
                     insertionMode = InsertionMode.InHead;
