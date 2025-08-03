@@ -1360,9 +1360,7 @@ public class TreeBuilder {
                         AddParseError("in BODY - </li> ");
                     }
                     // 3. Pop elements from the stack of open elements until an li element has been popped from the stack.
-                    while (true) {
-                        if (stackOfOpenElements.Pop().localName == "li") break;
-                    }
+                    while (stackOfOpenElements.Pop() is not Element { localName: "li", @namespace: Namespaces.HTML }) { }
                 }
                 break;
             case EndTag { name: "dd" or "dt" } tagToken:
@@ -1378,9 +1376,7 @@ public class TreeBuilder {
                         AddParseError("in-body-end-dd-dt-wrong-current-node");
                     }
                     // 3. Pop elements from the stack of open elements until an HTML element with the same tag name as the token has been popped from the stack.
-                    while (true) {
-                        if (stackOfOpenElements.Pop().localName == tagToken.name) break;
-                    }
+                    while (stackOfOpenElements.Pop() is var elem && !(elem.localName == tagToken.name && elem.@namespace == Namespaces.HTML)) { }
                 }
                 break;
             case EndTag { name: "h1" or "h2" or "h3" or "h4" or "h5" or "h6" } tagToken:
@@ -1396,9 +1392,7 @@ public class TreeBuilder {
                         AddParseError("IN BODY <hX> 2");
                     }
                     // 3. Pop elements from the stack of open elements until an HTML element whose tag name is one of "h1", "h2", "h3", "h4", "h5", or "h6" has been popped from the stack.
-                    while (true) {
-                        if (stackOfOpenElements.Pop().localName is "h1" or "h2" or "h3" or "h4" or "h5" or "h6") break;
-                    }
+                    while (stackOfOpenElements.Pop() is not Element { localName: "h1" or "h2" or "h3" or "h4" or "h5" or "h6", @namespace: Namespaces.HTML }) { }
                 }
                 break;
             case EndTag { name: "sarcasm" } tagToken:
@@ -1480,9 +1474,7 @@ public class TreeBuilder {
                         AddParseError("end-tag-too-early");
                     }
                     // 3. Pop elements from the stack of open elements until an HTML element with the same tag name as the token has been popped from the stack.
-                    while (true) {
-                        if (stackOfOpenElements.Pop().localName == tagToken.name) break;
-                    }
+                    while (stackOfOpenElements.Pop() is var elem && !(elem.localName == tagToken.name && elem.@namespace == Namespaces.HTML)) { }
                     // 4. Clear the list of active formatting elements up to the last marker.
                     ClearTheListOfACtiveFormattingElementsUpToTheLastMarker();
                 }
@@ -2062,10 +2054,7 @@ public class TreeBuilder {
                 } else {
                     // Otherwise:
                     // 1. Pop elements from this stack until a table element has been popped from the stack.
-                    while (true) {
-                        var element = stackOfOpenElements.Pop();
-                        if (element.localName == "table") break;
-                    }
+                    while (stackOfOpenElements.Pop() is not Element { localName: "table", @namespace: Namespaces.HTML }) ;
                     // 2. Reset the insertion mode appropriately.
                     ResetTheInsertionModeAppropriately();
                 }
@@ -2176,9 +2165,7 @@ public class TreeBuilder {
                         AddParseError("in-caption-is-not-caption");
                     }
                     // Pop elements from this stack until a caption element has been popped from the stack.
-                    while (true) {
-                        if (stackOfOpenElements.Pop() is Element { localName: "caption", @namespace: Namespaces.HTML }) break;
-                    }
+                    while (stackOfOpenElements.Pop() is not Element { localName: "caption", @namespace: Namespaces.HTML }) { }
                     // Clear the list of active formatting elements up to the last marker.
                     ClearTheListOfACtiveFormattingElementsUpToTheLastMarker();
                     // Switch the insertion mode to "in table".
@@ -2459,10 +2446,7 @@ public class TreeBuilder {
                 AddParseError("unexpected-cell-end-tag");
             }
             // Pop elements from the stack of open elements until a td element or a th element has been popped from the stack.
-            while (true) {
-                var element = stackOfOpenElements.Pop();
-                if (element.localName is "td" or "th") break;
-            }
+            while (stackOfOpenElements.Pop() is not Element { localName: "td" or "th", @namespace: Namespaces.HTML }) { }
             // Clear the list of active formatting elements up to the last marker.
             ClearTheListOfACtiveFormattingElementsUpToTheLastMarker();
             // Switch the insertion mode to "in row".
@@ -2479,12 +2463,10 @@ public class TreeBuilder {
                     GenerateImpliedEndTags();
                     // 2. Now, if the current node is not an HTML element with the same tag name as the token, then this is a parse error.
                     if (currentNode?.localName != tagToken.name) {
-                        AddParseError("IN CELL - Otherwise not same");
+                        AddParseError("unexpected-end-tag");
                     }
                     // 3. Pop elements from the stack of open elements until an HTML element with the same tag name as the token has been popped from the stack.
-                    while (true) {
-                        if (stackOfOpenElements.Pop().localName == tagToken.name) break;
-                    }
+                    while (stackOfOpenElements.Pop() is var elem && !(elem.localName == tagToken.name && elem.@namespace == Namespaces.HTML)) { }
                     // 4. Clear the list of active formatting elements up to the last marker.
                     ClearTheListOfACtiveFormattingElementsUpToTheLastMarker();
                     // 5. Switch the insertion mode to "in row".

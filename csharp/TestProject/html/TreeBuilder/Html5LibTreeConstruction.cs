@@ -26,7 +26,7 @@ public sealed class Html5LibTreeConstruction {
         ("main-element.dat", ([],[],[])),
         ("math.dat", ([],[],[])),
         ("menuitem-element.dat", ([],[],[])),
-        ("namespace-sensitivity.dat", ([],[0],[])),
+        ("namespace-sensitivity.dat", ([],[],[0])),
         ("noscript01.dat", ([],[],[])),
         // pending-spec-changes-plain-text-unsafe
         // pending-spec-changes
