@@ -30,7 +30,7 @@ public sealed class Html5LibTreeConstruction {
         ("noscript01.dat", ([],[],[])),
         // pending-spec-changes-plain-text-unsafe
         // pending-spec-changes
-        ("plain-text-unsafe.dat", ([],[0,1,2,4,5,18,19,21,22 ],[3,6,7,8,9,11,12,13,14,15,16,17,20,26,27,28,29,30,31,32])),
+        ("plain-text-unsafe.dat", ([],[0],[1,2,3,4,5,6,7,8,9,11,12,13,14,15,16,17,18,19,20,26,27,28,29,30,31,32])),
         ("quirks01.dat", ([],[],[])),
         // ruby.dat 
         ("scriptdata01.dat", ([],[],[3,4,6, 15,16,17,19,20,21,22])),
@@ -45,7 +45,7 @@ public sealed class Html5LibTreeConstruction {
         ("tests3.dat", ([],[19, 21],[])), // adopting agency
         ("tests4.dat", ([],[],[])),
         ("tests5.dat", ([],[],[])),
-        ("tests6.dat", ([],[47,48,49,50,51],[4, 5, 25])),
+        ("tests6.dat", ([],[],[4, 5, 25])),
         ("tests7.dat", ([],[],[30, 31, 32])),
         ("tests8.dat", ([],[8,9,],[])),
         ("tests9.dat", ([],[23,24,
@@ -56,7 +56,7 @@ public sealed class Html5LibTreeConstruction {
         ("tests12.dat", ([],[0],[])),
         // tests13.dat is missing
         ("tests14.dat", ([],[],[])),
-        ("tests15.dat", ([],[12],[6,7,8,9])),
+        ("tests15.dat", ([],[],[6,7,8,9])),
         ("tests16.dat", ([],[137,138,139,140,
         ],[10, 17, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 48, 49, 50, 51, 52, 53, 58, 59,
             38, 39, 40, 41, 42, 43, 44, 45, 46, 69,71,109,116,121,122,123,124,125,126,127,128,129,130,131,132,133,
@@ -64,7 +64,7 @@ public sealed class Html5LibTreeConstruction {
         ])),
         ("tests17.dat", ([],[],[])),
         ("tests18.dat", ([],[],[23,24])),
-        ("tests19.dat", ([],[15, 30, 31, 32, 33, 34, 45, 47, 72, 73, 74, 76, 79, 82, 90,91,92,94],[24,26])),
+        ("tests19.dat", ([],[15, 30, 31, 32, 33, 34, 82, 90,91,92,94],[24,26])),
         ("tests20.dat", ([],[],[])),
         ("tests21.dat", ([],[],[2,3,4,7,8,9,13,16,17])),
         ("tests22.dat", ([],[0,1,2,3,4],[])), // adopting
@@ -73,7 +73,7 @@ public sealed class Html5LibTreeConstruction {
         ("tests25.dat", ([],[],[])),
         ("tests26.dat", ([],[4,],[9,14])),
         ("tricky01.dat", ([],[0,1,2,4,8,9],[])),
-        ("webkit01.dat", ([],[40,50,],[3,9,10,13,14,17,19,38,39,44])),
+        ("webkit01.dat", ([],[40,],[3,9,10,13,14,17,19,38,39,44])),
         ("webkit02.dat", ([],[12,13,22,23,],[4])),
     ];
 

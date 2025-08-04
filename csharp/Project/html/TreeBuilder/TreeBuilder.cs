@@ -149,7 +149,8 @@ public class TreeBuilder {
     private List<ParseError> parseErrors = [];
 
     private Tokenizer.Tokenizer tokenizer;
-    private bool framesetOk = false;
+    // The frameset-ok flag is set to "ok" when the parser is created.
+    private bool framesetOk = true;
 
     private List<Character> pendingTableCharacterTokens = [];
 
@@ -1046,11 +1047,12 @@ public class TreeBuilder {
                 }
 
                 break;
-            case StartTag { name: "frameset" }:
+            case StartTag { name: "frameset" } tagToken:
                 // Parse error.
                 AddParseError("in-body-unexpected-frameset-tag");
-                // If the stack of open elements has only one node on it, or if the second element on the stack of open elements is not a body element, then ignore the token. (fragment case or there is a template element on the stack)
-                if (stackOfOpenElements.Count == 1 || stackOfOpenElements[1] is not not Element { localName: "body", @namespace: Namespaces.HTML }) {
+                // If the stack of open elements has only one node on it, or if the second element on the stack of open elements is not a body element, 
+                // then ignore the token. (fragment case or there is a template element on the stack)
+                if (stackOfOpenElements.Count == 1 || stackOfOpenElements[1] is not Element { localName: "body", @namespace: Namespaces.HTML }) {
                     break;
                 }
                 // If the frameset-ok flag is set to "not ok", ignore the token.
@@ -1059,13 +1061,19 @@ public class TreeBuilder {
                 }
                 // Otherwise, run the following steps:
                 // 1. Remove the second element on the stack of open elements from its parent node, if it has one.
-                throw new NotImplementedException();
+                var secondElement = stackOfOpenElements[1];
+                if (secondElement.parent is not null) {
+                    secondElement.parent.childNodes.Remove(secondElement);
+                    secondElement.parent = null;
+                }
                 // 2. Pop all the nodes from the bottom of the stack of open elements, from the current node up to, but not including, the root html element.
-
+                while (stackOfOpenElements.Count > 1) {
+                    stackOfOpenElements.Pop();
+                }
                 // 3. Insert an HTML element for the token.
-
+                InsertAnHTMLElement(tagToken);
                 // 4. Switch the insertion mode to "in frameset".
-
+                insertionMode = InsertionMode.InFrameset;
                 break;
             case EndOfFile: {
                     // If the stack of template insertion modes is not empty, then process the token using the rules for the "in template" insertion mode.
