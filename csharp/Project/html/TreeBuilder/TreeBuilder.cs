@@ -1249,6 +1249,9 @@ public class TreeBuilder {
                         // we done this with the loop up top
                     }
                     // 7. Done: If the stack of open elements has a p element in button scope, then close a p element.
+                    if (HasAElementInButtonScope("p")) {
+                        CloseAPElement();
+                    }
                     // 8. Finally, insert an HTML element for the token.
                     InsertAnHTMLElement(tagToken);
                 }
