@@ -10,8 +10,8 @@ public sealed class Html5LibTreeConstruction {
     private static string ProjectDirectory => Directory.GetParent(Environment.CurrentDirectory).Parent.Parent.Parent.Parent.FullName;
 
     private static (string, (int[] skipTests, int[] expectWrongTree, int[] expectWrongErrors))[] files = [
-        ("adoption01.dat", ([],[1,2,4,5,7,8,13,14],[0])),
-        ("adoption02.dat", ([],[0,1,],[])),
+        ("adoption01.dat", ([],[7,8,13,14],[])),
+        ("adoption02.dat", ([],[0],[])),
         ("blocks.dat", ([],[],[])),
         ("comments01.dat", ([],[],[1,2,3,4,6,7,9,10,11,12,13])),
         ("doctype01.dat", ([],[],[2,3,4,7,8,9,10,11,12,16,17,18,19,20,21,23,25,30,33,34,35,36])),
@@ -39,14 +39,14 @@ public sealed class Html5LibTreeConstruction {
         ("tables01.dat", ([],[17],[3])),
         ("template.dat", ([],[91,107],[])),
         // tests_innerHTML_1
-        ("tests1.dat", ([],[22, 23, 51, 56, 60, 70, 71, 72, 73, 74, 75, 95],[27, 32, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 96, 110])),
+        ("tests1.dat", ([],[70, 71, 72, 73, 74, 75],[27, 32, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 110])),
         ("tests2.dat", ([],[],[14,16, 17, 18, 20, 21, 22, 23, 25, 26, 27, 28, 30, 31, 34, 42, 58, 59, 61])),
         ("tests3.dat", ([],[21],[])), // adopting agency
         ("tests4.dat", ([],[],[])),
         ("tests5.dat", ([],[],[])),
         ("tests6.dat", ([],[],[4, 5, 25])),
         ("tests7.dat", ([],[],[30, 31, 32])),
-        ("tests8.dat", ([],[8,9,],[])),
+        ("tests8.dat", ([],[],[])),
         ("tests9.dat", ([],[23,24,
             25,26 // todo example of tree compare math attributes
             ],[])),
@@ -63,16 +63,16 @@ public sealed class Html5LibTreeConstruction {
         ])),
         ("tests17.dat", ([],[],[])),
         ("tests18.dat", ([],[],[23,24])),
-        ("tests19.dat", ([],[15, 90,91,92,94],[24,26])),
+        ("tests19.dat", ([],[15, 90,91,92],[24,26])),
         ("tests20.dat", ([],[],[])),
         ("tests21.dat", ([],[],[2,3,4,7,8,9,13,16,17])),
         ("tests22.dat", ([],[0,1,2,3,4],[])), // adopting
         ("tests23.dat", ([],[],[])),
         ("tests24.dat", ([],[],[])),
         ("tests25.dat", ([],[],[])),
-        ("tests26.dat", ([],[4,],[9,14])),
-        ("tricky01.dat", ([],[0,1,2,4,8,9],[])),
-        ("webkit01.dat", ([],[40,],[3,9,10,13,14,17,19,38,39,44])),
+        ("tests26.dat", ([],[],[9,14])),
+        ("tricky01.dat", ([],[1,8,9],[])),
+        ("webkit01.dat", ([],[],[3,9,10,13,14,17,19,44])),
         ("webkit02.dat", ([],[12,13,22,23,],[4])),
     ];
 

@@ -1881,7 +1881,6 @@ public class TreeBuilder {
                 stackOfOpenElements.Remove(formattingElement.Value.elem);
                 var indexA = stackOfOpenElements.IndexOf(furthestBlock);
                 stackOfOpenElements.Insert(indexA + 1, elem);
-                return;
             }
         }
     }
