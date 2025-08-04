@@ -3174,7 +3174,7 @@ public class TreeBuilder {
             list.Remove(except);
         }
         while (true) {
-            if (list.Contains(stackOfOpenElements.Peek().localName)) {
+            if (list.Contains(stackOfOpenElements.Peek().localName) && stackOfOpenElements.Peek().@namespace == Namespaces.HTML) {
                 stackOfOpenElements.Pop();
             } else {
                 return;
@@ -3201,7 +3201,7 @@ public class TreeBuilder {
 
 
     // https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-the-specific-scope
-    private bool HasAnElementInTheSpecificScope(ReadOnlySpan<string> elementsName, List<string> list) {
+    private bool HasAnElementInTheSpecificScope(ReadOnlySpan<string> elementsName, List<string> list, bool includeExtraList = true) {
         // 1. initialize node to be the current node (the bottommost node of the stack).
         var index = stackOfOpenElements.Count - 1;
         var node = stackOfOpenElements[index];
@@ -3212,8 +3212,10 @@ public class TreeBuilder {
             }
             // 3. Otherwise, if node is one of the element types in list, terminate in a failure state.
             if ((list.Contains(node.localName) && node.@namespace == Namespaces.HTML)
-                || (MathElementInScopeSpecialList.Contains(node.localName) && node.@namespace == Namespaces.MathML)
-                || (SVGElementInScopeSpecialList.Contains(node.localName) && node.@namespace == Namespaces.SVG)
+                || (includeExtraList && (
+                        (MathElementInScopeSpecialList.Contains(node.localName) && node.@namespace == Namespaces.MathML)
+                        || (SVGElementInScopeSpecialList.Contains(node.localName) && node.@namespace == Namespaces.SVG)
+                    ))
             ) {
                 return false;
             }
@@ -3242,7 +3244,7 @@ public class TreeBuilder {
     }
     // https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-table-scope
     private bool HasAElementInTableScope(params ReadOnlySpan<string> elementsName) {
-        return HasAnElementInTheSpecificScope(elementsName, ["html", "table", "template"]);
+        return HasAnElementInTheSpecificScope(elementsName, ["html", "table", "template"], false);
     }
     // https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-select-scope
     private bool HasAElementInSelectScope(params ReadOnlySpan<string> elementsName) {

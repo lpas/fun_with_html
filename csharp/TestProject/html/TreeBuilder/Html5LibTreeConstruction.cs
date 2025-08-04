@@ -26,7 +26,7 @@ public sealed class Html5LibTreeConstruction {
         ("main-element.dat", ([],[],[])),
         ("math.dat", ([],[],[])),
         ("menuitem-element.dat", ([],[],[])),
-        ("namespace-sensitivity.dat", ([],[0],[])),
+        ("namespace-sensitivity.dat", ([],[],[0])),
         ("noscript01.dat", ([],[],[])),
         // pending-spec-changes-plain-text-unsafe
         // pending-spec-changes
@@ -36,7 +36,7 @@ public sealed class Html5LibTreeConstruction {
         ("scriptdata01.dat", ([],[],[3,4,6, 15,16,17,19,20,21,22])),
         ("search-element.dat", ([],[],[])),
         ("svg.dat", ([],[],[])),
-        ("tables01.dat", ([],[17],[3])),
+        ("tables01.dat", ([],[],[3])),
         ("template.dat", ([],[91,107],[])),
         // tests_innerHTML_1
         ("tests1.dat", ([],[70, 71, 72, 73, 74, 75],[27, 32, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 110])),
