@@ -79,7 +79,7 @@ Test
         var body = new Element(document, "body");
         html.childNodes.AddRange([head, body]);
         var hr = new Element(document, "hr");
-        hr.attributes.Add("foo", "bar");
+        hr.attributes.Add(new Attr("foo", "bar"));
         body.childNodes.Add(hr);
         TestReader.AssertEqDocument(testCase, document);
     }
@@ -109,10 +109,10 @@ Test
         var body = new Element(document, "body");
         html.childNodes.AddRange([head, body]);
         var hr = new Element(document, "hr");
-        hr.attributes.Add("foo", "bar");
-        hr.attributes.Add("bar", "baz");
-        hr.attributes.Add("filterres", "");
-        hr.attributes.Add("filterUnits", "");
+        hr.attributes.Add(new Attr("foo", "bar"));
+        hr.attributes.Add(new Attr("bar", "baz"));
+        hr.attributes.Add(new Attr("filterres", ""));
+        hr.attributes.Add(new Attr("filterUnits", ""));
         body.childNodes.Add(hr);
         TestReader.AssertEqDocument(testCase, document);
     }
@@ -162,7 +162,7 @@ Test
         var document = new Document();
         var html = new Element(document, "html");
         var doctype = new DocumentType(document, "html");
-        html.attributes.Add("id", "x");
+        html.attributes.Add(new Attr("id", "x"));
         document.childNodes.AddRange([doctype, html]);
         var head = new Element(document, "head");
         var body = new Element(document, "body");

@@ -80,7 +80,7 @@ public class Element(Document document, string localName, string? @namespace = n
     public string? @namespace = @namespace;
     public string? namespacePrefix;
     public string localName = localName;
-    public Dictionary<string, string> attributes = [];
+    public List<Attr> attributes = [];
 
     public override string ToString() {
         return @namespace switch {
@@ -92,7 +92,7 @@ public class Element(Document document, string localName, string? @namespace = n
     }
 }
 
-public class NodeAttr(string name, string value): Node(null) {
+public class Attr(string name, string value): Node(null) {
     public string name = name;
     public string value = value;
 
@@ -321,10 +321,10 @@ public class TreeBuilder {
         // An SVG foreignObject element
         // An SVG desc element
         // An SVG title element
-        if (IsAMathMLAnnotationXmlElement(elem) && elem.attributes.Any(item => item.Key == "encoding"
+        if (IsAMathMLAnnotationXmlElement(elem) && elem.attributes.Any(item => item.name == "encoding"
             && (
-                string.Equals(item.Value, "text/html", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(item.Value, "application/xhtml+xml", StringComparison.OrdinalIgnoreCase)
+                string.Equals(item.value, "text/html", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(item.value, "application/xhtml+xml", StringComparison.OrdinalIgnoreCase)
             ))) {
             return true;
         }
@@ -1019,9 +1019,12 @@ public class TreeBuilder {
                 if (stackOfOpenElements.Any(item => item.localName == "template")) {
                     // ignore 
                 } else {
-                    // Otherwise, for each attribute on the token, check to see if the attribute is already present on the top element of the stack of open elements. If it is not, add the attribute and its corresponding value to that element.    
+                    // Otherwise, for each attribute on the token, check to see if the attribute is already present on the top element of the stack of open elements.
+                    // If it is not, add the attribute and its corresponding value to that element.    
                     foreach (var attr in tagToken.Attributes) {
-                        stackOfOpenElements[0].attributes.TryAdd(attr.name, attr.value);
+                        if (!stackOfOpenElements[0].attributes.Any(item => item.name == attr.name)) {
+                            stackOfOpenElements[0].attributes.Add(new Attr(attr.name, attr.value));
+                        }
                     }
                 }
                 break;
@@ -1042,7 +1045,9 @@ public class TreeBuilder {
                     // on the stack of open elements, and if it is not, add the attribute and its corresponding value to that element.
                     framesetOk = false;
                     foreach (var attr in tagToken.Attributes) {
-                        stackOfOpenElements[1].attributes.TryAdd(attr.name, attr.value);
+                        if (!stackOfOpenElements[1].attributes.Any(item => item.name == attr.name)) {
+                            stackOfOpenElements[1].attributes.Add(new Attr(attr.name, attr.value));
+                        }
                     }
                 }
 
@@ -3493,7 +3498,7 @@ public class TreeBuilder {
         // 11. Append each attribute in the given token to element.
         // todo this is not how this should be done: https://dom.spec.whatwg.org/#concept-element-attributes-append
         token.Attributes.ForEach((attr) => {
-            element.attributes.Add(attr.name, attr.value);
+            element.attributes.Add(new Attr(attr.name, attr.value));
         });
         // Note: This can enqueue a custom element callback reaction for the attributeChangedCallback, which might run immediately (in the next step).
         // Note: Even though the is attribute governs the creation of a customized built-in element, it is not present during the execution of the relevant custom element constructor; it is appended in this step, along with all other attributes.
