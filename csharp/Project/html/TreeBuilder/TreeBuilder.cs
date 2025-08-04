@@ -196,7 +196,7 @@ public class TreeBuilder {
             // https://html.spec.whatwg.org/multipage/parsing.html#tree-construction-dispatcher
             if (stackOfOpenElements.Count == 0
                 || adjustedCurrentNode is Element { @namespace: Namespaces.HTML }
-                || (IsAMathMlTextIntegrationPoint(adjustedCurrentNode) && token is StartTag tag && tag.name is not "mglyph" or "malignmark")
+                || (IsAMathMlTextIntegrationPoint(adjustedCurrentNode) && token is StartTag tag && tag.name is not ("mglyph" or "malignmark"))
                 || (IsAMathMlTextIntegrationPoint(adjustedCurrentNode) && token is Character)
                 || (IsAMathMLAnnotationXmlElement(adjustedCurrentNode) && token is StartTag tag2 && tag2.name is "svg")
                 || (IsAnHTMLIntegrationPoint(adjustedCurrentNode) && token is StartTag)
@@ -1194,7 +1194,7 @@ public class TreeBuilder {
                             break;
                         }
                         // 4. If node is in the special category, but is not an address, div, or p element, then jump to the step labeled done below.
-                        if (node.localName is not "address" or "div" or "p" && specialListElements.Contains(node.localName)) {
+                        if ((node.localName is not ("address" or "div" or "p")) && specialListElements.Contains(node.localName)) {
                             break;
                         }
                         // 5. Otherwise, set node to the previous entry in the stack of open elements and return to the step labeled loop.
@@ -1242,7 +1242,7 @@ public class TreeBuilder {
                             break;
                         }
                         // 5. If node is in the special category, but is not an address, div, or p element, then jump to the step labeled done below.
-                        if (node.localName is not "address" or "div" or "p" && specialListElements.Contains(node.localName)) {
+                        if ((node.localName is not ("address" or "div" or "p")) && specialListElements.Contains(node.localName)) {
                             break;
                         }
                         // 6. Otherwise, set node to the previous entry in the stack of open elements and return to the step labeled loop.
