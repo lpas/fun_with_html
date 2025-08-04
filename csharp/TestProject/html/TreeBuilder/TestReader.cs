@@ -57,15 +57,14 @@ public class TestReader(IEnumerable<string> iter) {
         var currentState = TestState.Data;
         var notEmitted = false;
         foreach (var line in iter) {
-            if (line == "" && currentState == TestState.Document) {
-                yield return testCase;
-                notEmitted = false;
-                testCase = new TestCase();
-                currentState = TestState.Data;
-                continue;
-            }
             switch (line) {
                 case "#data":
+                    if (currentState != TestState.Data) {
+                        testCase.document[^1] = testCase.document[^1].TrimEnd('\n');
+                        yield return testCase;
+                        notEmitted = false;
+                        testCase = new TestCase();
+                    }
                     currentState = TestState.Data;
                     break;
                 case "#errors":
@@ -96,7 +95,7 @@ public class TestReader(IEnumerable<string> iter) {
                         case TestState.NewErrors: testCase.newErrors.Add(line); break;
                         case TestState.DocumentFragment: testCase.documentFragment.Add(line); break;
                         case TestState.Document:
-                            if (line[0] == '|') {
+                            if (line.Length > 0 && line[0] == '|') {
                                 testCase.document.Add(line);
                             } else {
                                 testCase.document[^1] += '\n' + line;
@@ -107,7 +106,10 @@ public class TestReader(IEnumerable<string> iter) {
             }
         }
         // this can happen if the last line is not an empty line
-        if (notEmitted) yield return testCase;
+        if (notEmitted) {
+            testCase.document[^1] = testCase.document[^1].TrimEnd('\n');
+            yield return testCase;
+        }
     }
 
     public static void AssertEqDocument(TestCase testCase, Document document) {
