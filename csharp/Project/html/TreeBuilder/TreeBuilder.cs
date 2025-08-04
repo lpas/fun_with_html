@@ -32,7 +32,10 @@ enum InsertionMode {
 public static class Namespaces {
     public const string HTML = "http://www.w3.org/1999/xhtml";
     public const string SVG = "http://www.w3.org/2000/svg";
-    public const string MATH = "http://www.w3.org/1998/Math/MathML";
+    public const string MathML = "http://www.w3.org/1998/Math/MathML";
+    public const string XLink = "http://www.w3.org/1999/xlink";
+    public const string XML = "http://www.w3.org/XML/1998/namespace";
+    public const string XMLNS = "http://www.w3.org/2000/xmlns/";
 }
 
 public abstract class Node(Document? ownerDocument) {
@@ -86,18 +89,26 @@ public class Element(Document document, string localName, string? @namespace = n
         return @namespace switch {
             Namespaces.HTML => $"<{localName}>",
             Namespaces.SVG => $"<svg {localName}>",
-            Namespaces.MATH => $"<math {localName}>",
+            Namespaces.MathML => $"<math {localName}>",
             _ => $"<{localName}>",
         };
     }
 }
 
-public class Attr(string name, string value): Node(null) {
-    public string name = name;
+public class Attr(string name, string value, string? prefix = null, string? ns = null): Node(null) {
+    public string? namespaceURI { get; private set; } = ns;
+    public string? prefix { get; private set; } = prefix;
+    public string localName { get; } = name;
+    public string name { get => prefix == null ? localName : $"{prefix}:{localName}"; }
     public string value = value;
 
     public override string ToString() {
-        return $"{name}=\"{value}\"";
+        return namespaceURI switch {
+            Namespaces.XLink => $"xlink {localName}=\"{value}\"",
+            Namespaces.XML => $"xml {localName}=\"{value}\"",
+            Namespaces.XMLNS => $"xmlns {localName}=\"{value}\"",
+            _ => $"{localName}=\"{value}\"",
+        };
     }
 
 }
@@ -299,7 +310,7 @@ public class TreeBuilder {
 
     // https://w3c.github.io/mathml-core/#dfn-annotation-xml
     private static bool IsAMathMLAnnotationXmlElement(Element? elem) {
-        return elem is Element { localName: "annotation-xml", @namespace: Namespaces.MATH };
+        return elem is Element { localName: "annotation-xml", @namespace: Namespaces.MathML };
     }
     // https://html.spec.whatwg.org/multipage/parsing.html#mathml-text-integration-point
     private static bool IsAMathMlTextIntegrationPoint(Element? elem) {
@@ -310,7 +321,7 @@ public class TreeBuilder {
         // A MathML mn element
         // A MathML ms element
         // A MathML mtext element        
-        return elem is Element { @namespace: Namespaces.MATH, localName: "mi" or "mo" or "mn" or "mn" or "ms" or "mtext" };
+        return elem is Element { @namespace: Namespaces.MathML, localName: "mi" or "mo" or "mn" or "mn" or "ms" or "mtext" };
     }
     // https://html.spec.whatwg.org/multipage/parsing.html#html-integration-point
     private static bool IsAnHTMLIntegrationPoint(Element? elem) {
@@ -1659,7 +1670,7 @@ public class TreeBuilder {
                 // Adjust foreign attributes for the token. (This fixes the use of namespaced attributes, in particular XLink.)
                 AdjustForeignAttributes(tagToken);
                 // Insert a foreign element for the token, with MathML namespace and false.
-                InsertAForeignElement(tagToken, Namespaces.MATH, false);
+                InsertAForeignElement(tagToken, Namespaces.MathML, false);
                 // If the token has its self-closing flag set, pop the current node off the stack of open elements and acknowledge the token's self-closing flag.
                 if (tagToken.selfClosing) {
                     stackOfOpenElements.Pop();
@@ -2980,7 +2991,7 @@ public class TreeBuilder {
     private static bool IsNodeInSpecialCategory(Element elem) {
         return
             (elem.@namespace == Namespaces.HTML && specialListElements.Contains(elem.localName))
-            || (elem.@namespace == Namespaces.MATH && specialListMathElements.Contains(elem.localName))
+            || (elem.@namespace == Namespaces.MathML && specialListMathElements.Contains(elem.localName))
             || (elem.@namespace == Namespaces.SVG && specialListSvgElements.Contains(elem.localName));
     }
 
@@ -3201,7 +3212,7 @@ public class TreeBuilder {
             }
             // 3. Otherwise, if node is one of the element types in list, terminate in a failure state.
             if ((list.Contains(node.localName) && node.@namespace == Namespaces.HTML)
-                || (MathElementInScopeSpecialList.Contains(node.localName) && node.@namespace == Namespaces.MATH)
+                || (MathElementInScopeSpecialList.Contains(node.localName) && node.@namespace == Namespaces.MathML)
                 || (SVGElementInScopeSpecialList.Contains(node.localName) && node.@namespace == Namespaces.SVG)
             ) {
                 return false;
@@ -3247,7 +3258,7 @@ public class TreeBuilder {
             // 3. Otherwise, if node is one of the element types in list, terminate in a failure state.
             // NOTE: this is special for select: consisting of all element types EXCEPT the following:
             if (!((list.Contains(node.localName) && node.@namespace == Namespaces.HTML)
-                || (MathElementInScopeSpecialList.Contains(node.localName) && node.@namespace == Namespaces.MATH)
+                || (MathElementInScopeSpecialList.Contains(node.localName) && node.@namespace == Namespaces.MathML)
                 || (SVGElementInScopeSpecialList.Contains(node.localName) && node.@namespace == Namespaces.SVG))) {
                 return false;
             }
@@ -3370,7 +3381,29 @@ public class TreeBuilder {
 
     // https://html.spec.whatwg.org/multipage/parsing.html#adjust-foreign-attributes
     private static void AdjustForeignAttributes(StartTag tagToken) {
-        // todo 
+        if (tagToken.Attributes.Count == 0) return;
+
+        (string from, string prefix, string name, string ns)[] list = [
+            ("xlink:actuate", "xlink", "actuate", Namespaces.XLink),
+            ("xlink:arcrole","xlink", "arcrole", Namespaces.XLink),
+            ("xlink:href","xlink", "href", Namespaces.XLink),
+            ("xlink:role","xlink", "role",   Namespaces.XLink),
+            ("xlink:show","xlink", "show",   Namespaces.XLink),
+            ("xlink:title","xlink", "title",     Namespaces.XLink),
+            ("xlink:type","xlink", "type",   Namespaces.XLink),
+            ("xml:lang","xml", "lang",  Namespaces.XML),
+            ("xml:space","xml", "space",    Namespaces.XML),
+            ("xmlns","", "xmlns", Namespaces.XMLNS),
+            ("xmlns:xlink","xmlns", "xlink",    Namespaces.XMLNS),
+        ];
+
+        foreach (var (from, prefix, name, ns) in list) {
+            var index = tagToken.Attributes.FindIndex((attr) => attr.name == from);
+            if (index != -1) {
+                tagToken.Attributes[index] = new NamespacedAttribute(name, tagToken.Attributes[index].value, prefix, ns);
+            }
+        }
+
     }
 
     private static void AdjustAttribute(StartTag tagToken, (string from, string to) item) {
@@ -3498,7 +3531,7 @@ public class TreeBuilder {
         // 11. Append each attribute in the given token to element.
         // todo this is not how this should be done: https://dom.spec.whatwg.org/#concept-element-attributes-append
         token.Attributes.ForEach((attr) => {
-            element.attributes.Add(new Attr(attr.name, attr.value));
+            element.attributes.Add(attr is NamespacedAttribute nsAttr ? new Attr(nsAttr.name, nsAttr.value, nsAttr.prefix, nsAttr.@namespace) : new Attr(attr.name, attr.value));
         });
         // Note: This can enqueue a custom element callback reaction for the attributeChangedCallback, which might run immediately (in the next step).
         // Note: Even though the is attribute governs the creation of a customized built-in element, it is not present during the execution of the relevant custom element constructor; it is appended in this step, along with all other attributes.
@@ -3560,7 +3593,7 @@ public class TreeBuilder {
             case StartTag tagToken:
                 // If the adjusted current node is an element in the MathML namespace, adjust MathML attributes for the token. 
                 // (This fixes the case of MathML attributes that are not all lowercase.)
-                if (adjustedCurrentNode is Element { @namespace: Namespaces.MATH }) {
+                if (adjustedCurrentNode is Element { @namespace: Namespaces.MathML }) {
                     AdjustMathMLAttributes(tagToken);
                 }
                 // If the adjusted current node is an element in the SVG namespace, and the token's tag name is one of the ones in the first column of the following table,

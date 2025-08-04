@@ -231,6 +231,11 @@ public class Attribute: IEquatable<Attribute> {
 
 }
 
+public class NamespacedAttribute(string name, string value, string prefix, string @namespace): Attribute(name, value) {
+    public string prefix = prefix;
+    public string @namespace = @namespace;
+}
+
 public class Tokenizer(string content, bool debugPrint = false) {
 
     private static readonly Lazy<Entities> entities = new(() => new Entities());

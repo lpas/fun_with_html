@@ -47,10 +47,8 @@ public sealed class Html5LibTreeConstruction {
         ("tests6.dat", ([],[],[4, 5, 25])),
         ("tests7.dat", ([],[],[30, 31, 32])),
         ("tests8.dat", ([],[],[])),
-        ("tests9.dat", ([],[23,24,
-            25,26 // todo example of tree compare math attributes
-            ],[])),
-        ("tests10.dat", ([],[22,23,24,25,],[1])),
+        ("tests9.dat", ([],[],[])),
+        ("tests10.dat", ([],[],[1])),
         ("tests11.dat", ([],[],[])),
         ("tests12.dat", ([],[],[])),
         // tests13.dat is missing
@@ -73,7 +71,7 @@ public sealed class Html5LibTreeConstruction {
         ("tests26.dat", ([],[],[9,14])),
         ("tricky01.dat", ([],[1,8,9],[])),
         ("webkit01.dat", ([],[],[3,9,10,13,14,17,19,44])),
-        ("webkit02.dat", ([],[12,13,22,23,],[4])),
+        ("webkit02.dat", ([],[12,13],[4])),
     ];
 
 
