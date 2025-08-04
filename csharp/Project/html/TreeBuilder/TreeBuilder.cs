@@ -1194,7 +1194,7 @@ public class TreeBuilder {
                             break;
                         }
                         // 4. If node is in the special category, but is not an address, div, or p element, then jump to the step labeled done below.
-                        if ((node.localName is not ("address" or "div" or "p")) && specialListElements.Contains(node.localName)) {
+                        if ((node.localName is not ("address" or "div" or "p")) && IsNodeInSpecialCategory(node)) {
                             break;
                         }
                         // 5. Otherwise, set node to the previous entry in the stack of open elements and return to the step labeled loop.
@@ -1242,7 +1242,7 @@ public class TreeBuilder {
                             break;
                         }
                         // 5. If node is in the special category, but is not an address, div, or p element, then jump to the step labeled done below.
-                        if ((node.localName is not ("address" or "div" or "p")) && specialListElements.Contains(node.localName)) {
+                        if ((node.localName is not ("address" or "div" or "p")) && IsNodeInSpecialCategory(node)) {
                             break;
                         }
                         // 6. Otherwise, set node to the previous entry in the stack of open elements and return to the step labeled loop.
@@ -1694,8 +1694,8 @@ public class TreeBuilder {
             // 1. Initialize node to be the current node (the bottommost node of the stack).
             // 2. Loop: If node is an HTML element with the same tag name as the token, then:
             for (var i = stackOfOpenElements.Count - 1; i >= 0; i--) {
-                var node = stackOfOpenElements[i];
-                if (node?.localName == tagToken.name) {
+                var node = stackOfOpenElements[i] ?? throw new InvalidOperationException();
+                if (node.localName == tagToken.name) {
                     // 1. Generate implied end tags, except for HTML elements with the same tag name as the token.
                     GenerateImpliedEndTags(tagToken.name);
                     // 2. If node is not the current node, then this is a parse error.
@@ -1710,7 +1710,7 @@ public class TreeBuilder {
                     }
                 } else {
                     // 3. Otherwise, if node is in the special category, then this is a parse error; ignore the token, and return.    
-                    if (specialListElements.Contains(node?.localName)) {
+                    if (IsNodeInSpecialCategory(node)) {
                         AddParseError("unexpected-end-tag");
                         return;
                     }
@@ -1795,7 +1795,7 @@ public class TreeBuilder {
                 for (var i = stackOfOpenElements.Count - 1; i >= 0; i--) {
                     var element = stackOfOpenElements[i];
                     if (element == formattingElement.Value.elem) break;
-                    if (specialListElements.Contains(element.localName)) {
+                    if (IsNodeInSpecialCategory(element)) {
                         furthestBlock = element;
                         furthestBlockPosInStackOfOpenElements = i;
                     }
@@ -2969,7 +2969,17 @@ public class TreeBuilder {
         "dd", "details", "dir", "div", "dl", "dt", "embed", "fieldset", "figcaption", "figure", "footer", "form", "frame", "frameset", "h1", "h2", "h3", "h4", "h5", "h6",
          "head", "header", "hgroup", "hr", "html", "iframe", "img", "input", "keygen", "li", "link", "listing", "main", "marquee", "menu", "meta", "nav", "noembed", "noframes", "noscript", "object", "ol", "p",
           "param", "plaintext", "pre", "script", "search", "section", "select", "source", "style", "summary", "table", "tbody", "td", "template", "textarea", "tfoot", "th", "thead", "title", "tr",
-        "track", "ul", "wbr", "xmp"]; // todo MathML mi, MathML mo, MathML mn, MathML ms, MathML mtext, and MathML annotation-xml; and SVG foreignObject, SVG desc, and SVG title.];
+        "track", "ul", "wbr", "xmp"];
+    private static readonly string[] specialListMathElements = ["mi", "mo", "mn", "ms", "mtext", "annotation-xml"];
+    private static readonly string[] specialListSvgElements = ["foreignObject", "desc", "title"];
+
+    private static bool IsNodeInSpecialCategory(Element elem) {
+        return
+            (elem.@namespace == Namespaces.HTML && specialListElements.Contains(elem.localName))
+            || (elem.@namespace == Namespaces.MATH && specialListMathElements.Contains(elem.localName))
+            || (elem.@namespace == Namespaces.SVG && specialListSvgElements.Contains(elem.localName));
+    }
+
 
     // 13.2.4.1 The insertion mode
     // https://html.spec.whatwg.org/multipage/parsing.html#reset-the-insertion-mode-appropriately
@@ -3182,11 +3192,14 @@ public class TreeBuilder {
         var node = stackOfOpenElements[index];
         while (true) {
             // 2. If node is target node, terminate in a match state.
-            if (elementsName.Contains(node.localName)) {
+            if (elementsName.Contains(node.localName) && node.@namespace == Namespaces.HTML) {
                 return true;
             }
             // 3. Otherwise, if node is one of the element types in list, terminate in a failure state.
-            if (list.Contains(node.localName)) {
+            if ((list.Contains(node.localName) && node.@namespace == Namespaces.HTML)
+                || (MathElementInScopeSpecialList.Contains(node.localName) && node.@namespace == Namespaces.MATH)
+                || (SVGElementInScopeSpecialList.Contains(node.localName) && node.@namespace == Namespaces.SVG)
+            ) {
                 return false;
             }
             // 4. Otherwise, set node to the previous entry in the stack of open elements and return to step 2.
@@ -3196,8 +3209,9 @@ public class TreeBuilder {
         throw new InvalidOperationException();
     }
     // https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-scope
-    private static List<string> ElementInScopeSpecialList = ["applet", "caption", "html", "table", "td", "th", "marquee", "object", "template"];
-    // todo these elements should also be part of the list: They have a different namespace: "MathML mi" , "MathML mo" , "MathML mn" , "MathML ms" , "MathML mtext" , "MathML annotation-xml" , "SVG foreignObject" , "SVG desc" , "SVG title"
+    private static readonly List<string> ElementInScopeSpecialList = ["applet", "caption", "html", "table", "td", "th", "marquee", "object", "template"];
+    private static readonly List<string> MathElementInScopeSpecialList = ["mi", "mo", "mn", "ms", "mtext", "annotation-xml"];
+    private static readonly List<string> SVGElementInScopeSpecialList = ["foreignObject", "desc", "title"];
 
     //https://html.spec.whatwg.org/multipage/parsing.html#has-an-element-in-scope
     private bool HasAElementInScope(params ReadOnlySpan<string> elementsName) {
@@ -3223,12 +3237,14 @@ public class TreeBuilder {
         var node = stackOfOpenElements[index];
         while (true) {
             // 2. If node is target node, terminate in a match state.
-            if (elementsName.Contains(node.localName)) {
+            if (elementsName.Contains(node.localName) && node.@namespace == Namespaces.HTML) {
                 return true;
             }
             // 3. Otherwise, if node is one of the element types in list, terminate in a failure state.
             // NOTE: this is special for select: consisting of all element types EXCEPT the following:
-            if (!list.Contains(node.localName)) {
+            if (!((list.Contains(node.localName) && node.@namespace == Namespaces.HTML)
+                || (MathElementInScopeSpecialList.Contains(node.localName) && node.@namespace == Namespaces.MATH)
+                || (SVGElementInScopeSpecialList.Contains(node.localName) && node.@namespace == Namespaces.SVG))) {
                 return false;
             }
             // 4. Otherwise, set node to the previous entry in the stack of open elements and return to step 2.

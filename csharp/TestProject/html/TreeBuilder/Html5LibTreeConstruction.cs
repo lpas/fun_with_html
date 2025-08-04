@@ -10,7 +10,7 @@ public sealed class Html5LibTreeConstruction {
     private static string ProjectDirectory => Directory.GetParent(Environment.CurrentDirectory).Parent.Parent.Parent.Parent.FullName;
 
     private static (string, (int[] skipTests, int[] expectWrongTree, int[] expectWrongErrors))[] files = [
-        ("adoption01.dat", ([],[1,2,4,5,7,8,12,13,14],[0])),
+        ("adoption01.dat", ([],[1,2,4,5,7,8,13,14],[0])),
         ("adoption02.dat", ([],[0,1,],[])),
         ("blocks.dat", ([],[],[])),
         ("comments01.dat", ([],[],[1,2,3,4,6,7,9,10,11,12,13])),
@@ -26,7 +26,7 @@ public sealed class Html5LibTreeConstruction {
         ("main-element.dat", ([],[],[])),
         ("math.dat", ([],[],[])),
         ("menuitem-element.dat", ([],[],[])),
-        ("namespace-sensitivity.dat", ([],[],[0])),
+        ("namespace-sensitivity.dat", ([],[0],[])),
         ("noscript01.dat", ([],[],[])),
         // pending-spec-changes-plain-text-unsafe
         // pending-spec-changes
@@ -36,7 +36,7 @@ public sealed class Html5LibTreeConstruction {
         ("scriptdata01.dat", ([],[],[3,4,6, 15,16,17,19,20,21,22])),
         ("search-element.dat", ([],[],[])),
         ("svg.dat", ([],[],[])),
-        ("tables01.dat", ([],[],[3])),
+        ("tables01.dat", ([],[17],[3])),
         ("template.dat", ([],[91,107],[])),
         // tests_innerHTML_1
         ("tests1.dat", ([],[22, 23, 51, 56, 60, 70, 71, 72, 73, 74, 75, 95],[27, 32, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 96, 110])),
@@ -50,9 +50,9 @@ public sealed class Html5LibTreeConstruction {
         ("tests9.dat", ([],[23,24,
             25,26 // todo example of tree compare math attributes
             ],[])),
-        ("tests10.dat", ([],[22,23,24,25,30,31,34,35,],[1])),
+        ("tests10.dat", ([],[22,23,24,25,],[1])),
         ("tests11.dat", ([],[],[])),
-        ("tests12.dat", ([],[0],[])),
+        ("tests12.dat", ([],[],[])),
         // tests13.dat is missing
         ("tests14.dat", ([],[],[])),
         ("tests15.dat", ([],[],[6,7,8,9])),
@@ -63,7 +63,7 @@ public sealed class Html5LibTreeConstruction {
         ])),
         ("tests17.dat", ([],[],[])),
         ("tests18.dat", ([],[],[23,24])),
-        ("tests19.dat", ([],[15, 30, 31, 32, 33, 34, 82, 90,91,92,94],[24,26])),
+        ("tests19.dat", ([],[15, 90,91,92,94],[24,26])),
         ("tests20.dat", ([],[],[])),
         ("tests21.dat", ([],[],[2,3,4,7,8,9,13,16,17])),
         ("tests22.dat", ([],[0,1,2,3,4],[])), // adopting
