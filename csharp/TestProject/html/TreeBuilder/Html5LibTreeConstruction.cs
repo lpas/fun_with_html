@@ -63,7 +63,7 @@ public sealed class Html5LibTreeConstruction {
         ])),
         ("tests17.dat", ([],[],[])),
         ("tests18.dat", ([],[],[23,24])),
-        ("tests19.dat", ([],[15, 90,91,92],[24,26])),
+        ("tests19.dat", ([],[90,91,92],[24,26])),
         ("tests20.dat", ([],[],[])),
         ("tests21.dat", ([],[],[2,3,4,7,8,9,13,16,17])),
         ("tests22.dat", ([],[0,1,2,3,4],[])), // adopting

@@ -3153,7 +3153,7 @@ public class TreeBuilder {
     private void GenerateImpliedEndTags(string? except = null) {
         // When the steps below require the UA to generate implied end tags, then, while the current node is a dd element, a dt element, an li element, an optgroup element,
         // an option element, a p element, an rb element, an rp element, an rt element, or an rtc element, the UA must pop the current node off the stack of open elements.
-        List<string> list = ["dd", "dt", "li", "optgroup", "option", "p", "rb", "rt", "rtc"];
+        List<string> list = ["dd", "dt", "li", "optgroup", "option", "p", "rb", "rp", "rt", "rtc"];
         if (except != null) {
             list.Remove(except);
         }
