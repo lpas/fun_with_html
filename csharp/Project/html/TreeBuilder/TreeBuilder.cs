@@ -2241,7 +2241,9 @@ public class TreeBuilder {
     // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intabletext
     private void InSertionModeInTableText() {
         switch (token) {
-            case Character { data: '\0' }: throw new NotImplementedException();
+            case Character { data: '\0' }:
+                AddParseError("in-table-text-null-character-ignored");
+                break;
             case Character cToken:
                 // Append the character token to the pending table character tokens list.
                 pendingTableCharacterTokens.Add(cToken);
