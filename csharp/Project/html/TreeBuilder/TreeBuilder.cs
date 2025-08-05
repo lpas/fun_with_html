@@ -145,7 +145,7 @@ public class TreeBuilder {
     private Element? currentNode { get => stackOfOpenElements.Count > 0 ? stackOfOpenElements.Peek() : null; }
     // The adjusted current node is the context element if the parser was created as part of the HTML fragment parsing algorithm and the stack of open elements has only one element in it (fragment case);
     // otherwise, the adjusted current node is the current node.
-    internal Element? adjustedCurrentNode { get => currentNode; } // todo fragment case
+    internal Element? adjustedCurrentNode { get => fragmentParsing && stackOfOpenElements.Count == 1 ? contextElement : currentNode; }
     public List<ParseError> Errors { get => [.. parseErrors]; }
 
     private Element? headElementPointer = null;
@@ -171,6 +171,9 @@ public class TreeBuilder {
     private Token token = new();
     private bool shouldReprocessToken = false;
 
+    private bool fragmentParsing = false;
+    private Element? contextElement = null;
+
     private void ReprocessTheToken() {
         shouldReprocessToken = true;
     }
@@ -191,6 +194,97 @@ public class TreeBuilder {
         this.tokenizer = tokenizer;
         this.tokenizer.SetParser(this);
         this.debugPrint = debugPrint;
+    }
+
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#parsing-html-fragments
+    public static (TreeBuilder, Element) fragmentCase(Element context, string input, bool allowDeclarativeShadowRoots = false) {
+        // 1. Let document be a Document node whose type is "html".
+        var document = new Document();
+        // 2. If context's node document is in quirks mode, then set document's mode to "quirks".
+        if (context?.ownerDocument?.mode == Document.QuirksMode.Quirks) {
+            document.mode = Document.QuirksMode.Quirks;
+        } else
+        // 3. Otherwise, if context's node document is in limited-quirks mode, then set document's mode to "limited-quirks".
+        if (context?.ownerDocument?.mode == Document.QuirksMode.LimitedQuirks) {
+            document.mode = Document.QuirksMode.LimitedQuirks;
+        }
+        // 4. If allowDeclarativeShadowRoots is true, then set document's allow declarative shadow roots to true.
+        // todo
+        // 5. Create a new HTML parser, and associate it with document.
+        var tokenizer = new Tokenizer.Tokenizer(input);
+        var parser = new TreeBuilder(tokenizer) { document = document };
+        parser.fragmentParsing = true;
+        parser.contextElement = context;
+
+        // 6. Set the state of the HTML parser's tokenization stage as follows, switching on the context element:
+        switch (context) {
+            // title
+            // textarea
+            case Element { localName: "title" or "textarea", @namespace: Namespaces.HTML }:
+                // Switch the tokenizer to the RCDATA state.
+                tokenizer.SwitchState(State.RCDATAState);
+                break;
+            // style
+            // xmp
+            // iframe
+            // noembed
+            // noframes
+            case Element { localName: "style" or "xmp" or "iframe" or "noembed" or "noframes", @namespace: Namespaces.HTML }:
+                // Switch the tokenizer to the RAWTEXT state.
+                tokenizer.SwitchState(State.RAWTEXTState);
+                break;
+            // script
+            case Element { localName: "script", @namespace: Namespaces.HTML }:
+                // Switch the tokenizer to the script data state.
+                tokenizer.SwitchState(State.ScriptDataState);
+                break;
+            // noscript
+            case Element { localName: "noscript", @namespace: Namespaces.HTML }:
+                // If the scripting flag is enabled, switch the tokenizer to the RAWTEXT state. Otherwise, leave the tokenizer in the data state.
+                //todo
+                break;
+            // plaintext
+            case Element { localName: "plaintext", @namespace: Namespaces.HTML }:
+                // Switch the tokenizer to the PLAINTEXT state.
+                tokenizer.SwitchState(State.PLAINTEXTState);
+                break;
+            // Any other element
+            default:
+                // Leave the tokenizer in the data state.
+                break;
+        }
+        // NOTE: For performance reasons, an implementation that does not report errors and that uses the actual state machine described in this specification directly could use the 
+        // PLAINTEXT state instead of the RAWTEXT and script data states where those are mentioned in the list above. Except for rules regarding parse errors, they are equivalent,
+        // since there is no appropriate end tag token in the fragment case, yet they involve far fewer state transitions.
+
+        // 7. Let root be the result of creating an element given document, "html", the HTML namespace, null, null, false, and context's custom element registry.
+        // todo contexts custom element registry
+        var root = CreateAnElement(document, "html", Namespaces.HTML, null, null, false);
+        // 8. Append root to document.
+        AppendNode(document, root);
+        // 9. Set up the HTML parser's stack of open elements so that it contains just the single element root.
+        parser.stackOfOpenElements = [root];
+        // 10. If context is a template element, then push "in template" onto the stack of template insertion modes so that it is the new current template insertion mode.
+        if (context is Element { localName: "template", @namespace: Namespaces.HTML }) {
+            parser.stackOfTemplateInsertionModes.Push(InsertionMode.InTemplate);
+        }
+        // 11. Create a start tag token whose name is the local name of context and whose attributes are the attributes of context.
+
+        // Let this start tag token be the start tag token of context; e.g. for the purposes of determining if it is an HTML integration point.
+
+        // 12. Reset the parser's insertion mode appropriately.
+        parser.ResetTheInsertionModeAppropriately();
+        // NOTE The parser will reference the context element as part of that algorithm.
+
+        // 13. Set the HTML parser's form element pointer to the nearest node to context that is a form element (going straight up the ancestor chain, and including the element itself, if it is a form element), if any. (If there is no such form element, the form element pointer keeps its initial value, null.)
+        // todo
+        // 14. Place the input into the input stream for the HTML parser just created. The encoding confidence is irrelevant.
+        // todo we are doing this with the tokenizer?
+        // 15. Start the HTML parser and let it run until it has consumed all the characters just inserted into the input stream.
+        parser.build();
+        // 16. Return root's children, in tree order.
+        return (parser, root);
     }
 
     public void build() {
@@ -1332,7 +1426,7 @@ public class TreeBuilder {
                 }
             case EndTag { name: "form" }: {
                     // If there is no template element on the stack of open elements, then run these substeps:
-                    if (!stackOfOpenElements.Any((item) => item.localName == "template")) {
+                    if (!stackOfOpenElements.Any((item) => item.localName == "template" && item.@namespace == Namespaces.HTML)) {
                         // 1. Let node be the element that the form element pointer is set to, or null if it is not set to an element.
                         var node = formElementPointer;
                         // 2. Set the form element pointer to null.
@@ -1351,17 +1445,20 @@ public class TreeBuilder {
                         // 6. Remove node from the stack of open elements.
                         stackOfOpenElements.Remove(node);
                     } else {
-                        throw new NotImplementedException();
                         // If there is a template element on the stack of open elements, then run these substeps instead:
-
                         // 1. If the stack of open elements does not have a form element in scope, then this is a parse error; return and ignore the token.
-
+                        if (!stackOfOpenElements.Any((item) => item.localName == "template" && item.@namespace == Namespaces.HTML)) {
+                            AddParseError("unexpected-end-tag-form-ignored");
+                            break;
+                        }
                         // 2. Generate implied end tags.
-
+                        GenerateImpliedEndTags();
                         // 3. If the current node is not a form element, then this is a parse error.
-
+                        if (currentNode is not Element { localName: "form", @namespace: Namespaces.HTML }) {
+                            AddParseError("unexpected-end-tag-form");
+                        }
                         // 4. Pop elements from the stack of open elements until a form element has been popped from the stack.
-
+                        while (stackOfOpenElements.Pop() is not Element { localName: "form", @namespace: Namespaces.HTML }) { }
                     }
                     break;
                 }
@@ -2339,7 +2436,7 @@ public class TreeBuilder {
                     insertionMode = InsertionMode.InTable;
                 }
                 break;
-            case StartTag { name: "caption" or "col" or "colgroup" or "tbody" or "tfood" or "thead" }:
+            case StartTag { name: "caption" or "col" or "colgroup" or "tbody" or "tfoot" or "thead" }:
             case EndTag { name: "table" }:
                 // If the stack of open elements does not have a tbody, thead, or tfoot element in table scope, this is a parse error; ignore the token.
                 if (!HasAElementInTableScope("tbody", "thead", "tfoot")) {
@@ -2807,9 +2904,12 @@ public class TreeBuilder {
                 break;
             case EndTag { name: "html" }:
                 // If the parser was created as part of the HTML fragment parsing algorithm, this is a parse error; ignore the token. (fragment case)
-                // todo parse error
-                // Otherwise, switch the insertion mode to "after after body".
-                insertionMode = InsertionMode.AfterAfterBody;
+                if (fragmentParsing) {
+                    AddParseError("insertion-mode-after-body-unexpected-end-tag-html-ignored");
+                } else {
+                    // Otherwise, switch the insertion mode to "after after body".
+                    insertionMode = InsertionMode.AfterAfterBody;
+                }
                 break;
             case EndOfFile:
                 StopParsing();
@@ -2855,8 +2955,7 @@ public class TreeBuilder {
                     stackOfOpenElements.Pop();
                 }
                 // If the parser was not created as part of the HTML fragment parsing algorithm (fragment case), and the current node is no longer a frameset element, then switch the insertion mode to "after frameset".
-                if (currentNode?.localName != "frameset") {
-                    // todo add fragment case 
+                if (!fragmentParsing && currentNode?.localName != "frameset") {
                     insertionMode = InsertionMode.AfterFrameset;
                 }
                 break;
@@ -3008,7 +3107,9 @@ public class TreeBuilder {
         while (true) {
             if (index == 0) {
                 last = true;
-                // todo
+                if (fragmentParsing) {
+                    node = contextElement;
+                }
             }
             switch (node) {
                 // 4. If node is a select element, run these substeps:
@@ -3043,7 +3144,7 @@ public class TreeBuilder {
                     return;
 
                 // 5. If node is a td or th element and last is false, then switch the insertion mode to "in cell" and return.
-                case Element { localName: "td" or "th", @namespace: Namespaces.HTML }:
+                case Element { localName: "td" or "th", @namespace: Namespaces.HTML } when last is false:
                     insertionMode = InsertionMode.InCell;
                     return;
                 // 6. If node is a tr element, then switch the insertion mode to "in row" and return.
@@ -3080,7 +3181,8 @@ public class TreeBuilder {
                     return;
                 // 14. If node is a frameset element, then switch the insertion mode to "in frameset" and return. (fragment case)
                 case Element { localName: "frameset", @namespace: Namespaces.HTML }:
-                    throw new NotImplementedException();
+                    insertionMode = InsertionMode.InFrameset;
+                    return;
                 // 15. If node is an html element, run these substeps:
                 case Element { localName: "html", @namespace: Namespaces.HTML }:
                     // 1. If the head element pointer is null, switch the insertion mode to "before head" and return. (fragment case)
@@ -3095,7 +3197,8 @@ public class TreeBuilder {
             }
             // 16. If last is true, then switch the insertion mode to "in body" and return. (fragment case)
             if (last) {
-                throw new NotImplementedException();
+                insertionMode = InsertionMode.InBody;
+                return;
             }
             // 17. Let node now be the node before node in the stack of open elements.
             node = stackOfOpenElements[--index];
@@ -3725,8 +3828,7 @@ public class TreeBuilder {
     }
 
     //https://dom.spec.whatwg.org/#concept-create-element
-    private Element CreateAnElement(Document document, string localName, string? @namespace, string? prefix = null, string? isValue = null, bool synchronousCustomElements = false) {
-        if (debugPrint) Debug.WriteLine($"createELement {localName}");
+    private static Element CreateAnElement(Document document, string localName, string? @namespace, string? prefix = null, string? isValue = null, bool synchronousCustomElements = false) {
         return new Element(document, localName, @namespace);
     }
 

@@ -19,12 +19,12 @@ public sealed class Html5LibTreeConstruction {
         ("entities01.dat", ([],[],[1,2,4,6,7,14,15,16,17,18,19,20,21,22,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,
             41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,59,60,61,62,64, 66, 67,68,69,70,71,72,73,74])),
         ("entities02.dat", ([],[],[9,10,11,12,13,19,23,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41])),
-        // foreign-fragment
+        ("foreign-fragment.dat", ([],[],[3,62])),
         ("html5test-com.dat", ([],[20],[1,2,3,11,13])),
         ("inbody01.dat", ([],[],[])),
         ("isindex.dat", ([],[],[])),
         ("main-element.dat", ([],[],[])),
-        ("math.dat", ([],[],[])),
+        ("math.dat", ([],[],[5,6,7])),
         ("menuitem-element.dat", ([],[],[])),
         ("namespace-sensitivity.dat", ([],[],[0])),
         ("noscript01.dat", ([],[],[])),
@@ -35,10 +35,10 @@ public sealed class Html5LibTreeConstruction {
         // ruby.dat 
         ("scriptdata01.dat", ([],[],[3,4,6, 15,16,17,19,20,21,22])),
         ("search-element.dat", ([],[],[])),
-        ("svg.dat", ([],[],[])),
+        ("svg.dat", ([],[],[5,6,7])),
         ("tables01.dat", ([],[],[3])),
         ("template.dat", ([],[91,107],[])),
-        // tests_innerHTML_1
+        ("tests_innerHTML_1.dat", ([],[],[])),
         ("tests1.dat", ([],[70, 71, 72, 73, 74, 75],[27, 32, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 110])),
         ("tests2.dat", ([],[],[14,16, 17, 18, 20, 21, 22, 23, 25, 26, 27, 28, 30, 31, 34, 42, 58, 59, 61])),
         ("tests3.dat", ([],[21],[])), // adopting agency
@@ -91,10 +91,24 @@ public sealed class Html5LibTreeConstruction {
             foreach (var scriptingFlag in testCase.scripting is null ? new bool[] { true, false } : [testCase.scripting.Value]) {
                 // Console.WriteLine($"{index}:{scriptingFlag}");
                 if (skipTests.Contains(index)) continue;
-                if (testCase.documentFragment.Count > 0) continue; // todo handle fragment cases
 
                 var tokenizer = new Tokenizer(string.Join('\n', testCase.data));
-                var treeBuilder = new TreeBuilder(tokenizer) { scriptingFlag = scriptingFlag };
+                TreeBuilder treeBuilder;
+                Node root;
+
+                if (testCase.documentFragment.Count > 0) {
+                    var documentFragment = testCase.documentFragment[0];
+                    var context = documentFragment switch {
+                        string s when s.StartsWith("svg ") => new Element(new(), documentFragment[4..], Namespaces.SVG),
+                        string s when s.StartsWith("math ") => new Element(new(), documentFragment[5..], Namespaces.MathML),
+                        _ => new Element(new(), documentFragment, Namespaces.HTML),
+                    };
+                    (treeBuilder, root) = TreeBuilder.fragmentCase(context, string.Join('\n', testCase.data));
+                } else {
+                    treeBuilder = new TreeBuilder(tokenizer) { scriptingFlag = scriptingFlag };
+                    root = treeBuilder.Document;
+                }
+
                 try {
                     treeBuilder.build();
                 } catch (Exception e) {
@@ -106,13 +120,13 @@ public sealed class Html5LibTreeConstruction {
                     throw;
                 }
                 try {
-                    TestReader.AssertEqDocument(testCase, treeBuilder.Document);
+                    TestReader.AssertEqDocument(testCase, root);
                 } catch {
                     if (expectWrongTree.Contains(index)) continue;
                     Console.WriteLine("ERROR TREE");
                     Console.WriteLine(index);
                     Console.WriteLine(testCase);
-                    TestReader.PrintDebugDocumentTree(treeBuilder.Document);
+                    TestReader.PrintDebugDocumentTree(root);
                     foreach (var error in treeBuilder.Errors) {
                         Console.WriteLine(error);
                     }

@@ -24,6 +24,9 @@ public struct TestCase {
         sb.AppendLine($"#errors:\n{string.Join("\n", errors)}");
         if (newErrors.Count > 0)
             sb.AppendLine($"#new-errors:\n{string.Join("\n", newErrors)}");
+        if (documentFragment.Count > 0)
+            sb.AppendLine($"#document-fragment:\n{string.Join("\n", documentFragment)}");
+
         sb.AppendLine($"#document:\n{string.Join("\n", document)}");
         sb.AppendLine();
         return sb.ToString();
@@ -112,9 +115,9 @@ public class TestReader(IEnumerable<string> iter) {
         }
     }
 
-    public static void AssertEqDocument(TestCase testCase, Document document) {
+    public static void AssertEqDocument(TestCase testCase, Node baseNode) {
         var iter = testCase.document.GetEnumerator();
-        foreach (var (node, depth) in GetTreeLines(document)) {
+        foreach (var (node, depth) in GetTreeLines(baseNode)) {
             var indentation = depth == 0 ? "" : ("|" + new string(' ', depth * 2 - 1));
             if (!iter.MoveNext()) {
                 Assert.Fail($"tree != testCase (testCase empty) \n tree:     {indentation}{node} \n testCase: {iter.Current}");
