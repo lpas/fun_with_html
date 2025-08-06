@@ -397,7 +397,7 @@ public class TreeBuilder {
                 break;
 
             default:
-                throw new NotImplementedException($"insertionMode: {insertionMode}");
+                throw new InvalidOperationException($"insertionMode: {insertionMode}");
 
         }
     }
@@ -1069,7 +1069,10 @@ public class TreeBuilder {
                 }
                 // Note: The head element pointer cannot be null at this point.
                 break;
-            case EndTag { name: "template" }: throw new NotImplementedException();
+            case EndTag { name: "template" }:
+                // Process the token using the rules for the "in head" insertion mode.
+                InsertionModeInHead();
+                break;
             case EndTag { name: "body" or "html" or "br" }:
                 // Act as described in the "anything else" entry below.
                 goto default;
@@ -3723,7 +3726,7 @@ public class TreeBuilder {
                     // Acknowledge the token's self-closing flag, and then act as described in the steps for a "script" end tag below.                    
                     if (tagToken.name == "script" && currentNode is Element { @namespace: Namespaces.SVG }) {
                         tagToken.AcknowledgeSelfClosingFlag();
-                        throw new NotImplementedException();
+                        throw new NotImplementedException(); // todo
                     } else {
                         // Otherwise
                         // Pop the current node off the stack of open elements and acknowledge the token's self-closing flag.                        
