@@ -3842,6 +3842,8 @@ public class TreeBuilder {
     }
 
     private static void AppendNode(Node target, Node child) {
+        child.parent?.childNodes.Remove(child);
+
         target.childNodes.Add(child);
         child.parent = target;
     }

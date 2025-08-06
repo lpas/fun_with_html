@@ -10,7 +10,7 @@ public sealed class Html5LibTreeConstruction {
     private static string ProjectDirectory => Directory.GetParent(Environment.CurrentDirectory).Parent.Parent.Parent.Parent.FullName;
 
     private static (string, (int[] skipTests, int[] expectWrongTree, int[] expectWrongErrors))[] files = [
-        ("adoption01.dat", ([],[7,8,13,14],[])),
+        ("adoption01.dat", ([],[13],[7,8,14])),
         ("adoption02.dat", ([],[0],[])),
         ("blocks.dat", ([],[],[])),
         ("comments01.dat", ([],[],[1,2,3,4,6,7,9,10,11,12,13])),
@@ -39,7 +39,7 @@ public sealed class Html5LibTreeConstruction {
         ("tables01.dat", ([],[],[3])),
         ("template.dat", ([],[91,107],[])),
         ("tests_innerHTML_1.dat", ([],[],[])),
-        ("tests1.dat", ([],[70, 71, 72, 73, 74, 75],[27, 32, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 110])),
+        ("tests1.dat", ([],[71, 72, 73, 74, 75],[27, 32, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 70, 110])),
         ("tests2.dat", ([],[],[14,16, 17, 18, 20, 21, 22, 23, 25, 26, 27, 28, 30, 31, 34, 42, 58, 59, 61])),
         ("tests3.dat", ([],[21],[])), // adopting agency
         ("tests4.dat", ([],[],[])),
@@ -61,17 +61,17 @@ public sealed class Html5LibTreeConstruction {
         ])),
         ("tests17.dat", ([],[],[])),
         ("tests18.dat", ([],[],[23,24])),
-        ("tests19.dat", ([],[90,91,92],[24,26])),
+        ("tests19.dat", ([],[90,91],[24,26,92])),
         ("tests20.dat", ([],[],[])),
         ("tests21.dat", ([],[],[2,3,4,7,8,9,13,16,17])),
-        ("tests22.dat", ([],[0,1,2,3,4],[])), // adopting
+        ("tests22.dat", ([],[1,2,3,4],[0,])), // adopting
         ("tests23.dat", ([],[],[])),
         ("tests24.dat", ([],[],[])),
         ("tests25.dat", ([],[],[])),
         ("tests26.dat", ([],[],[9,14])),
         ("tricky01.dat", ([],[1,8,9],[])),
         ("webkit01.dat", ([],[],[3,9,10,13,14,17,19,44])),
-        ("webkit02.dat", ([],[12,13],[4])),
+        ("webkit02.dat", ([],[13],[4,12])),
     ];
 
 
