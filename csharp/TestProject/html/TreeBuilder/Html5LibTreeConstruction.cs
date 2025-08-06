@@ -41,7 +41,7 @@ public sealed class Html5LibTreeConstruction {
         ("tests_innerHTML_1.dat", ([],[],[])),
         ("tests1.dat", ([],[],[27, 32, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 110])),
         ("tests2.dat", ([],[],[14,16, 17, 18, 20, 21, 22, 23, 25, 26, 27, 28, 30, 31, 34, 42, 58, 59, 61])),
-        ("tests3.dat", ([],[21],[])), // adopting agency
+        ("tests3.dat", ([],[],[])),
         ("tests4.dat", ([],[],[])),
         ("tests5.dat", ([],[],[])),
         ("tests6.dat", ([],[],[4, 5, 25])),
@@ -64,12 +64,12 @@ public sealed class Html5LibTreeConstruction {
         ("tests19.dat", ([],[],[24,26])),
         ("tests20.dat", ([],[],[])),
         ("tests21.dat", ([],[],[2,3,4,7,8,9,13,16,17])),
-        ("tests22.dat", ([],[],[])), // adopting
+        ("tests22.dat", ([],[],[])),
         ("tests23.dat", ([],[],[])),
         ("tests24.dat", ([],[],[])),
         ("tests25.dat", ([],[],[])),
         ("tests26.dat", ([],[],[9,14])),
-        ("tricky01.dat", ([],[8,9],[])),
+        ("tricky01.dat", ([],[],[])),
         ("webkit01.dat", ([],[],[3,9,10,13,14,17,19,44])),
         ("webkit02.dat", ([],[],[4])),
     ];

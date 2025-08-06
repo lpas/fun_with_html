@@ -1571,7 +1571,7 @@ public class TreeBuilder {
                 // Insert an HTML element for the token. Push onto the list of active formatting elements that element.
                 PushOntoTheListOfActiveFormattingElements(InsertAnHTMLElement(tagToken), tagToken);
                 break;
-            case EndTag { name: "a" or "b" or "big" or "code" or "em" or "font" or "i" or "s" or "small" or "strike" or "strong" or "tt" or "u" } tagToken:
+            case EndTag { name: "a" or "b" or "big" or "code" or "em" or "font" or "i" or "nobr" or "s" or "small" or "strike" or "strong" or "tt" or "u" } tagToken:
                 // Run the adoption agency algorithm for the token.
                 AdoptionAgencyAlgorithm(tagToken);
                 break;
