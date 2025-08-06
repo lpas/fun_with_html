@@ -3568,7 +3568,7 @@ public class TreeBuilder {
                 // 3. If there is a last template and either there is no last table, or there is one, but last template is lower (more recently added) than last table in the stack of open elements, 
                 // then: let adjusted insertion location be inside last template's template contents, after its last child (if any), and abort these steps.
                 if (lastTempalte is not null)
-                    if (lastTable is null || lastTemplateIndex < lastTableIndex) {
+                    if (lastTable is null || lastTemplateIndex > lastTableIndex) {
                         return adjustedInsertionLocation = (lastTempalte, lastTempalte.childNodes.Count);
                     }
                 // 4. If there is no last table, then let adjusted insertion location be inside the first element in the stack of open elements (the html element),
