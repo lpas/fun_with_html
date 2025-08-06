@@ -1957,7 +1957,7 @@ public class TreeBuilder {
                     var nodeTag = ListOfActiveFormattingElements[index]!.Value.tag;
                     var element = CreateAnElementForAToken(nodeTag, Namespaces.HTML, commonAncestor);
                     ListOfActiveFormattingElements[index] = (element, nodeTag);
-                    stackOfOpenElements[nodePosInStackOfOpenElements + 1] = element;
+                    stackOfOpenElements[nodePosInStackOfOpenElements] = element;
                     node = element;
                     // 7. If lastNode is furthestBlock, then move the aforementioned bookmark to be immediately after the new node in the list of active formatting elements.
                     if (lastNode == furthestBlock) {
