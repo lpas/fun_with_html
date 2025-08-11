@@ -1,0 +1,92 @@
+[    
+    // comments
+    {"Input":"/* comment */", "Tokens":[], "Errors": []},
+    // whitespace    
+    {"Input":" ", "Tokens":["<whitespace-token>"], "Errors": []},
+    {"Input":"  ", "Tokens":["<whitespace-token>"], "Errors": []},
+    // U+0022 QUOTATION MARK (")
+    {"Input":"\"\"", "Tokens":["<string-token>"], "Errors": []},
+    {"Input":"\"", "Tokens":["<string-token>"], "Errors":["unexpected-eof-in-string"]},
+    // {"Input":"\"\n", "Tokens":["<bad-string-token>"], "Errors":["unexpected-newline-in-string"]}, // todo preprocess
+    // {"Input":"\"\\\n", "Tokens":["<bad-string-token>"], "Errors":["unexpected-eof-in-string"]}, // todo preprocess
+    {"Input":"\"foo\"", "Tokens":["<string-token 'foo'>"], "Errors": []},
+    {"Input":"\"#\"","Tokens": ["<string-token '#'>"], "Errors":["unexpected-eof-in-string"]},
+    // U+0023 NUMBER SIGN (#)
+    {"Input":"#","Tokens": ["<delim-token #>"], "Errors":[]},
+    {"Input":"#-","Tokens": ["<hash-token '-' unrestricted>"], "Errors":[]},
+    {"Input":"#--","Tokens": ["<hash-token '--' id>"], "Errors":[]},
+    {"Input":"#f00","Tokens": ["<hash-token 'f00' id>"], "Errors":[]},
+    // U+0027 APOSTROPHE (')
+    {"Input":"''", "Tokens":["<string-token>"], "Errors": []},
+    {"Input":"'", "Tokens":["<string-token>"], "Errors":["unexpected-eof-in-string"]},
+    // {"Input":"'\n", "Tokens":["<bad-string-token>"], "Errors":["unexpected-newline-in-string"]},
+    // {"Input":"'\\\n", "Tokens":["<bad-string-token>"], "Errors":["unexpected-eof-in-string"]},
+    {"Input":"'foo'", "Tokens":["<string-token 'foo'>"],"Errors": []},
+    // U+0028 LEFT PARENTHESIS (()
+    {"Input":"(", "Tokens":["<(-token>"], "Errors": []},
+    // U+0029 RIGHT PARENTHESIS ())
+    {"Input":")", "Tokens":["<)-token>"], "Errors": []},
+    // // U+002B PLUS SIGN (+)
+    {"Input":"+", "Tokens":["<delim-token +>"], "Errors": []},
+    {"Input":"+1", "Tokens":["<number-token 1 integer>"], "Errors": []},
+    {"Input":"+19", "Tokens":["<number-token 19 integer>"], "Errors": []},
+    {"Input":"+20", "Tokens":["<number-token 20 integer>"], "Errors": []},
+    {"Input":"+34.3", "Tokens":["<number-token 34.3 number>"], "Errors": []},
+    {"Input":"+761.3", "Tokens":["<number-token 761.3 number>"], "Errors": []},
+    {"Input":"+133.7e1", "Tokens":["<number-token 1337 number>"], "Errors": []},
+    {"Input":"+20.3e-1", "Tokens":["<number-token 2.03 number>"], "Errors": []},
+    // U+002C COMMA (,)
+    {"Input":",", "Tokens":["<comma-token>"], "Errors": []},
+    // U+002D HYPHEN-MINUS (-)
+    {"Input":"-", "Tokens":["<delim-token ->"], "Errors": []},
+    {"Input":"-1", "Tokens":["<number-token -1 integer>"], "Errors": []},
+    {"Input":"-19", "Tokens":["<number-token -19 integer>"], "Errors": []},
+    {"Input":"-20", "Tokens":["<number-token -20 integer>"], "Errors": []},
+    {"Input":"-34.3", "Tokens":["<number-token -34.3 number>"], "Errors": []},
+    {"Input":"-761.3", "Tokens":["<number-token -761.3 number>"], "Errors": []},
+    {"Input":"-133.7e1", "Tokens":["<number-token -1337 number>"], "Errors": []},
+    {"Input":"-20.3e-1", "Tokens":["<number-token -2.03 number>"], "Errors": []},
+    {"Input":"-->", "Tokens":["<CDC-token>"], "Errors": []},
+    {"Input":"-\\foo", "Tokens":["<ident-token '-\u000foo'>"], "Errors": []},    
+    {"Input":"-\\46", "Tokens":["<ident-token '-F'>"], "Errors": []},
+    // U+002E FULL STOP (.)
+    {"Input":".", "Tokens":["<delim-token .>"], "Errors": []},
+    {"Input":".5", "Tokens":["<number-token 0.5 number>"], "Errors": []},
+    {"Input":".7e1", "Tokens":["<number-token 7 number>"], "Errors": []},
+    {"Input":".3e-1", "Tokens":["<number-token 0.03 number>"], "Errors": []},    
+    // U+003A COLON (:)
+    {"Input":":", "Tokens":["<colon-token>"], "Errors": []},
+    // U+003B SEMICOLON (;)
+    {"Input":";", "Tokens":["<semicolon-token>"], "Errors": []},
+    // U+003C LESS-THAN SIGN (<)
+    {"Input":"<", "Tokens":["<delim-token <>"], "Errors": []},
+    {"Input":"<!-", "Tokens":["<delim-token <>","<delim-token !>","<delim-token ->"], "Errors": []},
+    {"Input":"<!--", "Tokens":["<CDO-token>"], "Errors": []},
+    // U+0040 COMMERCIAL AT (@)
+    {"Input":"@", "Tokens":["<delim-token @>"], "Errors": []},
+    {"Input":"@f00", "Tokens":["<at-keyword-token 'f00'>"], "Errors": []},
+    // U+005B LEFT SQUARE BRACKET ([)
+    {"Input":"[", "Tokens":["<[-token>"], "Errors": []},
+    // U+005C REVERSE SOLIDUS (\) // todo more
+    {"Input":"\\23", "Tokens":["<ident-token '#'>"], "Errors": []},
+    // {"Input":"\\\n", "Tokens":["<delim-token \\>"], "Errors": []},  // todo preprocess
+    // U+005D RIGHT SQUARE BRACKET (])
+    {"Input":"]", "Tokens":["<]-token>"], "Errors": []},
+    // U+007B LEFT CURLY BRACKET ({)
+    {"Input":"{", "Tokens":["<{-token>"], "Errors": []},
+    // U+007D RIGHT CURLY BRACKET (})
+    {"Input":"}", "Tokens":["<}-token>"], "Errors": []},
+    // digit
+    {"Input":"1", "Tokens":["<number-token 1 integer>"], "Errors": []},
+    {"Input":"19", "Tokens":["<number-token 19 integer>"], "Errors": []},
+    {"Input":"20", "Tokens":["<number-token 20 integer>"], "Errors": []},
+    {"Input":"34.3", "Tokens":["<number-token 34.3 number>"], "Errors": []},
+    {"Input":"761.3", "Tokens":["<number-token 761.3 number>"], "Errors": []},
+    {"Input":"133.7e1", "Tokens":["<number-token 1337 number>"], "Errors": []},
+    {"Input":"20.3e-1", "Tokens":["<number-token 2.03 number>"], "Errors": []},
+    // ident-start code point
+    // EOF
+    {"Input":"", "Tokens":[], "Errors": []},
+    // anything else
+
+]

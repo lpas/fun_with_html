@@ -1,0 +1,24 @@
+[
+    {"Input":"/*/*///** /* **/*//* ", "Tokens":["<delim-token />","<delim-token *>","<delim-token />"], "Errors": []},
+    {"Input":"red", "Tokens":["<ident-token 'red'>"], "Errors": []},
+    // {"Input":"  \t\t\r\n\nRed ", "Tokens":[], "Errors": []},
+    {"Input":"red/* CDC */-->", "Tokens":["<ident-token 'red'>", "<CDC-token>"], "Errors": []},
+    {"Input":"red-->/* Not CDC */", "Tokens":["<ident-token 'red--'>", "<delim-token >>"], "Errors": []},
+    // {"Input":"\\- red0 -red --red -\\-red\\ blue 0red -0red \u0000red _Red .red rêd r\\êd \u007F\u0080\u0081", "Tokens":[
+    //     "<ident-token '-'>", "<whitespace-token>",
+    //     "<ident-token 'red0'>", "<whitespace-token>",
+    //     "<ident-token '-red'>", "<whitespace-token>", 
+    //     "<ident-token '--red'>", "<whitespace-token>",
+    //     "<ident-token '--red blue'>", "<whitespace-token>",
+    //     "<dimension-token 0 red integer>", "<whitespace-token>",
+    //     "<dimension-token 0 red integer>", "<whitespace-token>",
+    //     "<ident-token '\uFFFDred'>", "<whitespace-token>",
+    //     "<ident-token '_Red'>", "<whitespace-token>",
+    //     "<delim-token .>", "<ident-token 'red'>","<whitespace-token>",
+    //     "<ident-token 'rêd'>", "<whitespace-token>",
+    //     "<ident-token 'rêd'>", "<whitespace-token>",
+    //     "<delim-token \u007F>", "<ident-token '\u0080\u0081'>"
+    // ], "Errors": []},
+    // {"Input":"", "Tokens":[], "Errors": []},
+    // {"Input":"", "Tokens":[], "Errors": []},
+]
