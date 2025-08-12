@@ -7,7 +7,7 @@
     // U+0022 QUOTATION MARK (")
     {"Input":"\"\"", "Tokens":["<string-token>"], "Errors": []},
     {"Input":"\"", "Tokens":["<string-token>"], "Errors":["unexpected-eof-in-string"]},
-    // {"Input":"\"\n", "Tokens":["<bad-string-token>"], "Errors":["unexpected-newline-in-string"]}, // todo preprocess
+    {"Input":"\"\n", "Tokens":["<bad-string-token>"], "Errors":["unexpected-newline-in-string"]},
     // {"Input":"\"\\\n", "Tokens":["<bad-string-token>"], "Errors":["unexpected-eof-in-string"]}, // todo preprocess
     {"Input":"\"foo\"", "Tokens":["<string-token 'foo'>"], "Errors": []},
     {"Input":"\"#\"","Tokens": ["<string-token '#'>"], "Errors":["unexpected-eof-in-string"]},

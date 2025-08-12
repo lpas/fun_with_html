@@ -1,6 +1,7 @@
 
 
 using System.Globalization;
+using System.Text;
 
 
 namespace FunWithHtml.css.Tokenizer;
@@ -142,25 +143,53 @@ class Tokenizer {
     // https://www.w3.org/TR/css-syntax-3/#maximum-allowed-code-point
     private const int MAXIMUM_ALLOWED_CODE_POINT = 0x10FFFF;
     private int index = 0;
-    private readonly string content;
+    private readonly string input;
 
     private char? NextInputCodePoint;
     private char? CurrentInputCodePoint;
 
     public List<string> Errors = [];
 
-    public Tokenizer(string content) {
-        this.content = content;
-        // todo preprocessing
-        this.NextInputCodePoint = content.Length > 0 ? content[0] : null;
+    // https://www.w3.org/TR/css-syntax-3/#input-preprocessing
+    private static string PreprocessingTheInput(string input) {
+        var result = new StringBuilder(input.Length);
+        var lastChrWasCR = false;
+        foreach (var chr in input) {
+            // Replace any U+000D CARRIAGE RETURN (CR) code points, U+000C FORM FEED (FF) code points,
+            // or pairs of U+000D CARRIAGE RETURN (CR) followed by U+000A LINE FEED (LF) in input by a single U+000A LINE FEED (LF) code point.            
+            if (chr is '\u000D') {
+                result.Append('\u000A');
+                lastChrWasCR = true;
+                continue;
+            } else
+            if (chr is '\u000C') {
+                result.Append('\u000A');
+            } else
+            if (chr is '\u000A' && lastChrWasCR) {
+                // do nothing CR was already replaced with LF
+            } else
+            // Replace any U+0000 NULL or surrogate code points in input with U+FFFD REPLACEMENT CHARACTER
+            if (chr is '\0' || IsSurrogate(chr)) {
+                result.Append('\uFFFD');
+            } else {
+                result.Append(chr);
+            }
+            lastChrWasCR = false;
+
+        }
+
+        return result.ToString();
+    }
+
+    public Tokenizer(string input) {
+        this.input = PreprocessingTheInput(input);
+        this.NextInputCodePoint = input.Length > 0 ? input[0] : null;
     }
 
     private char? ConsumeNextInputCodePoint() {
-        // todo add preprocessing here
-        // https://www.w3.org/TR/css-syntax-3/#input-preprocessing
-        if (content.Length > index) {
-            CurrentInputCodePoint = content[index++];
-            NextInputCodePoint = content.Length > index ? content[index] : null;
+        if (input.Length > index) {
+            CurrentInputCodePoint = input[index++];
+            NextInputCodePoint = input.Length > index ? input[index] : null;
         } else {
             index++;
             CurrentInputCodePoint = null;
@@ -170,9 +199,20 @@ class Tokenizer {
 
     }
 
+    private static bool IsLeadingSurrogate(char c) {
+        return c is >= '\uD800' and <= '\uDBFF';
+    }
+    private static bool IsTrailingSurrogate(char c) {
+        return c is >= '\uDC00' and <= '\uDFFF';
+    }
+
+    private static bool IsSurrogate(char c) {
+        return IsLeadingSurrogate(c) || IsTrailingSurrogate(c);
+    }
+
     private void Reconsume() {
         index--;
-        NextInputCodePoint = content.Length > index ? content[index] : null;
+        NextInputCodePoint = input.Length > index ? input[index] : null;
     }
 
     private void ConsumeNextInputCharacters(int v) {
@@ -181,9 +221,8 @@ class Tokenizer {
         }
     }
     private string NextInputCodePoints(int v) {
-        // todo preprocessing
-        var x = Math.Min(content.Length - index, v);
-        return index <= content.Length ? content.Substring(index, x) : "";
+        var x = Math.Min(input.Length - index, v);
+        return index <= input.Length ? input.Substring(index, x) : "";
     }
 
     private void AddParseError(string error) {
