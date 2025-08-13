@@ -84,6 +84,19 @@ public sealed class Html5LibTreeConstruction {
         }
     }
 
+    [TestMethod]
+    public void OwnCustomTests() {
+        (string, (int[] skipTests, int[] expectWrongTree, int[] expectWrongErrors))[] files = [
+            ("test1.dat", ([],[],[]))
+
+        ];
+        foreach (var (file, (skipTests, expectWrongTree, expectWrongErrors)) in files) {
+            var filePath = Path.Combine(ProjectDirectory, "html-tests", file);
+            Console.WriteLine(file);
+            RunTestsForFile(filePath, skipTests, expectWrongTree, expectWrongErrors);
+        }
+    }
+
     private static void RunTestsForFile(string filePath, int[] skipTests, int[] expectWrongTree, int[] expectWrongErrors) {
         var testReader = TestReader.CreateFromFile(filePath);
         foreach (var (testCase, index) in testReader.GetTestCases().Select((testCase, i) => (testCase, i))) {

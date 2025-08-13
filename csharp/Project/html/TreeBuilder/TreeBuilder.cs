@@ -1497,7 +1497,7 @@ public class TreeBuilder {
                 } else {
                     // Otherwise, run these steps:
                     // 1. Generate implied end tags, except for HTML elements with the same tag name as the token.
-                    GenerateImpliedEndTags();
+                    GenerateImpliedEndTags(tagToken.name);
                     // 2. If the current node is not an HTML element with the same tag name as that of the token, then this is a parse error.
                     if (currentNode?.localName != tagToken.name) {
                         AddParseError("in-body-end-dd-dt-wrong-current-node");

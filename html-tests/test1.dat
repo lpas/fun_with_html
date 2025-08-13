@@ -1,0 +1,11 @@
+#data
+<dl><dt></dt><dd></dd></dl>
+#errors
+(1,4): expected-doctype
+#document
+| <html>
+|   <head>
+|   <body>
+|     <dl>
+|       <dt>
+|       <dd>
