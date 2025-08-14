@@ -165,59 +165,49 @@ public class Renderer {
         }
     }
 
+
+    private static void SetFloatValue(string value, Action<float> setter) {
+        if (float.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var floatValue)) {
+            setter(floatValue);
+        }
+    }
+
+    private static void SetIntValue(string value, Action<int> setter) {
+        if (int.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var intValue)) {
+            setter(intValue);
+        }
+    }
+
+
+    private static void SetColorValue(string value, Action<SKColor> setter) {
+        if (SKColor.TryParse(value, out SKColor color)) {
+            setter(color);
+        }
+    }
+
+    private static void SetAllPaddings(LayoutNode node, float value) => node.padding.top = node.padding.right = node.padding.bottom = node.padding.left = value;
+    private static void SetAllMargins(LayoutNode node, float value) => node.margin.top = node.margin.right = node.margin.bottom = node.margin.left = value;
+    private static void SetAllBorders(LayoutNode node, int value) => node.border.top = node.border.right = node.border.bottom = node.border.left = value;
+
+    private static readonly Dictionary<string, Action<string, LayoutNode>> StyleHandlers = new() {
+        {"background", (value, node) => SetColorValue(value, color => node.Background = color) },
+        {"color", (value, node) => SetColorValue(value, color => node.color = color) },
+        {"padding", (value, node) => SetFloatValue(value, padding => SetAllPaddings(node, padding)) },
+        {"padding-top", (value, node) => SetFloatValue(value, padding => node.padding.top = padding) },
+        {"margin", (value, node) => SetFloatValue(value, margin => SetAllMargins(node, margin)) },
+        {"margin-top", (value, node) => SetFloatValue(value, margin => node.margin.top = margin) },
+        {"border", (value, node) => SetIntValue(value, border => SetAllBorders(node, border)) },
+        {"border-top", (value, node) => SetIntValue(value, border => node.border.top = border) },
+        {"border-color", (value, node) => SetColorValue(value, color => node.borderColor = color) },
+    };
+
     private static void SetValues(LayoutNode node, Styles styles) {
         if (node.element is null) return;
-        foreach (var block in styles) {
-            if (node.element.localName == block.name) {
-                foreach (var line in block.value) {
-                    switch (line.name) {
-                        case "background":
-                            SKColor color;
-                            if (SKColor.TryParse(line.value, out color)) {
-                                node.Background = color;
-                            }
-                            break;
-                        case "color":
-                            if (SKColor.TryParse(line.value, out color)) {
-                                node.color = color;
-                            }
-                            break;
-                        case "padding":
-                            if (float.TryParse(line.value, NumberStyles.Any, CultureInfo.InvariantCulture, out float floatValue)) {
-                                node.padding.top = node.padding.right = node.padding.bottom = node.padding.left = floatValue;
-                            }
-                            break;
-                        case "padding-top":
-                            if (float.TryParse(line.value, NumberStyles.Any, CultureInfo.InvariantCulture, out floatValue)) {
-                                node.padding.top = floatValue;
-                            }
-                            break;
-                        case "margin":
-                            if (float.TryParse(line.value, NumberStyles.Any, CultureInfo.InvariantCulture, out floatValue)) {
-                                node.margin.top = node.margin.right = node.margin.bottom = node.margin.left = floatValue;
-                            }
-                            break;
-                        case "margin-top":
-                            if (float.TryParse(line.value, NumberStyles.Any, CultureInfo.InvariantCulture, out floatValue)) {
-                                node.margin.top = floatValue;
-                            }
-                            break;
-                        case "border":
-                            if (int.TryParse(line.value, NumberStyles.Any, CultureInfo.InvariantCulture, out int intValue)) {
-                                node.border.top = node.border.right = node.border.bottom = node.border.left = intValue;
-                            }
-                            break;
-                        case "border-top":
-                            if (int.TryParse(line.value, NumberStyles.Any, CultureInfo.InvariantCulture, out intValue)) {
-                                node.border.top = intValue;
-                            }
-                            break;
-                        case "border-color":
-                            if (SKColor.TryParse(line.value, out color)) {
-                                node.borderColor = color;
-                            }
-                            break;
-                    }
+
+        foreach (var block in styles.Where(block => node.element.localName == block.name)) {
+            foreach (var line in block.value) {
+                if (StyleHandlers.TryGetValue(line.name, out var handler)) {
+                    handler(line.value, node);
                 }
             }
         }
