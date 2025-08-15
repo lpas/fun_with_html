@@ -2,6 +2,7 @@ namespace FunWithHtml.renderer;
 
 using FunWithHtml.html.TreeBuilder;
 using SkiaSharp;
+using System.Diagnostics;
 using System.Globalization;
 
 public class Styles: List<Block>;
@@ -40,7 +41,10 @@ public class Renderer {
     }
 
     public void Render(string filePath) {
-        var body = BuildStyleNode(this.body);
+        var body = BuildStyleNode(this.body) switch {
+            LayoutElementNode rootElement => rootElement,
+            _ => throw new InvalidOperationException("Root element must be a LayoutElementNode."),
+        };
         body.width = width;
         body.height = height;
 
@@ -54,37 +58,57 @@ public class Renderer {
         Save(surface, filePath);
     }
 
-    private static LayoutNode BuildStyleNode(Element element, LayoutNode? parent = null) {
-        var layoutNode = new LayoutNode() {
-            element = element,
-            parent = parent,
-        };
-        layoutNode.childNodes = [.. element.childNodes
-            .OfType<Element>()
-            .Select(node => BuildStyleNode(node, layoutNode))];
-        return layoutNode;
+    private static LayoutNode? BuildStyleNode(Node element, LayoutElementNode? parent = null) {
+        if (element is Text textNode) {
+            return new LayoutTextNode(textNode) {
+                parent = parent
+            };
+        } else if (element is Element elementNode) {
+            var layoutNode = new LayoutElementNode() {
+                element = elementNode,
+                parent = parent,
+            };
+
+            layoutNode.childNodes = [.. element.childNodes
+                .Where(elem => elem is Text or Element)
+                .Select(node => BuildStyleNode(node, layoutNode))
+                .OfType<LayoutNode>()
+            ];
+
+            return layoutNode;
+        } else {
+            return null;
+        }
     }
 
-    private static void PaintChildNodes(LayoutNode node, SKCanvas canvas) {
+    private static void PaintChildNodes(LayoutElementNode node, SKCanvas canvas) {
         foreach (var child in node.childNodes) {
             PaintNodes(child, canvas);
         }
     }
 
-    private static void LayoutChildNodes(LayoutNode node) {
+    private static void LayoutChildNodes(LayoutElementNode node) {
         foreach (var child in node.childNodes) {
             LayoutNodes(child);
         }
     }
 
-    private void SetValueDeep(LayoutNode node) {
+    private void SetValueDeep(LayoutElementNode node) {
         SetValues(node, styles);
-        foreach (var child in node.childNodes) {
+        foreach (var child in node.childNodes.OfType<LayoutElementNode>()) {
             SetValueDeep(child);
         }
     }
 
-    private static void LayoutNodes(LayoutNode node, LayoutNode? prevNode = null) {
+    private static void LayoutNodes(LayoutNode node) {
+        if (node is LayoutElementNode layoutElementNode) {
+            LayoutElementNodes(layoutElementNode);
+        } else if (node is LayoutTextNode layoutTextNode) {
+
+        }
+    }
+
+    private static void LayoutElementNodes(LayoutElementNode node, LayoutElementNode? prevNode = null) {
         // 4.1.1    Vertical formatting
         // todo negative margins
         if (prevNode is not null) {
@@ -101,9 +125,16 @@ public class Renderer {
 
         node.rect.Top += node.border.top;
 
+        var ChildWidth = 0.0f;
+        var ChildHeight = 0.0f;
+
         // get margin from child if margins are collapsed
         if (node.padding.top == 0 && node.border.top == 0 && node.childNodes.Count > 0) {
-            node.rect.Top += node.childNodes[0].margin.top;
+            var firstRenderedChild = node.childNodes.Find((node) => node is LayoutElementNode || (node is LayoutTextNode tn && tn.rect.Height > 0));
+            if (firstRenderedChild is LayoutElementNode leNode) {
+                node.rect.Top += leNode.margin.top;
+                ChildHeight -= leNode.margin.top;
+            }
         }
 
         if (node.parent is not null) {
@@ -121,25 +152,65 @@ public class Renderer {
                  - node.margin.left - node.margin.right;
         }
 
-        var ChildWidth = 0.0f;
-        var ChildHeight = 0.0f;
-        LayoutNode? prev = null;
+        LayoutElementNode? prev = null;
         foreach (var child in node.childNodes) {
-            LayoutNodes(child, prev);
-            ChildWidth = Math.Max(ChildWidth, child.rect.Width + child.margin.left + child.margin.right);
-            ChildHeight += (prev is null ? child.margin.top : Math.Max(prev.margin.bottom, child.margin.top) - prev.margin.bottom) + child.rect.Height + child.margin.bottom;
-            prev = child;
-        }
-
-        if (node.padding.top == 0 && node.border.top == 0 && node.childNodes.Count > 0) {
-            ChildHeight -= node.childNodes[0].margin.top; // margin-collapse
+            if (child is LayoutElementNode layoutElementNode) {
+                LayoutElementNodes(layoutElementNode, prev);
+                ChildWidth = Math.Max(ChildWidth,
+                     layoutElementNode.rect.Width + layoutElementNode.margin.left + layoutElementNode.margin.right);
+                ChildHeight +=
+                    (prev is null ? layoutElementNode.margin.top :
+                        Math.Max(prev.margin.bottom, layoutElementNode.margin.top) - prev.margin.bottom)
+                         + layoutElementNode.rect.Height + layoutElementNode.margin.bottom;
+                prev = layoutElementNode;
+            } else if (child is LayoutTextNode layoutTextNode) {
+                LayoutTextNodes(layoutTextNode);
+                ChildHeight += layoutTextNode.rect.Height;
+            }
         }
 
         node.rect.Right = node.rect.Left + node.Width;
         node.rect.Bottom = node.rect.Top + node.padding.top + ChildHeight + node.padding.bottom;
     }
 
+
+    private static void LayoutTextNodes(LayoutTextNode node) {
+        if (string.IsNullOrWhiteSpace(node.text.data)) {
+            return;
+        }
+        var height = node.parent.lineHeight * node.parent.fontSize;
+        node.rect.Top = node.parent.rect.Top + node.parent.padding.top;
+        node.rect.Left = node.parent.rect.Left + node.parent.padding.left;
+        node.rect.Right = node.parent.rect.Right - node.parent.padding.right;
+        node.rect.Bottom = node.rect.Top + height;
+    }
+
     private static void PaintNodes(LayoutNode node, SKCanvas canvas) {
+        if (node is LayoutElementNode layoutElementNode) {
+            PaintElementNodes(layoutElementNode, canvas);
+        } else if (node is LayoutTextNode layoutTextNode) {
+            PaintTextNode(layoutTextNode, canvas);
+        }
+    }
+
+    private static void PaintTextNode(LayoutTextNode node, SKCanvas canvas) {
+        Debug.Assert(node.parent != null, "LayoutTextNodes should always have a parent node");
+
+        var textPaint = new SKPaint {
+            Color = node.parent.color,
+            IsAntialias = true,
+        };
+        var font = new SKFont {
+            Size = node.parent.fontSize,
+            Typeface = SKTypeface.FromFamilyName(node.parent.fontFamily),
+        };
+
+        canvas.DrawText(
+            node.text.data, node.rect.Left, node.rect.Bottom,
+            SKTextAlign.Left, font, textPaint);
+    }
+
+    private static void PaintElementNodes(LayoutElementNode node, SKCanvas canvas) {
         using (var paint = new SKPaint()) {
             paint.Style = SKPaintStyle.Fill;
             paint.Color = node.Background;
@@ -148,7 +219,7 @@ public class Renderer {
 
             if (node.border.top > 0 || node.border.right > 0 || node.border.bottom > 0 || node.border.left > 0) {
                 var borderRect = node.rect;
-                paint.Color = node.borderColor;
+                paint.Color = node.borderColor ?? node.CurrentColor; // todo this should not be done here
                 borderRect.Top -= node.border.top;
                 borderRect.Right += node.border.right;
                 borderRect.Bottom += node.border.bottom;
@@ -185,11 +256,11 @@ public class Renderer {
         }
     }
 
-    private static void SetAllPaddings(LayoutNode node, float value) => node.padding.top = node.padding.right = node.padding.bottom = node.padding.left = value;
-    private static void SetAllMargins(LayoutNode node, float value) => node.margin.top = node.margin.right = node.margin.bottom = node.margin.left = value;
-    private static void SetAllBorders(LayoutNode node, int value) => node.border.top = node.border.right = node.border.bottom = node.border.left = value;
+    private static void SetAllPaddings(LayoutElementNode node, float value) => node.padding.top = node.padding.right = node.padding.bottom = node.padding.left = value;
+    private static void SetAllMargins(LayoutElementNode node, float value) => node.margin.top = node.margin.right = node.margin.bottom = node.margin.left = value;
+    private static void SetAllBorders(LayoutElementNode node, int value) => node.border.top = node.border.right = node.border.bottom = node.border.left = value;
 
-    private static readonly Dictionary<string, Action<string, LayoutNode>> StyleHandlers = new() {
+    private static readonly Dictionary<string, Action<string, LayoutElementNode>> StyleHandlers = new() {
         {"background", (value, node) => SetColorValue(value, color => node.Background = color) },
         {"color", (value, node) => SetColorValue(value, color => node.color = color) },
         {"padding", (value, node) => SetFloatValue(value, padding => SetAllPaddings(node, padding)) },
@@ -201,7 +272,7 @@ public class Renderer {
         {"border-color", (value, node) => SetColorValue(value, color => node.borderColor = color) },
     };
 
-    private static void SetValues(LayoutNode node, Styles styles) {
+    private static void SetValues(LayoutElementNode node, Styles styles) {
         if (node.element is null) return;
 
         foreach (var block in styles.Where(block => node.element.localName == block.name)) {
@@ -232,25 +303,38 @@ public class Line(string name, string value) {
 }
 
 
-public class LayoutNode() {
+public class LayoutNode {
+
+    public LayoutElementNode? parent = null;
+}
+
+public class LayoutTextNode(Text text): LayoutNode {
+    public Text text = text;
+    public SKRect rect = new();
+}
+
+public class LayoutElementNode: LayoutNode {
     public Element? element = null;
 
     public List<LayoutNode> childNodes = [];
-    public LayoutNode? parent = null;
 
-
+    public float lineHeight = 1;
+    public string fontFamily = "Arial";
+    public float fontSize = 16;
     public SKColor color;
     public SKColor Background = SKColor.Empty;
     public SKRect rect = new();
     public Margin margin = new();
     public Padding padding = new();
     public Border border = new();
-    public SKColor borderColor = SKColors.Black; // todo if border color is not set use currentColor 
+    public SKColor? borderColor;
 
     public float? width = null;
     public float? height = null;
 
     public float Width { get => (width ?? 0) + padding.left + padding.right + border.left + border.right; }
+
+    public SKColor CurrentColor { get => color; }
 }
 
 public class Margin {

@@ -5,7 +5,13 @@ using FunWithHtml.renderer;
 // string path = @"./index.html";
 // string content = File.ReadAllText(path);
 
-var content = "<ul><li><li><li>";
+var content = """
+    <UL>
+        <LI>1st element of list</LI>
+        <LI>2nd element of list</LI>
+        <LI>3nd element of list</LI>
+    </UL>
+""";
 var tokenizer = new Tokenizer(content);
 var treeBuilder = new TreeBuilder(tokenizer);
 treeBuilder.build();
