@@ -1,5 +1,7 @@
 namespace FunWithHtml.renderer;
 
+using FunWithHtml.css;
+using FunWithHtml.css.Tokenizer;
 using FunWithHtml.html.TreeBuilder;
 using SkiaSharp;
 using System.Diagnostics;
@@ -48,7 +50,6 @@ public class Renderer {
         body.width = width;
         body.height = height;
 
-        SetValueDeep(body);
         LayoutChildNodes(body);
         using var surface = SKSurface.Create(info);
         SKCanvas canvas = surface.Canvas;
@@ -58,7 +59,7 @@ public class Renderer {
         Save(surface, filePath);
     }
 
-    private static LayoutNode? BuildStyleNode(Node element, LayoutElementNode? parent = null) {
+    private LayoutNode? BuildStyleNode(Node element, LayoutElementNode? parent = null) {
         if (element is Text textNode) {
             return new LayoutTextNode(textNode) {
                 parent = parent
@@ -68,6 +69,7 @@ public class Renderer {
                 element = elementNode,
                 parent = parent,
             };
+            SetValues(layoutNode, styles);
 
             layoutNode.childNodes = [.. element.childNodes
                 .Where(elem => elem is Text or Element)
@@ -90,13 +92,6 @@ public class Renderer {
     private static void LayoutChildNodes(LayoutElementNode node) {
         foreach (var child in node.childNodes) {
             LayoutNodes(child);
-        }
-    }
-
-    private void SetValueDeep(LayoutElementNode node) {
-        SetValues(node, styles);
-        foreach (var child in node.childNodes.OfType<LayoutElementNode>()) {
-            SetValueDeep(child);
         }
     }
 
@@ -237,52 +232,75 @@ public class Renderer {
         }
     }
 
+    private static readonly Dictionary<string, Action<List<Token>, PreStyles>> PreStyleHandlers = new() {
+        {"background-color", (tokens, preStyles) => PreStyles.SetCssColorValue(tokens, color => preStyles.BackgroundColor = color) },
+        {"color", (tokens, preStyles) => PreStyles.SetCssColorValue(tokens, color => preStyles.color = color) },
 
-    private static void SetFloatValue(string value, Action<float> setter) {
-        if (float.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var floatValue)) {
-            setter(floatValue);
-        }
-    }
+        {"line-height", (tokens, preStyles) => PreStyles.SetCssLineHeight(tokens, v => preStyles.lineHeight = v) },
+        {"font-family", (tokens, preStyles) => PreStyles.SetCssFontFamily(tokens, v => preStyles.fontFamily = v) },
+        {"font-size", (tokens, preStyles) => PreStyles.SetCssFontSize(tokens, v => preStyles.fontSize = v) },
 
-    private static void SetIntValue(string value, Action<int> setter) {
-        if (int.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var intValue)) {
-            setter(intValue);
-        }
-    }
+        { "margin-top", (tokens, preStyles) => PreStyles.MarginSetter(tokens, (v) => preStyles.margin.top = v)},
+        { "margin-right", (tokens, preStyles) => PreStyles.MarginSetter(tokens, (v) => preStyles.margin.right = v)},
+        { "margin-bottom", (tokens, preStyles) => PreStyles.MarginSetter(tokens, (v) => preStyles.margin.bottom = v)},
+        { "margin-left", (tokens, preStyles) => PreStyles.MarginSetter(tokens, (v) => preStyles.margin.left = v)},
 
+        { "padding-top", (tokens, preStyles) => PreStyles.PaddingSetter(tokens, (v) => preStyles.padding.top = v)},
+        { "padding-right", (tokens, preStyles) => PreStyles.PaddingSetter(tokens, (v) => preStyles.padding.right = v)},
+        { "padding-bottom", (tokens, preStyles) => PreStyles.PaddingSetter(tokens, (v) => preStyles.padding.bottom = v)},
+        { "padding-left", (tokens, preStyles) => PreStyles.PaddingSetter(tokens, (v) => preStyles.padding.left = v)},
 
-    private static void SetColorValue(string value, Action<SKColor> setter) {
-        if (SKColor.TryParse(value, out SKColor color)) {
-            setter(color);
-        }
-    }
-
-    private static void SetAllPaddings(LayoutElementNode node, float value) => node.padding.top = node.padding.right = node.padding.bottom = node.padding.left = value;
-    private static void SetAllMargins(LayoutElementNode node, float value) => node.margin.top = node.margin.right = node.margin.bottom = node.margin.left = value;
-    private static void SetAllBorders(LayoutElementNode node, int value) => node.border.top = node.border.right = node.border.bottom = node.border.left = value;
-
-    private static readonly Dictionary<string, Action<string, LayoutElementNode>> StyleHandlers = new() {
-        {"background", (value, node) => SetColorValue(value, color => node.Background = color) },
-        {"color", (value, node) => SetColorValue(value, color => node.color = color) },
-        {"padding", (value, node) => SetFloatValue(value, padding => SetAllPaddings(node, padding)) },
-        {"padding-top", (value, node) => SetFloatValue(value, padding => node.padding.top = padding) },
-        {"margin", (value, node) => SetFloatValue(value, margin => SetAllMargins(node, margin)) },
-        {"margin-top", (value, node) => SetFloatValue(value, margin => node.margin.top = margin) },
-        {"border", (value, node) => SetIntValue(value, border => SetAllBorders(node, border)) },
-        {"border-top", (value, node) => SetIntValue(value, border => node.border.top = border) },
-        {"border-color", (value, node) => SetColorValue(value, color => node.borderColor = color) },
+        { "border-width-top", (tokens, preStyles) => PreStyles.BorderWidthSetter(tokens, (v) => preStyles.borderWidth.top = v)},
+        { "border-width-right", (tokens, preStyles) => PreStyles.BorderWidthSetter(tokens, (v) => preStyles.borderWidth.right = v)},
+        { "border-width-bottom", (tokens, preStyles) => PreStyles.BorderWidthSetter(tokens, (v) => preStyles.borderWidth.bottom = v)},
+        { "border-width-left", (tokens, preStyles) => PreStyles.BorderWidthSetter(tokens, (v) => preStyles.borderWidth.left = v)},
     };
 
     private static void SetValues(LayoutElementNode node, Styles styles) {
         if (node.element is null) return;
 
+        var preStyle = new PreStyles();
+        // collecting values from styles
         foreach (var block in styles.Where(block => node.element.localName == block.name)) {
             foreach (var line in block.value) {
-                if (StyleHandlers.TryGetValue(line.name, out var handler)) {
-                    handler(line.value, node);
+                if (PreStyleHandlers.TryGetValue(line.name, out var preHandler)) {
+                    var tokenizer = new Tokenizer(line.value);
+                    var tokens = tokenizer.GetTokenList();
+                    preHandler(tokens, preStyle);
                 }
             }
         }
+        // calculating & inheritance
+        node.fontFamily = PreStyles.getFontFamilyValue(preStyle.fontFamily, node);
+        node.fontSize = PreStyles.getFontSizeValue(preStyle.fontSize, node);
+        node.lineHeight = PreStyles.getLineHeightValue(preStyle.lineHeight, node);
+        node.color = new SKColor(preStyle.color?.value ?? 0); // 0 is default here
+        node.Background = preStyle.BackgroundColor != null ? new SKColor(preStyle.BackgroundColor.value) : SKColor.Empty;
+        node.rect = new();
+        node.margin = new() {
+            top = PreStyles.GetMarginValue(preStyle.margin.top, node),
+            right = PreStyles.GetMarginValue(preStyle.margin.right, node),
+            bottom = PreStyles.GetMarginValue(preStyle.margin.bottom, node),
+            left = PreStyles.GetMarginValue(preStyle.margin.left, node)
+        };
+        node.padding = new() {
+            top = PreStyles.GetPaddingValue(preStyle.padding.top, node),
+            right = PreStyles.GetPaddingValue(preStyle.padding.right, node),
+            bottom = PreStyles.GetPaddingValue(preStyle.padding.bottom, node),
+            left = PreStyles.GetPaddingValue(preStyle.padding.left, node)
+        };
+        node.border = new() {
+            top = PreStyles.GetBorderValue(preStyle.borderWidth.top, node),
+            right = PreStyles.GetBorderValue(preStyle.borderWidth.right, node),
+            bottom = PreStyles.GetBorderValue(preStyle.borderWidth.bottom, node),
+            left = PreStyles.GetBorderValue(preStyle.borderWidth.left, node)
+        };
+
+        node.borderColor = node.color; // todo this is the fallback
+
+        node.width = null; // todo
+        node.height = null; // todo
+
     }
 
     private static void Save(SKSurface surface, string filePath) {
