@@ -6,6 +6,7 @@ using FunWithHtml.html.TreeBuilder;
 using SkiaSharp;
 using System.Diagnostics;
 using System.Globalization;
+using System.Text;
 
 public class Styles: List<Block>;
 
@@ -174,11 +175,38 @@ public class Renderer {
         if (string.IsNullOrWhiteSpace(node.text.data)) {
             return;
         }
-        var height = node.parent.lineHeight * node.parent.fontSize;
         node.rect.Top = node.parent.rect.Top + node.parent.padding.top;
         node.rect.Left = node.parent.rect.Left + node.parent.padding.left;
         node.rect.Right = node.parent.rect.Right - node.parent.padding.right;
-        node.rect.Bottom = node.rect.Top + height;
+        // todo don't create so many fonts cache them 
+        var font = new SKFont {
+            Size = node.parent.fontSize,
+            Typeface = SKTypeface.FromFamilyName(node.parent.fontFamily),
+        };
+        // 
+        var width = node.rect.Width;
+        var words = node.text.data.Split([' ', '\t', '\n'], StringSplitOptions.RemoveEmptyEntries);
+        var lines = node.textBoxes;
+        var currentLine = new StringBuilder();
+        var spaceWidth = font.MeasureText(" ");
+        var fontSpacing = font.Spacing;
+        var lineCount = 0;
+        var currentLineWidth = .0f;
+        foreach (var word in words) {
+            var nextWordWidth = font.MeasureText(word);
+
+            if (currentLineWidth + spaceWidth + nextWordWidth > width) {
+                lines.Add((new SKPoint(node.rect.Left, node.rect.Top + fontSpacing * ++lineCount),
+                    currentLine.ToString().Trim()));
+                currentLine.Clear();
+                currentLineWidth = 0;
+            }
+            currentLine.Append(word + " ");
+            currentLineWidth += nextWordWidth + spaceWidth;
+        }
+        lines.Add((new SKPoint(node.rect.Left, node.rect.Top + fontSpacing * ++lineCount),
+            currentLine.ToString().Trim()));
+        node.rect.Bottom = lines[^1].Item1.Y;
     }
 
     private static void PaintNodes(LayoutNode node, SKCanvas canvas) {
@@ -191,7 +219,7 @@ public class Renderer {
 
     private static void PaintTextNode(LayoutTextNode node, SKCanvas canvas) {
         Debug.Assert(node.parent != null, "LayoutTextNodes should always have a parent node");
-
+        if (node.rect.Width == 0) return;
         var textPaint = new SKPaint {
             Color = node.parent.color,
             IsAntialias = true,
@@ -201,9 +229,9 @@ public class Renderer {
             Typeface = SKTypeface.FromFamilyName(node.parent.fontFamily),
         };
 
-        canvas.DrawText(
-            node.text.data, node.rect.Left, node.rect.Bottom,
-            SKTextAlign.Left, font, textPaint);
+        foreach (var (point, text) in node.textBoxes) {
+            canvas.DrawText(text, point, font, textPaint);
+        }
     }
 
     private static void PaintElementNodes(LayoutElementNode node, SKCanvas canvas) {
@@ -330,6 +358,8 @@ public class LayoutNode {
 public class LayoutTextNode(Text text): LayoutNode {
     public Text text = text;
     public SKRect rect = new();
+
+    public List<(SKPoint, string)> textBoxes = [];
 }
 
 public class LayoutElementNode: LayoutNode {
