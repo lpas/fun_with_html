@@ -229,6 +229,16 @@ class Tokenizer {
         Errors.Add(error);
     }
 
+    public List<Token> GetTokenList() {
+        List<Token> tokens = [];
+        while (true) {
+            var token = ConsumeAToken();
+            if (token is EofToken) break;
+            tokens.Add(token);
+        }
+        return tokens;
+    }
+
     #region Tokenizer Algorithms (https://www.w3.org/TR/css-syntax-3/#tokenizer-algorithms)
     // https://www.w3.org/TR/css-syntax-3/#consume-token
     public Token ConsumeAToken() {
