@@ -148,6 +148,7 @@ public class Renderer {
                  - node.margin.left - node.margin.right;
         }
 
+        node.rect.Right = node.rect.Left + node.Width;
         LayoutElementNode? prev = null;
         foreach (var child in node.childNodes) {
             if (child is LayoutElementNode layoutElementNode) {
@@ -165,7 +166,6 @@ public class Renderer {
             }
         }
 
-        node.rect.Right = node.rect.Left + node.Width;
         node.rect.Bottom = node.rect.Top + node.padding.top + ChildHeight + node.padding.bottom;
     }
 
