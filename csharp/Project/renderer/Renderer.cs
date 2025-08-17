@@ -132,7 +132,8 @@ public class Renderer {
         if (node.padding.top == 0 && node.border.top == 0 && node.childNodes.Count > 0) {
             var firstRenderedChild = node.childNodes.Find((node) => node is LayoutElementNode || (node is LayoutTextNode tn && tn.rect.Height > 0));
             if (firstRenderedChild is LayoutElementNode leNode) {
-                node.rect.Top += leNode.margin.top;
+                var maxMargin = Math.Max(leNode.margin.top, node.margin.top);
+                node.rect.Top += maxMargin;
                 ChildHeight -= leNode.margin.top;
             }
         }
