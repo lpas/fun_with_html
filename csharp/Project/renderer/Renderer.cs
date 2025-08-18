@@ -99,35 +99,42 @@ public class Renderer {
         SetDefaultValues(node);
         // 4.1.1    Vertical formatting
         // todo negative margins
-        if (prevNode is null) {
-            if (node.parent is null) {
-                node.rect.Top = node.margin.top;
-            } else {
-                node.rect.Top = node.parent.rect.Top + node.parent.padding.top + node.margin.top;
-                if (node.parent.border.top == 0 && node.parent.padding.top == 0) { // margin-collapse with parent
-                    if (node.parent.margin.top > node.margin.top) {
-                        node.rect.Top -= node.margin.top;
+        switch (node.display) {
+            case Display.None: return false;
+            case Display.Block:
+                if (prevNode is null) {
+                    if (node.parent is null) {
+                        node.rect.Top = node.margin.top;
                     } else {
-                        node.rect.Top -= node.parent.margin.top;
-                        node.parent.rect.Top += node.margin.top - node.parent.margin.top;
+                        node.rect.Top = node.parent.rect.Top + node.parent.padding.top + node.margin.top;
+                        if (node.parent.border.top == 0 && node.parent.padding.top == 0) { // margin-collapse with parent
+                            if (node.parent.margin.top > node.margin.top) {
+                                node.rect.Top -= node.margin.top;
+                            } else {
+                                node.rect.Top -= node.parent.margin.top;
+                                node.parent.rect.Top += node.margin.top - node.parent.margin.top;
+                            }
+                        }
                     }
+                } else {
+                    // margin-collapse with prev child
+                    node.rect.Top = prevNode.rect.Bottom + Math.Max(node.margin.top, prevNode.margin.bottom);
                 }
-            }
-        } else {
-            // margin-collapse with prev child
-            node.rect.Top = prevNode.rect.Bottom + Math.Max(node.margin.top, prevNode.margin.bottom);
-        }
-        node.rect.Top += node.border.top;
+                node.rect.Top += node.border.top;
 
-        node.rect.Left = (node.parent != null ? (node.parent.rect.Left + node.parent.padding.left) : 0) + node.margin.left;
+                node.rect.Left = (node.parent != null ? (node.parent.rect.Left + node.parent.padding.left) : 0) + node.margin.left;
 
-        if (node.width is null && node.parent is not null) {
-            node.width = node.parent.InnerWidth
-                 - node.padding.left - node.padding.right
-                 - node.border.left - node.border.right
-                 - node.margin.left - node.margin.right;
+                if (node.width is null && node.parent is not null) {
+                    node.width = node.parent.InnerWidth
+                         - node.padding.left - node.padding.right
+                         - node.border.left - node.border.right
+                         - node.margin.left - node.margin.right;
+                }
+                node.rect.Right = node.rect.Left + node.Width;
+                break;
+            default:
+                throw new NotImplementedException();
         }
-        node.rect.Right = node.rect.Left + node.Width;
 
         var bottom = 0.0f;
         LayoutElementNode? prev = null;
@@ -247,6 +254,7 @@ public class Renderer {
     private static readonly Dictionary<string, Action<List<Token>, PreStyles>> PreStyleHandlers = new() {
         {"background-color", (tokens, preStyles) => PreStyles.SetCssColorValue(tokens, color => preStyles.BackgroundColor = color) },
         {"color", (tokens, preStyles) => PreStyles.SetCssColorValue(tokens, color => preStyles.color = color) },
+        {"display", (tokens, preStyles) => PreStyles.DisplaySetter(tokens, display => preStyles.display = display)},
 
         {"line-height", (tokens, preStyles) => PreStyles.SetCssLineHeight(tokens, v => preStyles.lineHeight = v) },
         {"font-family", (tokens, preStyles) => PreStyles.SetCssFontFamily(tokens, v => preStyles.fontFamily = v) },
@@ -307,6 +315,7 @@ public class Renderer {
             bottom = PreStyles.GetBorderValue(preStyle.borderWidth.bottom, node),
             left = PreStyles.GetBorderValue(preStyle.borderWidth.left, node)
         };
+        node.display = PreStyles.GetDisplayValue(preStyle.display, node);
 
         node.borderColor = node.color; // todo this is the fallback
 
@@ -346,11 +355,19 @@ public class LayoutTextNode(Text text): LayoutNode {
     public List<(SKPoint, string)> textBoxes = [];
 }
 
+public enum Display {
+    Block,
+    Inline,
+    ListItem,
+    None,
+}
+
 public class LayoutElementNode: LayoutNode {
     public Element? element = null;
 
     public List<LayoutNode> childNodes = [];
 
+    public Display display = Display.Block;
     public float lineHeight = 1;
     public string fontFamily = "Arial";
     public float fontSize = 16;

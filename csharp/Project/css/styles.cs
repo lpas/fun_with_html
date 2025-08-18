@@ -27,6 +27,7 @@ public struct CssPercent(decimal value) {
 public struct AutoKeyword { }
 
 public class PreStyles() {
+    public Display? display;
     public OneOf<NormalKeyword, CssNumber, CssLength, CssPercent>? lineHeight;
     public string? fontFamily;
     public OneOf<FontSize, CssLength, CssPercent>? fontSize;
@@ -177,6 +178,28 @@ public class PreStyles() {
         if (v is not null) {
             setter(v);
         }
+    }
+
+    public static void DisplaySetter(List<Token> tokens, Action<Display?> setter) {
+        if (tokens.Count == 0) return;
+        Display? v = tokens[0] switch {
+            IdentToken it => it.value switch {
+                "block" => Display.Block,
+                "inline" => Display.Inline,
+                "list-item" => Display.ListItem,
+                "none" => Display.None,
+                _ => null,
+            },
+            _ => null,
+        };
+
+        if (v is not null) {
+            setter(v);
+        }
+    }
+
+    public static Display GetDisplayValue(Display? value, LayoutElementNode node) {
+        return value ?? Display.Block;
     }
 
     static decimal ConvertLength(CssLength length, float referenceFontSize) {
