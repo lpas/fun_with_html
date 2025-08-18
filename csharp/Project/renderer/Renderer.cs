@@ -59,6 +59,7 @@ public class Renderer {
 
     private LayoutNode? BuildStyleNode(Node element, LayoutElementNode? parent = null) {
         if (element is Text textNode) {
+            if (string.IsNullOrWhiteSpace(textNode.data)) return null;
             return new LayoutTextNode(textNode) {
                 parent = parent
             };
@@ -67,13 +68,20 @@ public class Renderer {
                 element = elementNode,
                 parent = parent,
             };
+
+            SetDefaultValues(layoutNode);
             SetValues(layoutNode, styles);
 
-            layoutNode.childNodes = [.. element.childNodes
-                .Where(elem => elem is Text or Element)
-                .Select(node => BuildStyleNode(node, layoutNode))
-                .OfType<LayoutNode>()
-            ];
+            if (layoutNode.display == Display.None) return null;
+
+            LayoutNode? prevNode = null;
+            foreach (var child in element.childNodes.Where(elem => elem is Text or Element)) {
+                var childLayoutNode = BuildStyleNode(child, layoutNode);
+                if (childLayoutNode == null) continue;
+                childLayoutNode.prev = prevNode;
+                layoutNode.childNodes.Add(childLayoutNode);
+                prevNode = childLayoutNode;
+            }
 
             return layoutNode;
         } else {
@@ -87,21 +95,19 @@ public class Renderer {
         }
     }
 
-    private static bool LayoutNodes(LayoutNode node) {
+    private static void LayoutNodes(LayoutNode node) {
         if (node is LayoutElementNode layoutElementNode) {
-            return LayoutElementNodes(layoutElementNode);
+            LayoutElementNodes(layoutElementNode);
         } else if (node is LayoutTextNode layoutTextNode) {
-            return LayoutTextNodes(layoutTextNode);
+            LayoutTextNodes(layoutTextNode);
         }
-        return false;
     }
 
-    private static bool LayoutElementNodes(LayoutElementNode node) {
-        SetDefaultValues(node);
+    private static void LayoutElementNodes(LayoutElementNode node) {
         // 4.1.1    Vertical formatting
         // todo negative margins
         switch (node.display) {
-            case Display.None: return false;
+            case Display.None: throw new InvalidOperationException();
             case Display.Block:
                 DisplayBlockLayout(node);
                 break;
@@ -113,13 +119,12 @@ public class Renderer {
         LayoutNode? prev = null;
         foreach (var child in node.childNodes) {
             child.prev = prev;
-            if (!LayoutNodes(child)) continue;
+            LayoutNodes(child);
             prev = child;
             bottom = bottom = Math.Max(bottom, child.Bottom);
         }
 
         node.rect.Bottom = bottom + node.padding.bottom;
-        return true;
     }
 
     private static void DisplayBlockLayout(LayoutElementNode node) {
@@ -161,10 +166,7 @@ public class Renderer {
         }
     }
 
-    private static bool LayoutTextNodes(LayoutTextNode node) {
-        if (string.IsNullOrWhiteSpace(node.text.data)) {
-            return false;
-        }
+    private static void LayoutTextNodes(LayoutTextNode node) {
         node.rect.Top = node.parent.rect.Top + node.parent.padding.top;
         node.rect.Left = node.parent.rect.Left + node.parent.padding.left;
         node.rect.Right = node.parent.rect.Right - node.parent.padding.right;
@@ -197,8 +199,6 @@ public class Renderer {
         lines.Add((new SKPoint(node.rect.Left, node.rect.Top + fontSpacing * ++lineCount),
             currentLine.ToString().Trim()));
         node.rect.Bottom = lines[^1].Item1.Y;
-
-        return true;
     }
 
     private static void PaintNodes(LayoutNode node, SKCanvas canvas) {
@@ -320,8 +320,8 @@ public class Renderer {
 
         node.borderColor = node.color; // todo this is the fallback
 
-        node.width = null; // todo
-        node.height = null; // todo
+        // node.width = null; // todo
+        // node.height = null; // todo
 
     }
 
