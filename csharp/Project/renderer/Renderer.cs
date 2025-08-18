@@ -103,35 +103,7 @@ public class Renderer {
         switch (node.display) {
             case Display.None: return false;
             case Display.Block:
-                if (node.prev is null) {
-                    if (node.parent is null) {
-                        node.rect.Top = node.margin.top;
-                    } else {
-                        node.rect.Top = node.parent.rect.Top + node.parent.padding.top + node.margin.top;
-                        if (node.parent.border.top == 0 && node.parent.padding.top == 0) { // margin-collapse with parent
-                            if (node.parent.margin.top > node.margin.top) {
-                                node.rect.Top -= node.margin.top;
-                            } else {
-                                node.rect.Top -= node.parent.margin.top;
-                                node.parent.rect.Top += node.margin.top - node.parent.margin.top;
-                            }
-                        }
-                    }
-                } else {
-                    // margin-collapse with prev child
-                    node.rect.Top = node.prev.rect.Bottom + Math.Max(node.margin.top, (node.prev is LayoutElementNode leNode) ? leNode.margin.bottom : 0);
-                }
-                node.rect.Top += node.border.top;
-
-                node.rect.Left = (node.parent != null ? (node.parent.rect.Left + node.parent.padding.left) : 0) + node.margin.left;
-
-                if (node.width is null && node.parent is not null) {
-                    node.width = node.parent.InnerWidth
-                         - node.padding.left - node.padding.right
-                         - node.border.left - node.border.right
-                         - node.margin.left - node.margin.right;
-                }
-                node.rect.Right = node.rect.Left + node.Width;
+                DisplayBlockLayout(node);
                 break;
             default:
                 throw new NotImplementedException();
@@ -148,6 +120,38 @@ public class Renderer {
 
         node.rect.Bottom = bottom + node.padding.bottom;
         return true;
+    }
+
+    private static void DisplayBlockLayout(LayoutElementNode node) {
+        if (node.prev is null) {
+            if (node.parent is null) {
+                node.rect.Top = node.margin.top;
+            } else {
+                node.rect.Top = node.parent.rect.Top + node.parent.padding.top + node.margin.top;
+                if (node.parent.border.top == 0 && node.parent.padding.top == 0) { // margin-collapse with parent
+                    if (node.parent.margin.top > node.margin.top) {
+                        node.rect.Top -= node.margin.top;
+                    } else {
+                        node.rect.Top -= node.parent.margin.top;
+                        node.parent.rect.Top += node.margin.top - node.parent.margin.top;
+                    }
+                }
+            }
+        } else {
+            // margin-collapse with prev child
+            node.rect.Top = node.prev.rect.Bottom + Math.Max(node.margin.top, (node.prev is LayoutElementNode leNode) ? leNode.margin.bottom : 0);
+        }
+        node.rect.Top += node.border.top;
+
+        node.rect.Left = (node.parent != null ? (node.parent.rect.Left + node.parent.padding.left) : 0) + node.margin.left;
+
+        if (node.width is null && node.parent is not null) {
+            node.width = node.parent.InnerWidth
+                 - node.padding.left - node.padding.right
+                 - node.border.left - node.border.right
+                 - node.margin.left - node.margin.right;
+        }
+        node.rect.Right = node.rect.Left + node.Width;
     }
 
     private static void SetDefaultValues(LayoutElementNode node) {
