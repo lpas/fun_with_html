@@ -48,10 +48,7 @@ public class Renderer {
             LayoutElementNode rootElement => rootElement,
             _ => throw new InvalidOperationException("Root element must be a LayoutElementNode."),
         };
-        body.width = width;
-        body.height = height;
-
-        LayoutChildNodes(body);
+        LayoutNodes(body);
         using var surface = SKSurface.Create(info);
         SKCanvas canvas = surface.Canvas;
         canvas.Clear(SKColors.White);
@@ -90,12 +87,6 @@ public class Renderer {
         }
     }
 
-    private static void LayoutChildNodes(LayoutElementNode node) {
-        foreach (var child in node.childNodes) {
-            LayoutNodes(child);
-        }
-    }
-
     private static void LayoutNodes(LayoutNode node) {
         if (node is LayoutElementNode layoutElementNode) {
             LayoutElementNodes(layoutElementNode);
@@ -105,6 +96,7 @@ public class Renderer {
     }
 
     private static bool LayoutElementNodes(LayoutElementNode node, LayoutElementNode? prevNode = null) {
+        SetDefaultValues(node);
         // 4.1.1    Vertical formatting
         // todo negative margins
         if (prevNode is null) {
@@ -154,6 +146,12 @@ public class Renderer {
         return true;
     }
 
+    private static void SetDefaultValues(LayoutElementNode node) {
+        if (node.element is Element { localName: "body" }) {
+            node.width = width;
+            node.height = height;
+        }
+    }
 
     private static bool LayoutTextNodes(LayoutTextNode node) {
         if (string.IsNullOrWhiteSpace(node.text.data)) {
