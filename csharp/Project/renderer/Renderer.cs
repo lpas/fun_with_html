@@ -87,22 +87,23 @@ public class Renderer {
         }
     }
 
-    private static void LayoutNodes(LayoutNode node) {
+    private static bool LayoutNodes(LayoutNode node) {
         if (node is LayoutElementNode layoutElementNode) {
-            LayoutElementNodes(layoutElementNode);
+            return LayoutElementNodes(layoutElementNode);
         } else if (node is LayoutTextNode layoutTextNode) {
-
+            return LayoutTextNodes(layoutTextNode);
         }
+        return false;
     }
 
-    private static bool LayoutElementNodes(LayoutElementNode node, LayoutElementNode? prevNode = null) {
+    private static bool LayoutElementNodes(LayoutElementNode node) {
         SetDefaultValues(node);
         // 4.1.1    Vertical formatting
         // todo negative margins
         switch (node.display) {
             case Display.None: return false;
             case Display.Block:
-                if (prevNode is null) {
+                if (node.prev is null) {
                     if (node.parent is null) {
                         node.rect.Top = node.margin.top;
                     } else {
@@ -118,7 +119,7 @@ public class Renderer {
                     }
                 } else {
                     // margin-collapse with prev child
-                    node.rect.Top = prevNode.rect.Bottom + Math.Max(node.margin.top, prevNode.margin.bottom);
+                    node.rect.Top = node.prev.rect.Bottom + Math.Max(node.margin.top, (node.prev is LayoutElementNode leNode) ? leNode.margin.bottom : 0);
                 }
                 node.rect.Top += node.border.top;
 
@@ -137,16 +138,12 @@ public class Renderer {
         }
 
         var bottom = 0.0f;
-        LayoutElementNode? prev = null;
+        LayoutNode? prev = null;
         foreach (var child in node.childNodes) {
-            if (child is LayoutElementNode layoutElementNode) {
-                if (!LayoutElementNodes(layoutElementNode, prev)) continue;
-                bottom = layoutElementNode.rect.Bottom + layoutElementNode.margin.bottom;
-                prev = layoutElementNode;
-            } else if (child is LayoutTextNode layoutTextNode) {
-                if (!LayoutTextNodes(layoutTextNode)) continue;
-                bottom = layoutTextNode.rect.Bottom;
-            }
+            child.prev = prev;
+            if (!LayoutNodes(child)) continue;
+            prev = child;
+            bottom = bottom = Math.Max(bottom, child.Bottom);
         }
 
         node.rect.Bottom = bottom + node.padding.bottom;
@@ -346,11 +343,15 @@ public class Line(string name, string value) {
 public class LayoutNode {
 
     public LayoutElementNode? parent = null;
+    public LayoutNode? prev = null;
+    public SKRect rect = new();
+
+    public virtual float Bottom { get => rect.Bottom; }
+    public virtual float InnerBottom { get => rect.Bottom; }
 }
 
 public class LayoutTextNode(Text text): LayoutNode {
     public Text text = text;
-    public SKRect rect = new();
 
     public List<(SKPoint, string)> textBoxes = [];
 }
@@ -373,7 +374,6 @@ public class LayoutElementNode: LayoutNode {
     public float fontSize = 16;
     public SKColor color;
     public SKColor Background = SKColor.Empty;
-    public SKRect rect = new();
     public Margin margin = new();
     public Padding padding = new();
     public Border border = new();
@@ -385,6 +385,10 @@ public class LayoutElementNode: LayoutNode {
     public float Width { get => InnerWidth + padding.left + padding.right + border.left + border.right; }
     public float InnerWidth { get => width ?? 0; }
     public SKColor CurrentColor { get => color; }
+
+    public override float Bottom { get => rect.Bottom + border.bottom + margin.bottom; }
+    public override float InnerBottom { get => rect.Bottom - padding.bottom; }
+
 }
 
 public class Margin {
