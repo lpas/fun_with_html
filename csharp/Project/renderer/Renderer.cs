@@ -104,76 +104,60 @@ public class Renderer {
         }
     }
 
-    private static void LayoutElementNodes(LayoutElementNode node, LayoutElementNode? prevNode = null) {
+    private static bool LayoutElementNodes(LayoutElementNode node, LayoutElementNode? prevNode = null) {
         // 4.1.1    Vertical formatting
         // todo negative margins
-        if (prevNode is not null) {
-            node.rect.Top = prevNode.rect.Bottom + Math.Max(prevNode.margin.bottom, node.margin.top);
-        } else if (node.parent is not null) {
-            if (node.parent.padding.top == 0 && node.parent.border.top == 0) { // margin-collapse
-                node.rect.Top = node.parent.rect.Top;
+        if (prevNode is null) {
+            if (node.parent is null) {
+                node.rect.Top = node.margin.top;
             } else {
                 node.rect.Top = node.parent.rect.Top + node.parent.padding.top + node.margin.top;
+                if (node.parent.border.top == 0 && node.parent.padding.top == 0) { // margin-collapse with parent
+                    if (node.parent.margin.top > node.margin.top) {
+                        node.rect.Top -= node.margin.top;
+                    } else {
+                        node.rect.Top -= node.parent.margin.top;
+                        node.parent.rect.Top += node.margin.top - node.parent.margin.top;
+                    }
+                }
             }
         } else {
-            node.rect.Top = node.margin.top;
+            // margin-collapse with prev child
+            node.rect.Top = prevNode.rect.Bottom + Math.Max(node.margin.top, prevNode.margin.bottom);
         }
-
         node.rect.Top += node.border.top;
 
-        var ChildWidth = 0.0f;
-        var ChildHeight = 0.0f;
-
-        // get margin from child if margins are collapsed
-        if (node.padding.top == 0 && node.border.top == 0 && node.childNodes.Count > 0) {
-            var firstRenderedChild = node.childNodes.Find((node) => node is LayoutElementNode || (node is LayoutTextNode tn && tn.rect.Height > 0));
-            if (firstRenderedChild is LayoutElementNode leNode) {
-                var maxMargin = Math.Max(leNode.margin.top, node.margin.top);
-                node.rect.Top += maxMargin;
-                ChildHeight -= leNode.margin.top;
-            }
-        }
-
-        if (node.parent is not null) {
-            node.rect.Left = node.parent.rect.Left + node.parent.padding.left + node.margin.left;
-        } else {
-            node.rect.Left = node.margin.left;
-        }
+        node.rect.Left = (node.parent != null ? (node.parent.rect.Left + node.parent.padding.left) : 0) + node.margin.left;
 
         if (node.width is null && node.parent is not null) {
-            node.width = node.parent.Width
-                 - node.parent.padding.left - node.parent.padding.right
-                 - node.parent.border.left - node.parent.border.right
+            node.width = node.parent.InnerWidth
                  - node.padding.left - node.padding.right
                  - node.border.left - node.border.right
                  - node.margin.left - node.margin.right;
         }
-
         node.rect.Right = node.rect.Left + node.Width;
+
+        var bottom = 0.0f;
         LayoutElementNode? prev = null;
         foreach (var child in node.childNodes) {
             if (child is LayoutElementNode layoutElementNode) {
-                LayoutElementNodes(layoutElementNode, prev);
-                ChildWidth = Math.Max(ChildWidth,
-                     layoutElementNode.rect.Width + layoutElementNode.margin.left + layoutElementNode.margin.right);
-                ChildHeight +=
-                    (prev is null ? layoutElementNode.margin.top :
-                        Math.Max(prev.margin.bottom, layoutElementNode.margin.top) - prev.margin.bottom)
-                         + layoutElementNode.rect.Height + layoutElementNode.margin.bottom;
+                if (!LayoutElementNodes(layoutElementNode, prev)) continue;
+                bottom = layoutElementNode.rect.Bottom + layoutElementNode.margin.bottom;
                 prev = layoutElementNode;
             } else if (child is LayoutTextNode layoutTextNode) {
-                LayoutTextNodes(layoutTextNode);
-                ChildHeight += layoutTextNode.rect.Height;
+                if (!LayoutTextNodes(layoutTextNode)) continue;
+                bottom = layoutTextNode.rect.Bottom;
             }
         }
 
-        node.rect.Bottom = node.rect.Top + node.padding.top + ChildHeight + node.padding.bottom;
+        node.rect.Bottom = bottom + node.padding.bottom;
+        return true;
     }
 
 
-    private static void LayoutTextNodes(LayoutTextNode node) {
+    private static bool LayoutTextNodes(LayoutTextNode node) {
         if (string.IsNullOrWhiteSpace(node.text.data)) {
-            return;
+            return false;
         }
         node.rect.Top = node.parent.rect.Top + node.parent.padding.top;
         node.rect.Left = node.parent.rect.Left + node.parent.padding.left;
@@ -207,6 +191,8 @@ public class Renderer {
         lines.Add((new SKPoint(node.rect.Left, node.rect.Top + fontSpacing * ++lineCount),
             currentLine.ToString().Trim()));
         node.rect.Bottom = lines[^1].Item1.Y;
+
+        return true;
     }
 
     private static void PaintNodes(LayoutNode node, SKCanvas canvas) {
@@ -381,8 +367,8 @@ public class LayoutElementNode: LayoutNode {
     public float? width = null;
     public float? height = null;
 
-    public float Width { get => (width ?? 0) + padding.left + padding.right + border.left + border.right; }
-
+    public float Width { get => InnerWidth + padding.left + padding.right + border.left + border.right; }
+    public float InnerWidth { get => width ?? 0; }
     public SKColor CurrentColor { get => color; }
 }
 
