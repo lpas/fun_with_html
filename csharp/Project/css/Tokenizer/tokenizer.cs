@@ -2,6 +2,7 @@
 
 using System.Globalization;
 using System.Text;
+using FunWithHtml.css.Parser;
 
 
 namespace FunWithHtml.css.Tokenizer;
@@ -27,14 +28,14 @@ public abstract class ValueToken(string value): Token {
 }
 
 
-public class IdentToken(string value): ValueToken(value) {
+public class IdentToken(string value): ValueToken(value), ComponentValue {
     public override string NAME => "ident";
 }
 public class FunctionToken(string value): ValueToken(value) {
     public override string NAME => "function";
 
 }
-public class AtKeywordToken(string value): ValueToken(value) {
+public class AtKeywordToken(string value): ValueToken(value), ComponentValue {
     public override string NAME => "at-keyword";
 }
 
@@ -42,7 +43,7 @@ public enum HashTokenType {
     id,
     unrestricted,
 }
-public class HashToken(string value): ValueToken(value) {
+public class HashToken(string value): ValueToken(value), ComponentValue {
     public override string NAME => "hash";
     public HashTokenType type = HashTokenType.unrestricted;
     public override string ToString() {
@@ -50,14 +51,14 @@ public class HashToken(string value): ValueToken(value) {
     }
 
 }
-public class StringToken(string value): ValueToken(value) {
+public class StringToken(string value): ValueToken(value), ComponentValue {
     public override string NAME => "string";
 }
-public class UrlToken(string value): ValueToken(value) {
+public class UrlToken(string value): ValueToken(value), ComponentValue {
     public override string NAME => "url";
 }
 
-public class DelimToken(char value): Token {
+public class DelimToken(char value): Token, ComponentValue {
     public override string NAME => "delim";
     public char value = value;
 
@@ -66,7 +67,7 @@ public class DelimToken(char value): Token {
     }
 }
 
-public class NumberToken(decimal value, NumberTokenType type = NumberTokenType.integer): Token {
+public class NumberToken(decimal value, NumberTokenType type = NumberTokenType.integer): Token, ComponentValue {
     public override string NAME => "number";
     public decimal value = value;
     public NumberTokenType type = type;
@@ -79,11 +80,11 @@ public enum NumberTokenType {
     integer,
     number,
 }
-public class PercentageToken(decimal value, NumberTokenType type = NumberTokenType.integer): NumberToken(value, type) {
+public class PercentageToken(decimal value, NumberTokenType type = NumberTokenType.integer): NumberToken(value, type), ComponentValue {
     public override string NAME => "percentage";
 
 }
-public class DimensionToken(decimal value, string unit, NumberTokenType type = NumberTokenType.integer): NumberToken(value, type) {
+public class DimensionToken(decimal value, string unit, NumberTokenType type = NumberTokenType.integer): NumberToken(value, type), ComponentValue {
     public override string NAME => "dimension";
     public string unit = unit;
     public override string ToString() {
@@ -92,50 +93,50 @@ public class DimensionToken(decimal value, string unit, NumberTokenType type = N
 }
 
 
-public class BadStringToken: Token {
+public class BadStringToken: Token, ComponentValue {
     public override string NAME => "bad-string";
 };
-public class BadUrlToken: Token {
+public class BadUrlToken: Token, ComponentValue {
     public override string NAME => "bad-url";
 };
-public class WhitespaceToken: Token {
+public class WhitespaceToken: Token, ComponentValue {
     public override string NAME => "whitespace";
 };
-public class CDOToken: Token {
+public class CDOToken: Token, ComponentValue {
     public override string NAME => "CDO";
 };
-public class CDCToken: Token {
+public class CDCToken: Token, ComponentValue {
     public override string NAME => "CDC";
 };
-public class ColonToken: Token {
+public class ColonToken: Token, ComponentValue {
     public override string NAME => "colon";
 };
-public class SemicolonToken: Token {
+public class SemicolonToken: Token, ComponentValue {
     public override string NAME => "semicolon";
 };
-public class CommaToken: Token {
+public class CommaToken: Token, ComponentValue {
     public override string NAME => "comma";
 };
 public class SquareBracketOpenToken: Token {
     public override string NAME => "[";
 };
-public class SquareBracketCloseToken: Token {
+public class SquareBracketCloseToken: Token, ComponentValue {
     public override string NAME => "]";
 };
 public class BracketOpenToken: Token {
     public override string NAME => "(";
 };
-public class BracketCloseToken: Token {
+public class BracketCloseToken: Token, ComponentValue {
     public override string NAME => ")";
 };
 public class CurlyBracesOpenToken: Token {
     public override string NAME => "{";
 };
-public class CurlyBracesCloseToken: Token {
+public class CurlyBracesCloseToken: Token, ComponentValue {
     public override string NAME => "}";
 };
 
-public class EofToken: Token {
+public class EofToken: Token, ComponentValue {
     public override string NAME => "eof";
 }
 class Tokenizer {

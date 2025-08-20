@@ -1,13 +1,12 @@
-#if DONT_COMPILE_THIS_FILE // todo file ist just a ruff draft of the parser
-
-
+namespace FunWithHtml.css.Parser;
 
 using System.Data;
 using FunWithHtml.css.Tokenizer;
+using FunWithHTML.css.Parser;
+using FunWithHTML.misc;
+using OneOf;
 
-namespace FunWithHtml.css.Parser;
-
-public class Rule { }
+public class Rule: CSSRule { }
 
 public class AtRule: Rule {
     public string name;
@@ -28,10 +27,13 @@ public class Declaration {
     public bool important = false;
 }
 
-public abstract class ComponentValue { }
+public interface ComponentValue { }
 
-public class PreservedToken: ComponentValue {
-    public Token token;
+public class PreservedToken(Token token): ComponentValue {
+    public Token token = token;
+    public string ToString() {
+        return token.ToString();
+    }
 }
 
 public class Function: ComponentValue {
@@ -51,7 +53,7 @@ public class Parser(List<Token> input) {
     private List<Token> input = input;
     private int index = 0;
     private Token CurrentInputToken = eofToken;
-    private Token NextInputToken = eofToken;
+    private Token NextInputToken = input.Count > 0 ? input[0] : eofToken;
 
     private void ConsumeTheNextInputToken() {
         if (reconsume) {
@@ -71,13 +73,75 @@ public class Parser(List<Token> input) {
         Errors.Add(error);
     }
 
+
+    #region Parser Entry Points(https://www.w3.org/TR/css-syntax-3/#parser-entry-points)
+    // https://www.w3.org/TR/css-syntax-3/#normalize-into-a-token-stream
+    private static List<Token> NormalizeInput(List<Token> input) {
+        return input;
+    }
+    private static List<Token> NormalizeInput(string input) {
+        return new Tokenizer(input).GetTokenList();
+    }
+
+    // https://www.w3.org/TR/css-syntax-3/#parse-stylesheet
+    public static ICSSStyleSheet ParseAStylesheet(string input) {
+        // If input is a byte stream for stylesheet, decode bytes from input, and set input to the result.
+        // todo
+        // Normalize input, and set input to the result.
+        var parser = new Parser(NormalizeInput(input));
+        // Create a new stylesheet, with its location set to location (or null, if location was not passed).
+        var stylesheet = StyleSheet.Create(new CSSStyleSheetInit());
+        // Consume a list of rules from input, with the top-level flag set, and set the stylesheet’s value to the result.
+        stylesheet.cssRules = parser.ConsumeAListOfRules(true);
+        // Return the stylesheet.
+        return stylesheet;
+    }
+
+    // https://www.w3.org/TR/css-syntax-3/#parse-list-of-rules
+    public static CSSRuleList ParseAListOfRules(string input) {
+        // 1. Normalize input, and set input to the result.
+        var parser = new Parser(NormalizeInput(input));
+        // 2. Consume a list of rules from the input, with the top-level flag unset.
+        // 3. Return the returned list.        
+        return parser.ConsumeAListOfRules(false);
+    }
+
+    // https://www.w3.org/TR/css-syntax-3/#parse-rule
+    public static OneOf<Rule, SyntaxError> ParseARule(string input) {
+        // 1. Normalize input, and set input to the result.
+        var parser = new Parser(NormalizeInput(input));
+        // 2. While the next input token from input is a <whitespace-token>, consume the next input token from input.
+        while (parser.NextInputToken is WhitespaceToken) parser.ConsumeTheNextInputToken();
+        // 3. If the next input token from input is an <EOF-token>, return a syntax error.
+        if (parser.NextInputToken is EofToken) return new SyntaxError();
+        // Otherwise, if the next input token from input is an <at-keyword-token>, consume an at-rule from input, and let rule be the return value.
+        Rule rule;
+        if (parser.NextInputToken is AtKeywordToken) {
+            rule = parser.ConsumeAnAtRule();
+        } else {
+            // Otherwise, consume a qualified rule from input and let rule be the return value. If nothing was returned, return a syntax error.
+            if (parser.ConsumeAQualifiedRule() is QualifiedRule qualifiedRule) {
+                rule = qualifiedRule;
+            } else {
+                return new SyntaxError();
+            }
+        }
+        // 4. While the next input token from input is a <whitespace-token>, consume the next input token from input.
+        while (parser.NextInputToken is WhitespaceToken) parser.ConsumeTheNextInputToken();
+        // 5. If the next input token from input is an <EOF-token>, return rule. Otherwise, return a syntax error.
+        return (parser.NextInputToken is EofToken) ? rule : new SyntaxError();
+    }
+
+
+    #endregion
+
     #region Parser Algorithms (https://www.w3.org/TR/css-syntax-3/#parser-algorithms)
 
     // https://www.w3.org/TR/css-syntax-3/#consume-list-of-rules
-    public List<Rule> ConsumeAListOfRules(bool topLevel) {
+    public CSSRuleList ConsumeAListOfRules(bool topLevel) {
         // To consume a list of rules, given a top-level flag:
         // Create an initially empty list of rules.
-        List<Rule> rules = [];
+        CSSRuleList rules = [];
         // Repeatedly consume the next input token:
         while (true) {
             ConsumeTheNextInputToken();
@@ -152,10 +216,11 @@ public class Parser(List<Token> input) {
                     atRule.block = ConsumeASimpleBlock();
                     return atRule;
                 // simple block with an associated token of <{-token>
-                case SimpleBlock { token: CurlyBracesOpenToken } block:
-                    // Assign the block to the at-rule’s block. Return the at-rule.
-                    atRule.block = block;
-                    return atRule;
+                // todo
+                // case SimpleBlock { token: CurlyBracesOpenToken } block:
+                //     // Assign the block to the at-rule’s block. Return the at-rule.
+                //     atRule.block = block;
+                //     return atRule;
                 // anything else
                 default:
                     // Reconsume the current input token. Consume a component value. Append the returned value to the at-rule’s prelude.
@@ -187,10 +252,11 @@ public class Parser(List<Token> input) {
                     qualifiedRule.block = ConsumeASimpleBlock();
                     return qualifiedRule;
                 // simple block with an associated token of <{-token>
-                case SimpleBlock { token: CurlyBracesOpenToken } block:
-                    // Assign the block to the qualified rule’s block. Return the qualified rule.
-                    qualifiedRule.block = block;
-                    return qualifiedRule;
+                // todo
+                // case SimpleBlock { token: CurlyBracesOpenToken } block:
+                //     // Assign the block to the qualified rule’s block. Return the qualified rule.
+                //     qualifiedRule.block = block;
+                //     return qualifiedRule;
                 // anything else
                 default:
                     // Reconsume the current input token. Consume a component value. Append the returned value to the qualified rule’s prelude.        
@@ -202,96 +268,96 @@ public class Parser(List<Token> input) {
     }
 
     // https://www.w3.org/TR/css-syntax-3/#consume-style-block
-    private List<Declaration> ConsumeAStyleBlocksContents() {
-        // Create an initially empty list of declarations decls, and an initially empty list of rules rules.
-        List<Declaration> decls = [];
-        List<Rule> rules = [];
-        // Repeatedly consume the next input token:
-        while (true) {
-            ConsumeTheNextInputToken();
-            switch (CurrentInputToken) {
-                // <whitespace-token>
-                case WhitespaceToken:
-                // <semicolon-token>
-                case SemicolonToken:
-                    // Do nothing.
-                    break;
-                // <EOF-token>
-                case EofToken:
-                    // Extend decls with rules, then return decls.
-                    decls.AddRange(rules);
-                    return decls;
-                // <at-keyword-token>
-                case AtKeywordToken:
-                    // Reconsume the current input token. Consume an at-rule, and append the result to rules.
-                    ReconsumeTheCurrentInputToken();
-                    rules.Add(ConsumeAnAtRule());
-                    break;
-                // <ident-token>
-                case IdentToken:
-                    // Initialize a temporary list initially filled with the current input token. As long as the next input token is anything other than a <semicolon-token> or <EOF-token>,
-                    // consume a component value and append it to the temporary list. Consume a declaration from the temporary list. If anything was returned, append it to decls.
-                    throw new NotImplementedException();
-                // <delim-token> with a value of "&" (U+0026 AMPERSAND)                
-                case DelimToken { value: '&' }:
-                    // Reconsume the current input token. Consume a qualified rule. If anything was returned, append it to rules.
-                    ReconsumeTheCurrentInputToken();
-                    if (ConsumeAQualifiedRule() is QualifiedRule rule)
-                        rules.Add(rule);
-                    break;
-                // anything else
-                default:
-                    // This is a parse error. Reconsume the current input token.
-                    AddParseError("unexpected-token-in-a-style-block-content");
-                    ReconsumeTheCurrentInputToken();
-                    // As long as the next input token is anything other than a <semicolon-token> or <EOF-token>, consume a component value and throw away the returned value.
-                    if (!(NextInputToken is SemicolonToken or EofToken))
-                        ConsumeAComponentValue();
-                    break;
-            }
-        }
-    }
+    // private List<Declaration> ConsumeAStyleBlocksContents() { // todo
+    //     // Create an initially empty list of declarations decls, and an initially empty list of rules rules.
+    //     List<Declaration> decls = [];
+    //     List<Rule> rules = [];
+    //     // Repeatedly consume the next input token:
+    //     while (true) {
+    //         ConsumeTheNextInputToken();
+    //         switch (CurrentInputToken) {
+    //             // <whitespace-token>
+    //             case WhitespaceToken:
+    //             // <semicolon-token>
+    //             case SemicolonToken:
+    //                 // Do nothing.
+    //                 break;
+    //             // <EOF-token>
+    //             case EofToken:
+    //                 // Extend decls with rules, then return decls.
+    //                 decls.AddRange(rules);
+    //                 return decls;
+    //             // <at-keyword-token>
+    //             case AtKeywordToken:
+    //                 // Reconsume the current input token. Consume an at-rule, and append the result to rules.
+    //                 ReconsumeTheCurrentInputToken();
+    //                 rules.Add(ConsumeAnAtRule());
+    //                 break;
+    //             // <ident-token>
+    //             case IdentToken:
+    //                 // Initialize a temporary list initially filled with the current input token. As long as the next input token is anything other than a <semicolon-token> or <EOF-token>,
+    //                 // consume a component value and append it to the temporary list. Consume a declaration from the temporary list. If anything was returned, append it to decls.
+    //                 throw new NotImplementedException();
+    //             // <delim-token> with a value of "&" (U+0026 AMPERSAND)                
+    //             case DelimToken { value: '&' }:
+    //                 // Reconsume the current input token. Consume a qualified rule. If anything was returned, append it to rules.
+    //                 ReconsumeTheCurrentInputToken();
+    //                 if (ConsumeAQualifiedRule() is QualifiedRule rule)
+    //                     rules.Add(rule);
+    //                 break;
+    //             // anything else
+    //             default:
+    //                 // This is a parse error. Reconsume the current input token.
+    //                 AddParseError("unexpected-token-in-a-style-block-content");
+    //                 ReconsumeTheCurrentInputToken();
+    //                 // As long as the next input token is anything other than a <semicolon-token> or <EOF-token>, consume a component value and throw away the returned value.
+    //                 if (!(NextInputToken is SemicolonToken or EofToken))
+    //                     ConsumeAComponentValue();
+    //                 break;
+    //         }
+    //     }
+    // }
 
     // https://www.w3.org/TR/css-syntax-3/#consume-list-of-declarations
-    private List<Declaration> ConsumeAListOfDeclarations() {
-        // Create an initially empty list of declarations.
-        List<Declaration> list = [];
-        // Repeatedly consume the next input token:
-        while (true) {
-            switch (CurrentInputToken) {
-                // <whitespace-token>
-                case WhitespaceToken:
-                // <semicolon-token>
-                case SemicolonToken:
-                    // Do nothing.
-                    break;
-                // <EOF-token>
-                case EofToken:
-                    // Return the list of declarations.
-                    return list;
-                // <at-keyword-token>
-                case AtKeywordToken:
-                    // Reconsume the current input token. Consume an at-rule. Append the returned rule to the list of declarations.
-                    ReconsumeTheCurrentInputToken();
-                    list.Add(ConsumeAnAtRule());
-                    break;
-                // <ident-token>
-                case IdentToken:
-                    // Initialize a temporary list initially filled with the current input token. As long as the next input token is anything other than a <semicolon-token> or <EOF-token>,
-                    // consume a component value and append it to the temporary list. Consume a declaration from the temporary list. If anything was returned, append it to the list of declarations.
-                    throw new NotImplementedException();
-                // anything else
-                default:
-                    // This is a parse error. Reconsume the current input token. As long as the next input token is anything other than a <semicolon-token> or <EOF-token>,
-                    // consume a component value and throw away the returned value.
-                    AddParseError("unexpected-token-in-a-list-of-declarations");
-                    ReconsumeTheCurrentInputToken();
-                    if (!(NextInputToken is SemicolonToken or EofToken))
-                        ConsumeAComponentValue();
-                    break;
-            }
-        }
-    }
+    // private List<Declaration> ConsumeAListOfDeclarations() {  // todo
+    //     // Create an initially empty list of declarations.
+    //     List<Declaration> list = [];
+    //     // Repeatedly consume the next input token:
+    //     while (true) {
+    //         switch (CurrentInputToken) {
+    //             // <whitespace-token>
+    //             case WhitespaceToken:
+    //             // <semicolon-token>
+    //             case SemicolonToken:
+    //                 // Do nothing.
+    //                 break;
+    //             // <EOF-token>
+    //             case EofToken:
+    //                 // Return the list of declarations.
+    //                 return list;
+    //             // <at-keyword-token>
+    //             case AtKeywordToken:
+    //                 // Reconsume the current input token. Consume an at-rule. Append the returned rule to the list of declarations.
+    //                 ReconsumeTheCurrentInputToken();
+    //                 list.Add(ConsumeAnAtRule());
+    //                 break;
+    //             // <ident-token>
+    //             case IdentToken:
+    //                 // Initialize a temporary list initially filled with the current input token. As long as the next input token is anything other than a <semicolon-token> or <EOF-token>,
+    //                 // consume a component value and append it to the temporary list. Consume a declaration from the temporary list. If anything was returned, append it to the list of declarations.
+    //                 throw new NotImplementedException();
+    //             // anything else
+    //             default:
+    //                 // This is a parse error. Reconsume the current input token. As long as the next input token is anything other than a <semicolon-token> or <EOF-token>,
+    //                 // consume a component value and throw away the returned value.
+    //                 AddParseError("unexpected-token-in-a-list-of-declarations");
+    //                 ReconsumeTheCurrentInputToken();
+    //                 if (!(NextInputToken is SemicolonToken or EofToken))
+    //                     ConsumeAComponentValue();
+    //                 break;
+    //         }
+    //     }
+    // }
 
     // https://www.w3.org/TR/css-syntax-3/#consume-declaration
     private Declaration? ConsumeADeclaration() {
@@ -335,16 +401,14 @@ public class Parser(List<Token> input) {
     private ComponentValue ConsumeAComponentValue() {
         // Consume the next input token.
         ConsumeTheNextInputToken();
-        // If the current input token is a <{-token>, <[-token>, or <(-token>, consume a simple block and return it.
-        if (CurrentInputToken is CurlyBracesOpenToken or SquareBracketOpenToken or BracketOpenToken) {
-            return ConsumeASimpleBlock();
-        }
-        // Otherwise, if the current input token is a <function-token>, consume a function and return it.
-        if (CurrentInputToken is FunctionToken) {
-            return ConsumeAFunction();
-        }
-        // Otherwise, return the current input token.
-        return CurrentInputToken;
+        return CurrentInputToken switch {
+            // If the current input token is a <{-token>, <[-token>, or <(-token>, consume a simple block and return it.
+            CurlyBracesOpenToken or SquareBracketCloseToken or BracketCloseToken => ConsumeASimpleBlock(),
+            // Otherwise, if the current input token is a <function-token>, consume a function and return it.
+            FunctionToken => ConsumeAFunction(),
+            // Otherwise, return the current input token.
+            _ => (ComponentValue)CurrentInputToken,
+        };
     }
 
     // https://www.w3.org/TR/css-syntax-3/#consume-simple-block
@@ -414,5 +478,3 @@ public class Parser(List<Token> input) {
     #endregion
 
 }
-
-#endif
