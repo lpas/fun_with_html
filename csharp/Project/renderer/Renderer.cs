@@ -5,7 +5,6 @@ using FunWithHtml.css.Tokenizer;
 using FunWithHtml.html.TreeBuilder;
 using SkiaSharp;
 using System.Diagnostics;
-using System.Globalization;
 using System.Text;
 
 public class Styles: List<Block>;
@@ -14,7 +13,6 @@ public class Renderer {
 
     private const int width = 800;
     private const int height = 600;
-    private SKImageInfo info;
 
     private Styles styles;
     private Document document;
@@ -24,7 +22,6 @@ public class Renderer {
         this.styles = styles;
         this.document = document;
         body = GetBody(document) ?? throw new InvalidOperationException();
-        info = new SKImageInfo(width, height);
     }
 
     private static Element? GetBody(Document document) {
@@ -44,6 +41,7 @@ public class Renderer {
     }
 
     public void Render(string filePath) {
+        var info = new SKImageInfo(width, height);
         var body = BuildStyleNode(this.body) switch {
             LayoutElementNode rootElement => rootElement,
             _ => throw new InvalidOperationException("Root element must be a LayoutElementNode."),
@@ -212,13 +210,14 @@ public class Renderer {
     private static void PaintTextNode(LayoutTextNode node, SKCanvas canvas) {
         Debug.Assert(node.parent != null, "LayoutTextNodes should always have a parent node");
         if (node.rect.Width == 0) return;
-        var textPaint = new SKPaint {
+        using var textPaint = new SKPaint {
             Color = node.parent.color,
             IsAntialias = true,
         };
-        var font = new SKFont {
+        using var typeface = SKTypeface.FromFamilyName(node.parent.fontFamily);
+        using var font = new SKFont {
             Size = node.parent.fontSize,
-            Typeface = SKTypeface.FromFamilyName(node.parent.fontFamily),
+            Typeface = typeface,
         };
 
         foreach (var (point, text) in node.textBoxes) {
@@ -240,8 +239,8 @@ public class Renderer {
                 borderRect.Right += node.border.right;
                 borderRect.Bottom += node.border.bottom;
                 borderRect.Left -= node.border.left;
-                var inner = new SKRoundRect(node.rect);
-                var border = new SKRoundRect(borderRect);
+                using var inner = new SKRoundRect(node.rect);
+                using var border = new SKRoundRect(borderRect);
                 canvas.DrawRoundRectDifference(border, inner, paint);
             }
 
