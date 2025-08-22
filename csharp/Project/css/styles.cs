@@ -1,3 +1,4 @@
+using FunWithHtml.css.Parser;
 using FunWithHtml.css.Tokenizer;
 using FunWithHtml.renderer;
 using OneOf;
@@ -50,7 +51,7 @@ public class PreStyles() {
     }
 
 
-    public static void SetCssColorValue(List<Token> tokens, Action<CssColor> setter) {
+    public static void SetCssColorValue(List<ComponentValue> tokens, Action<CssColor> setter) {
         if (tokens[0] is HashToken ht) {
             if (SKColor.TryParse($"#{ht.value}", out SKColor color)) {
                 setter(new CssColor((uint)color));
@@ -58,7 +59,7 @@ public class PreStyles() {
         }
     }
 
-    public static void SetCssLineHeight(List<Token> tokens, Action<OneOf<NormalKeyword, CssNumber, CssLength, CssPercent>?> setter) {
+    public static void SetCssLineHeight(List<ComponentValue> tokens, Action<OneOf<NormalKeyword, CssNumber, CssLength, CssPercent>?> setter) {
         if (tokens.Count == 0) return;
 
         OneOf<NormalKeyword, CssNumber, CssLength, CssPercent>? v = tokens[0] switch {
@@ -78,7 +79,7 @@ public class PreStyles() {
         }
     }
 
-    public static void SetCssFontFamily(List<Token> tokens, Action<string?> setter) {
+    public static void SetCssFontFamily(List<ComponentValue> tokens, Action<string?> setter) {
         if (tokens.Count == 0) return;
         string? v = tokens[0] switch {
             IdentToken it => it.value,
@@ -90,7 +91,7 @@ public class PreStyles() {
         }
     }
 
-    public static void SetCssFontSize(List<Token> tokens, Action<OneOf<FontSize, CssLength, CssPercent>?> setter) {
+    public static void SetCssFontSize(List<ComponentValue> tokens, Action<OneOf<FontSize, CssLength, CssPercent>?> setter) {
         if (tokens.Count == 0) return;
         OneOf<FontSize, CssLength, CssPercent>? v = tokens[0] switch {
             NumberToken nt when nt.value == 0 => new CssLength(0, LengthUnit.px),
@@ -120,7 +121,7 @@ public class PreStyles() {
         }
     }
 
-    public static void BorderWidthSetter(List<Token> tokens, Action<OneOf<CssLength, BorderWidth>?> setter) {
+    public static void BorderWidthSetter(List<ComponentValue> tokens, Action<OneOf<CssLength, BorderWidth>?> setter) {
         if (tokens.Count == 0) return;
         OneOf<CssLength, BorderWidth>? v = tokens[0] switch {
             NumberToken nt when nt.value == 0 => new CssLength(0, LengthUnit.px),
@@ -143,7 +144,7 @@ public class PreStyles() {
         }
     }
 
-    public static void MarginSetter(List<Token> tokens, Action<OneOf<CssLength, CssPercent, AutoKeyword>?> setter) {
+    public static void MarginSetter(List<ComponentValue> tokens, Action<OneOf<CssLength, CssPercent, AutoKeyword>?> setter) {
         if (tokens.Count == 0) return;
         OneOf<CssLength, CssPercent, AutoKeyword>? v = tokens[0] switch {
             NumberToken nt when nt.value == 0 => new CssLength(0, LengthUnit.px),
@@ -162,7 +163,7 @@ public class PreStyles() {
         }
     }
 
-    public static void PaddingSetter(List<Token> tokens, Action<OneOf<CssLength, CssPercent>?> setter) {
+    public static void PaddingSetter(List<ComponentValue> tokens, Action<OneOf<CssLength, CssPercent>?> setter) {
         if (tokens.Count == 0) return;
         OneOf<CssLength, CssPercent>? v = tokens[0] switch {
             NumberToken nt when nt.value == 0 => new CssLength(0, LengthUnit.px),
@@ -180,7 +181,7 @@ public class PreStyles() {
         }
     }
 
-    public static void DisplaySetter(List<Token> tokens, Action<Display?> setter) {
+    public static void DisplaySetter(List<ComponentValue> tokens, Action<Display?> setter) {
         if (tokens.Count == 0) return;
         Display? v = tokens[0] switch {
             IdentToken it => it.value switch {

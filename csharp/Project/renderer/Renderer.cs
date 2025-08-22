@@ -1,30 +1,36 @@
 namespace FunWithHtml.renderer;
 
 using FunWithHtml.css;
+using FunWithHtml.css.Parser;
 using FunWithHtml.css.Tokenizer;
 using FunWithHtml.html.TreeBuilder;
+using FunWithHTML.css.Parser;
 using SkiaSharp;
 using System.Diagnostics;
 using System.Text;
-
-public class Styles: List<Block>;
 
 public class Renderer {
 
     private const int width = 800;
     private const int height = 600;
 
-    private Styles styles;
+    private CSSStyleSheet? sheet;
     private Document document;
     private Element body;
 
-    public Renderer(Styles styles, Document document) {
-        this.styles = styles;
+    public Renderer(Document document) {
         this.document = document;
-        body = GetBody(document) ?? throw new InvalidOperationException();
+        var firstStyle = FindElement(document, element => element.localName == "style");
+        if (firstStyle is not null && firstStyle.childNodes.Count > 0 && firstStyle.childNodes[0] is Text styleTextNode) {
+            var sheet = Parser.ParseAStylesheet(styleTextNode.data);
+            if (sheet is not null) {
+                this.sheet = sheet;
+            }
+        }
+        body = FindElement(document, element => element.localName == "body") ?? throw new InvalidOperationException();
     }
 
-    private static Element? GetBody(Document document) {
+    private static Element? FindElement(Document document, Func<Element, bool> predicate) {
         var stack = new Stack<Node>();
         foreach (var child in Enumerable.Reverse(document.childNodes)) {
             stack.Push(child);
@@ -32,7 +38,7 @@ public class Renderer {
 
         while (stack.Count > 0) {
             var node = stack.Pop();
-            if (node is Element { localName: "body" } body) return body;
+            if (node is Element element && predicate(element)) return element;
             foreach (var child in Enumerable.Reverse(node.childNodes)) {
                 stack.Push(child);
             }
@@ -68,7 +74,7 @@ public class Renderer {
             };
 
             SetDefaultValues(layoutNode);
-            SetValues(layoutNode, styles);
+            SetValues(layoutNode, sheet);
 
             if (layoutNode.display == Display.None) return null;
 
@@ -251,7 +257,7 @@ public class Renderer {
         }
     }
 
-    private static readonly Dictionary<string, Action<List<Token>, PreStyles>> PreStyleHandlers = new() {
+    private static readonly Dictionary<string, Action<List<ComponentValue>, PreStyles>> PreStyleHandlers = new() {
         {"background-color", (tokens, preStyles) => PreStyles.SetCssColorValue(tokens, color => preStyles.BackgroundColor = color) },
         {"color", (tokens, preStyles) => PreStyles.SetCssColorValue(tokens, color => preStyles.color = color) },
         {"display", (tokens, preStyles) => PreStyles.DisplaySetter(tokens, display => preStyles.display = display)},
@@ -270,23 +276,22 @@ public class Renderer {
         { "padding-bottom", (tokens, preStyles) => PreStyles.PaddingSetter(tokens, (v) => preStyles.padding.bottom = v)},
         { "padding-left", (tokens, preStyles) => PreStyles.PaddingSetter(tokens, (v) => preStyles.padding.left = v)},
 
-        { "border-width-top", (tokens, preStyles) => PreStyles.BorderWidthSetter(tokens, (v) => preStyles.borderWidth.top = v)},
-        { "border-width-right", (tokens, preStyles) => PreStyles.BorderWidthSetter(tokens, (v) => preStyles.borderWidth.right = v)},
-        { "border-width-bottom", (tokens, preStyles) => PreStyles.BorderWidthSetter(tokens, (v) => preStyles.borderWidth.bottom = v)},
-        { "border-width-left", (tokens, preStyles) => PreStyles.BorderWidthSetter(tokens, (v) => preStyles.borderWidth.left = v)},
+        { "border-top-width", (tokens, preStyles) => PreStyles.BorderWidthSetter(tokens, (v) => preStyles.borderWidth.top = v)},
+        { "border-right-width", (tokens, preStyles) => PreStyles.BorderWidthSetter(tokens, (v) => preStyles.borderWidth.right = v)},
+        { "border-bottom-width", (tokens, preStyles) => PreStyles.BorderWidthSetter(tokens, (v) => preStyles.borderWidth.bottom = v)},
+        { "border-left-width", (tokens, preStyles) => PreStyles.BorderWidthSetter(tokens, (v) => preStyles.borderWidth.left = v)},
     };
 
-    private static void SetValues(LayoutElementNode node, Styles styles) {
-        if (node.element is null) return;
+    private static void SetValues(LayoutElementNode node, CSSStyleSheet? sheet = null) {
+        if (node.element is null || sheet is null) return;
 
         var preStyle = new PreStyles();
         // collecting values from styles
-        foreach (var block in styles.Where(block => node.element.localName == block.name)) {
-            foreach (var line in block.value) {
-                if (PreStyleHandlers.TryGetValue(line.name, out var preHandler)) {
-                    var tokenizer = new Tokenizer(line.value);
-                    var tokens = tokenizer.GetTokenList();
-                    preHandler(tokens, preStyle);
+        foreach (var rule in sheet.cssRules.Where(rule => rule is QualifiedRule qr && qr.prelude[0] is IdentToken it
+             && it.value.Equals(node.element.localName, StringComparison.OrdinalIgnoreCase)).Cast<QualifiedRule>()) {
+            foreach (var declaration in rule.declarations) {
+                if (PreStyleHandlers.TryGetValue(declaration.name, out var preHandler)) {
+                    preHandler(declaration.value, preStyle);
                 }
             }
         }
@@ -330,16 +335,6 @@ public class Renderer {
         using var stream = File.OpenWrite(filePath);
         data.SaveTo(stream);
     }
-}
-
-public class Block {
-    public string name = "";
-    public List<Line> value = [];
-}
-
-public class Line(string name, string value) {
-    public string name = name;
-    public string value = value;
 }
 
 
