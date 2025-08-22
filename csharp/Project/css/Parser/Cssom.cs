@@ -5,29 +5,52 @@ using FunWithHtml.css.Parser;
 
 using USVString = String; // todo
 using DOMString = String;
-// https://www.w3.org/TR/cssom-1/#cssomstring-type
+// https://drafts.csswg.org/cssom-1/#cssomstring-type
 using CSSOMString = String;
 using FunWithHTML.misc;
+using OneOf;
 
 public class Promise<T>(T value) {
     readonly T value = value;
 }
 
 
-// 
+
+// https://drafts.csswg.org/cssom-1/#the-stylesheet-interface
+partial class CSSStyleSheet: StyleSheet {
+    public static partial CSSStyleSheet Create(CSSStyleSheetInit? options = null);
+    public CSSRule? ownerRule { get; private set; }
+    public partial CSSRuleList cssRules { get; internal set; }
+    public partial ulong insertRule(CSSOMString rule, ulong index = 0);
+    public partial void deleteRule(ulong index);
+
+    public partial Promise<CSSStyleSheet> replace(USVString text);
+    public partial void replaceSync(USVString text);
+};
+
+// https://drafts.csswg.org/cssom-1/#legacy-css-style-sheet-members
+
+partial class CSSStyleSheet {
+    [Obsolete]
+    public partial CSSRuleList rules { get; }
+    [Obsolete]
+    public partial long addRule(DOMString selector = "undefined", DOMString block = "undefined", ulong? optionalIndex = null);
+    [Obsolete]
+    public partial void removeRule(ulong index = 0);
+}
 
 
-// https://www.w3.org/TR/cssom-1/#css-style-sheets
-public class StyleSheet: ICSSStyleSheet {
+
+// https://drafts.csswg.org/cssom-1/#css-style-sheets
+public partial class CSSStyleSheet: StyleSheet {
 
 
     public string type => "text/css";
     public string? location { get; private set; }
 
-    public ICSSStyleSheet? parentStyleSheet { get; private set; }
+    public CSSStyleSheet? parentStyleSheet { get; private set; }
 
     public Element? ownerNode { get; private set; }
-    public ICSSRule? ownerRule { get; private set; }
     // todo media
 
     // todo If this property is specified to an attribute of the owner node, the title must be set to the value of that attribute. Whenever the attribute is set, changed or removed, the title must be set to the new value of the attribute, or to the empty string if the attribute is absent.
@@ -36,8 +59,8 @@ public class StyleSheet: ICSSStyleSheet {
     public bool alternate { get; private set; }
     // todo The disabled attribute, on getting, must return true if the disabled flag is set, or false otherwise. On setting, the disabled attribute must set the disabled flag if the new value is true, or unset the disabled flag otherwise.
     public bool disabled { get; private set; }
-    private ICSSRuleList _cssRules = new CSSRuleList();
-    public ICSSRuleList cssRules {
+    private CSSRuleList _cssRules = new CSSRuleList();
+    public partial CSSRuleList cssRules {
         get {
             // If the origin-clean flag is unset, throw a SecurityError exception.
             if (originClean is false) throw new SecurityError();
@@ -47,7 +70,7 @@ public class StyleSheet: ICSSStyleSheet {
             // it can nevertheless change over time due to its liveness status. For example, invoking the insertRule() 
             // or deleteRule() methods can result in mutations reflected in the returned object.            
         }
-        set { _cssRules = value; }
+        internal set { _cssRules = value; }
     }
     public bool originClean { get; private set; }
     public bool constructed { get; private set; }
@@ -56,121 +79,111 @@ public class StyleSheet: ICSSStyleSheet {
     public DOMString? stylesheetBaseUrl;
     public string? href => location;
 
-    static public ICSSStyleSheet Create(CSSStyleSheetInit? options = null) {
-        // Construct a new CSSStyleSheet object sheet.
-        var sheet = new StyleSheet() {
-            // Set sheet’s location to the base URL of the associated Document for the current global object.
+    private CSSStyleSheet() { }
+
+    public static partial CSSStyleSheet Create(CSSStyleSheetInit? options = null) {
+        // 1. Construct a new CSSStyleSheet object sheet.
+        var sheet = new CSSStyleSheet() {
+            // 2. Set sheet’s location to the base URL of the associated Document for the current global object.
             // todo
             location = null,
-            // Set sheet’s stylesheet base URL to the baseURL attribute value from options.
+            // 3. Set sheet’s stylesheet base URL to the baseURL attribute value from options.
             stylesheetBaseUrl = options?.baseURL,
-            // Set sheet’s parent CSS style sheet to null.
+            // 4. Set sheet’s parent CSS style sheet to null.
             parentStyleSheet = null,
-            // Set sheet’s owner node to null.
+            // 5. Set sheet’s owner node to null.
             ownerNode = null,
-            // Set sheet’s owner CSS rule to null.
+            // 6. Set sheet’s owner CSS rule to null.
             ownerRule = null,
-            // Set sheet’s title to the the empty string.
+            // 7. Set sheet’s title to the the empty string.
             title = "",
-            // Unset sheet’s alternate flag.
+            // 8. Unset sheet’s alternate flag.
             alternate = false,
-            // Set sheet’s origin-clean flag.
+            // 9. Set sheet’s origin-clean flag.
             originClean = true,
-            // Set sheet’s constructed flag.
+            // 10. Set sheet’s constructed flag.
             constructed = true,
-            // Set sheet’s Constructor document to the associated Document for the current global object.
+            // 11. Set sheet’s Constructor document to the associated Document for the current global object.
             // todo
             document = null,
-            // If the media attribute of options is a string, create a MediaList object from the string and assign it as sheet’s media.
+            // 12. If the media attribute of options is a string, create a MediaList object from the string and assign it as sheet’s media.
             // Otherwise, serialize a media query list from the attribute and then create a MediaList object from the resulting string and set it as sheet’s media.
             // todo
-            // If the disabled attribute of options is true, set sheet’s disabled flag.
+            // 13. If the disabled attribute of options is true, set sheet’s disabled flag.
             disabled = options?.disabled ?? false,
 
         };
-        // Return sheet.
+        // 14. Return sheet.
         return sheet;
     }
 
-    // https://www.w3.org/TR/cssom-1/#dom-cssstylesheet-insertrule
-    public ulong insertRule(string rule, ulong index = 0) {
-        // If the origin-clean flag is unset, throw a SecurityError exception.
+    // https://drafts.csswg.org/cssom-1/#dom-cssstylesheet-insertrule
+    public partial ulong insertRule(CSSOMString rule, ulong index) {
+        // 1. If the origin-clean flag is unset, throw a SecurityError exception.
         if (!originClean) throw new SecurityError();
-        // If the disallow modification flag is set, throw a NotAllowedError DOMException.
+        // 2. If the disallow modification flag is set, throw a NotAllowedError DOMException.
         if (disallowModification) throw new NotAllowedError();
-        // Let parsed rule be the return value of invoking parse a rule with rule.
-        SyntaxError? error = null;
-        Rule? parsedRule = null;
-        Parser.ParseARule(rule).Switch(
-            r => parsedRule = r,
-            err => error = err
-        );
-        // If parsed rule is a syntax error, return parsed rule.
-        if (error is not null) return 12;
-        // If parsed rule is an @import rule, and the constructed flag is set, throw a SyntaxError DOMException.
+        // 3. Let parsed rule be the return value of invoking parse a rule with rule.
+        var parsedRule = Parser.ParseARule(rule);
+        // 4. If parsed rule is a syntax error, throw a SyntaxError DOMException.
+        if (parsedRule.IsT1) throw parsedRule.AsT1;
+        // 5. If parsed rule is an @import rule, and the constructed flag is set, throw a SyntaxError DOMException.
         // todo
-        // Return the result of invoking insert a CSS rule rule in the CSS rules at index.
-        // todo
+        // 6. Return the result of invoking insert a CSS rule rule in the CSS rules at index.
         return CSSRule.InsertACssRule(rule, cssRules, index);
     }
 
-    // https://www.w3.org/TR/cssom-1/#dom-cssstylesheet-deleterule
-    public void deleteRule(ulong index) {
-        // If the origin-clean flag is unset, throw a SecurityError exception.
+    // https://drafts.csswg.org/cssom-1/#dom-cssstylesheet-deleterule
+    public partial void deleteRule(ulong index) {
+        // 1. If the origin-clean flag is unset, throw a SecurityError exception.
         if (!originClean) throw new SecurityError();
-        // If the disallow modification flag is set, throw a NotAllowedError DOMException.
+        // 2. If the disallow modification flag is set, throw a NotAllowedError DOMException.
         if (disallowModification) throw new NotAllowedError();
-        // Remove a CSS rule in the CSS rules at index.       
+        // 3. Remove a CSS rule in the CSS rules at index.       
         CSSRule.RemoveACssRule(cssRules, index);
     }
 
-    // https://www.w3.org/TR/cssom-1/#dom-cssstylesheet-replace
-    public Promise<ICSSStyleSheet> replace(string text) {
-        // Let promise be a promise.
-        var promise = new Promise<ICSSStyleSheet>(this);
-        // If the constructed flag is not set, or the disallow modification flag is set, reject promise with a NotAllowedError DOMException and return promise.
+    // https://drafts.csswg.org/cssom-1/#dom-cssstylesheet-replace
+    public partial Promise<CSSStyleSheet> replace(string text) {
+        // 1. Let promise be a promise.
+        var promise = new Promise<CSSStyleSheet>(this);
+        // 2. If the constructed flag is not set, or the disallow modification flag is set, reject promise with a NotAllowedError DOMException and return promise.
         if (!constructed || disallowModification) {
             // todo reject
             return promise;
         }
-        // Set the disallow modification flag.
+        // 3. Set the disallow modification flag.
         disallowModification = true;
-        // In parallel, do these steps:        
-        // Let rules be the result of running parse a list of rules from text. If rules is not a list of rules (i.e. an error occurred during parsing), set rules to an empty list.
-        var rules = Parser.ParseAListOfRules(text);
-        // todo handle error
-        // If rules contains one or more @import rules, remove those rules from rules.
+        // 4. In parallel, do these steps: // todo
+        // 1. Let rules be the result of running parse a stylesheet’s contents from text.
+        var rules = Parser.ParseAStylesheetsContents(text);
+        // 2. If rules contains one or more @import rules, remove those rules from rules.
         // todo
-        // Set sheet’s CSS rules to rules.
+        // 3. Set sheet’s CSS rules to rules.
         cssRules = rules;
-        // Unset sheet’s disallow modification flag.
+        // 4. Unset sheet’s disallow modification flag.
         disallowModification = false;
-        // Resolve promise with sheet.
+        // 5. Resolve promise with sheet.
         // todo
-        // Return promise.
+        // 5. Return promise.
         return promise;
     }
 
-    // https://www.w3.org/TR/cssom-1/#synchronously-replace-the-rules-of-a-cssstylesheet
-    public void replaceSync(string text) {
-        // If the constructed flag is not set, or the disallow modification flag is set, throw a NotAllowedError DOMException.
+    // https://drafts.csswg.org/cssom-1/#dom-cssstylesheet-replacesync
+    public partial void replaceSync(string text) {
+        // 1. If the constructed flag is not set, or the disallow modification flag is set, throw a NotAllowedError DOMException.
         if (!constructed || disallowModification) throw new NotAllowedError();
-        // Let rules be the result of running parse a list of rules from text. If rules is not a list of rules (i.e. an error occurred during parsing), set rules to an empty list.
-        var rules = Parser.ParseAListOfRules(text);
-        // todo handle error
-        // If rules contains one or more @import rules, remove those rules from rules.
+        // 2. Let rules be the result of running parse a stylesheet’s contents from text.
+        var rules = Parser.ParseAStylesheetsContents(text);
+        // 3 If rules contains one or more @import rules, remove those rules from rules.
         // todo
-        // Set sheet’s CSS rules to rules.
         cssRules = rules;
     }
 
-    // https://www.w3.org/TR/cssom-1/#legacy-css-style-sheet-members
-    [Obsolete]
-    public ICSSRuleList rules => cssRules;
-    [Obsolete]
-    public void removeRule(ulong index = 0) => deleteRule(index);
-    [Obsolete]
-    public long addRule(DOMString selector = "undefined", DOMString block = "undefined", ulong? optionalIndex = null) {
+    // https://drafts.csswg.org/cssom-1/#legacy-css-style-sheet-members
+    public partial CSSRuleList rules => cssRules;
+    public partial void removeRule(ulong index) => deleteRule(index);
+    public partial long addRule(DOMString selector, DOMString block, ulong? optionalIndex) {
         // Let rule be an empty string.
         var rule = "";
         // Append selector to rule.
@@ -193,138 +206,144 @@ public class StyleSheet: ICSSStyleSheet {
 
 }
 
-
-
-
-// https://www.w3.org/TR/cssom-1/#the-stylesheet-interface
-public interface IStyleSheet {
+// https://drafts.csswg.org/cssom-1/#the-stylesheet-interface
+public interface StyleSheet {
     CSSOMString type { get; }
     USVString? href { get; }
     Element? ownerNode { get; } // todo ProcessingInstruction
-    ICSSStyleSheet? parentStyleSheet { get; }
+    CSSStyleSheet? parentStyleSheet { get; }
     DOMString? title { get; }
     // readonly MediaList media; // todo
     bool disabled { get; }
 }
 
-// https://www.w3.org/TR/cssom-1/#the-cssstylesheet-interface
-public interface ICSSStyleSheet: IStyleSheet {
-    public static ICSSStyleSheet Create(CSSStyleSheetInit? options = null) {
-        return StyleSheet.Create(options);
-    }
-    ICSSRule? ownerRule { get; }
-    public ICSSRuleList cssRules { get; internal set; }
-    ulong insertRule(CSSOMString rule, ulong index = 0);
-    void deleteRule(ulong index);
-
-    Promise<ICSSStyleSheet> replace(USVString text);
-    void replaceSync(USVString text);
-};
 
 public struct CSSStyleSheetInit() {
     public DOMString? baseURL = null;
-    //   (MediaList or DOMString) media = "";
+    //   (MediaList or DOMString) media = ""; // todo
     public bool disabled = false;
 };
 
 
-// https://www.w3.org/TR/cssom-1/#the-cssrulelist-interface
-public interface ICSSRuleList: IList<ICSSRule> {
-    ICSSRule? item(ulong index);
-    ulong length { get; }
+// https://drafts.csswg.org/cssom-1/#the-cssrulelist-interface
+public partial class CSSRuleList: List<CSSRule> {
+    public partial CSSRule? item(ulong index);
+    public partial ulong length { get; }
 };
 
-public class CSSRuleList: List<ICSSRule>, ICSSRuleList {
-    public ulong length => (ulong)Count;
+public partial class CSSRuleList {
+    public partial ulong length => (ulong)Count;
 
-    public ICSSRule? item(ulong index) {
+    public partial CSSRule? item(ulong index) {
         return this[(int)index];
     }
 }
 
-// https://www.w3.org/TR/cssom-1/#cssrule
-public interface ICSSRule {
-    CSSOMString cssText { get; set; }
-    ICSSRule? parentRule { get; set; }
-    ICSSStyleSheet? parentStyleSheet { get; set; }
+// https://drafts.csswg.org/cssom-1/#the-cssrule-interface
+public partial class CSSRule {
+    public CSSOMString cssText { get; set; }
+    public CSSRule? parentRule { get; internal set; }
+    public CSSStyleSheet? parentStyleSheet { get; internal set; }
 
     // the following attribute and constants are historical
     [Obsolete]
-    ushort type { get; }
+    public partial ushort type { get; }
     [Obsolete]
-    const ushort STYLE_RULE = 1;
+    public const ushort STYLE_RULE = 1;
     [Obsolete]
-    const ushort CHARSET_RULE = 2;
+    public const ushort CHARSET_RULE = 2;
     [Obsolete]
-    const ushort IMPORT_RULE = 3;
+    public const ushort IMPORT_RULE = 3;
     [Obsolete]
-    const ushort MEDIA_RULE = 4;
+    public const ushort MEDIA_RULE = 4;
     [Obsolete]
-    const ushort FONT_FACE_RULE = 5;
+    public const ushort FONT_FACE_RULE = 5;
     [Obsolete]
-    const ushort PAGE_RULE = 6;
+    public const ushort PAGE_RULE = 6;
     [Obsolete]
-    const ushort MARGIN_RULE = 9;
+    public const ushort MARGIN_RULE = 9;
     [Obsolete]
-    const ushort NAMESPACE_RULE = 10;
+    public const ushort NAMESPACE_RULE = 10;
 };
 
-public class CSSRule: ICSSRule {
-    [Obsolete]
-    public virtual ushort type { get; } = 0;
-    private string text { get; set; }
+public partial class CSSRule {
+    // private string text { get; set; }
 
-    public string cssText { get => throw new NotImplementedException(); set { } }
+    // public string cssText { get => throw new NotImplementedException(); set { } }
 
-    private ICSSRule? _parentRule;
-    public ICSSRule? parentRule { get => _parentRule; set { if (value is null) _parentRule = value; } }
+    // private ICSSRule? _parentRule;
+    // public ICSSRule? parentRule { get => _parentRule; set { if (value is null) _parentRule = value; } }
 
-    private ICSSStyleSheet? _parentStyleSheet;
-    public ICSSStyleSheet? parentStyleSheet { get => _parentStyleSheet; set { if (value is null) _parentStyleSheet = value; } }
+    // private ICSSStyleSheet? _parentStyleSheet;
+    // public ICSSStyleSheet? parentStyleSheet { get => _parentStyleSheet; set { if (value is null) _parentStyleSheet = value; } }
 
-    private ICSSRuleList childCSSRules;
+    // private ICSSRuleList childCSSRules;
 
-    // https://www.w3.org/TR/cssom-1/#parse-a-css-rule    
-    public static Rule? parseACssRule(string input) {
-        // 1. Let rule be the return value of invoking parse a rule with string.
-        SyntaxError? error = null;
-        Rule? parsedRule = null;
-        Parser.ParseARule(input).Switch(
-            r => parsedRule = r,
-            err => error = err
-        );
-        // 2. If rule is a syntax error, return rule.
-        if (error is not null) return null;
-        // 3. Let parsed rule be the result of parsing rule according to the appropriate CSS specifications,
-        // dropping parts that are said to be ignored. If the whole style rule is dropped, return a syntax error.
-        // todo
-        // 4. Return parsed rule.
-        return parsedRule;
+    public partial ushort type {
+        get {
+            return this switch {
+                CSSStyleRule => 1,
+                CSSImportRule => 3,
+                // CSSMediaRule => 4, // todo
+                // CSSFontFaceRule => 5, // todo
+                CSSPageRule => 6,
+                // CSSKeyframesRule => 7, // todo                
+                // CSSKeyFrameRule => 8, // todo
+                CSSMarginRule => 9,
+                CSSNamespaceRule => 10,
+                // CSSCounterStyleRule => 11,
+                // CSSSupportsRule => 12,
+                // CSSFontFeatureValuesRule => 14, // todo
+                _ => 0,
+            };
+        }
     }
 
-    // https://www.w3.org/TR/cssom-1/#insert-a-css-rule
-    public static ulong InsertACssRule(string input, ICSSRuleList list, ulong index) {
+    // https://drafts.csswg.org/cssom-1/#parse-a-css-rule
+    public static OneOf<Rule, SyntaxError> ParseACssRule(string input) {
+        // 1. Let rule be the return value of invoking parse a rule with string.
+        var rule = Parser.ParseARule(input);
+        // 2. If rule is a syntax error, return rule.
+        if (rule.IsT1) return rule;
+        // 3. Let parsed rule be the result of parsing rule according to the appropriate CSS specifications,
+        // dropping parts that are said to be ignored. If the whole style rule is dropped, return a syntax error.
+        // todo fixme
+        // 4. Return parsed rule.
+        return rule;
+    }
+
+    // https://drafts.csswg.org/cssom-1/#insert-a-css-rule
+    public static ulong InsertACssRule(string rule, CSSRuleList list, ulong index, bool nested = false) { // todo nested 
         // 1. Set length to the number of items in list.
         var length = list.length;
         // 2. If index is greater than length, then throw an IndexSizeError exception.
         if (index > length) throw new IndexSizeError();
         // 3. Set new rule to the results of performing parse a CSS rule on argument rule.
-        var newRule = parseACssRule(input);
-        // 4. If new rule is a syntax error, throw a SyntaxError exception.
-        if (newRule is null) throw new SyntaxError();
-        // 5. If new rule cannot be inserted into list at the zero-index position index due to constraints specified by CSS, then throw a HierarchyRequestError exception. [CSS21]
+        var newRule = ParseACssRule(rule);
+        // 4. If new rule is a syntax error, and nested is set, perform the following substeps:
+        if (newRule.IsT1 && nested) {
+            // Set declarations to the results of performing parse a CSS declaration block, on argument rule.
+            var declaration = CSSStyleDeclaration.ParseACssDeclarationBlock(rule);
+            // If declarations is empty, throw a SyntaxError exception.
+            if (declaration.Count == 0) throw new SyntaxError();
+            // Otherwise, set new rule to a new nested declarations rule with declarations as it contents.            
+            // todo
+        }
+        // 5. If new rule is a syntax error, throw a SyntaxError exception.
+        if (newRule.IsT1) throw newRule.AsT1;
+        // 6. If new rule cannot be inserted into list at the zero-indexed position index due to constraints specified by CSS, then throw a HierarchyRequestError exception. [CSS21]
         // todo
         // Note: For example, a CSS style sheet cannot contain an @import at-rule after a style rule.
-        // 6. If new rule is an @namespace at-rule, and list contains anything other than @import at-rules, and @namespace at-rules, throw an InvalidStateError exception.
+        // 7. If new rule is an @namespace at-rule, and list contains anything other than @import at-rules, and @namespace at-rules, throw an InvalidStateError exception.
         // todo
-        // 7. Insert new rule into list at the zero-indexed position index.
-        list.Insert((int)index, newRule);
-        // 8. Return index.
+        // 8. Insert new rule into list at the zero-indexed position index.
+        list.Insert((int)index, newRule.AsT0);
+        // 9. Return index.
         return index;
     }
 
-    // https://www.w3.org/TR/cssom-1/#remove-a-css-rule
-    public static void RemoveACssRule(ICSSRuleList list, ulong index) {
+    // https://drafts.csswg.org/cssom-1/#remove-a-css-rule
+    public static void RemoveACssRule(CSSRuleList list, ulong index) {
         // 1. Set length to the number of items in list.
         var length = list.length;
         // 2. If index is greater than or equal to length, then throw an IndexSizeError exception.
@@ -341,29 +360,117 @@ public class CSSRule: ICSSRule {
     }
 }
 
-class CSSStyleRule: CSSRule {
-    [Obsolete]
-    public override ushort type { get; } = 1;
+// https://drafts.csswg.org/cssom-1/#the-cssstylerule-interface
+public partial class CSSStyleRule: CSSGroupingRule {
 
-    public CSSOMString selectorText { get; } // todo set
-    // public CSSStyleDeclaration style { get; }
-
-
+    public CSSOMString selectorText { get; set; }
+    public CSSStyleProperties style { get; }
 }
 
+// https://drafts.csswg.org/cssom-1/#the-cssimportrule-interface
+public partial class CSSImportRule: CSSRule {
+    public USVString href { get; }
+    // public MediaList media; // todo
+    public CSSStyleSheet? styleSheet { get; }
+    public CSSOMString? layerName { get; }
+    public CSSOMString? supportsText { get; }
+}
 
+// https://drafts.csswg.org/cssom-1/#the-cssgroupingrule-interface
+public partial class CSSGroupingRule: CSSRule {
+    public CSSRuleList cssRules { get; }
+    public partial long insertRule(CSSOMString rule, ulong index = 0);
+}
 
-class Declaration {
+public partial class CSSGroupingRule {
+    public partial long insertRule(CSSOMString rule, ulong index) => throw new NotImplementedException();
+}
+
+// https://drafts.csswg.org/cssom-1/#the-cssmediarule-interface
+// todo
+// https://drafts.csswg.org/cssom-1/#the-csspagerule-interface
+
+public partial class CSSPageDescriptors: CSSStyleDeclaration {
+    // todo
+}
+
+public partial class CSSPageRule: CSSGroupingRule {
+    public CSSOMString selectorText { get; set; }
+    // todo put forwards
+    public CSSPageDescriptors style;
+}
+
+// https://drafts.csswg.org/cssom-1/#the-cssmarginrule-interface
+public class CSSMarginDescriptors {
+    // todo
+}
+public partial class CSSMarginRule: CSSRule {
+    public CSSOMString name { get; }
+    public CSSMarginDescriptors style;
+}
+
+// https://drafts.csswg.org/cssom-1/#the-cssnamespacerule-interface
+public partial class CSSNamespaceRule: CSSRule {
+    public CSSOMString namespaceURI { get; }
+    public CSSOMString prefix { get; }
+}
+
+// https://drafts.csswg.org/cssom-1/#css-declarations
+
+public class Declaration {
     public string propertyName { get; set; }
-    public string value { get; set; }
+    public List<ComponentValue> value { get; set; }
     public bool important = false;
     public bool caseSensitive = false;
 }
 
-class CSSStyleDeclaration {
+public partial class CSSStyleDeclaration {
     public bool computed = false;
     public List<Declaration> declarations = [];
     public CSSRule? parentCssRule = null;
     public Element? OwnerNode = null;
     public bool updating = false;
+    public partial CSSOMString item(ulong index) => throw new NotImplementedException();
+    public partial CSSOMString getPropertyValue(CSSOMString property) => throw new NotImplementedException();
+    public partial CSSOMString getPropertyPriority(CSSOMString property) => throw new NotImplementedException();
+    public partial void setProperty(CSSOMString property, CSSOMString value, CSSOMString priority) => throw new NotImplementedException();
+    public partial CSSOMString removeProperty(CSSOMString property) => throw new NotImplementedException();
+
+    // https://drafts.csswg.org/cssom-1/#parse-a-css-declaration-block
+    public static List<Declaration> ParseACssDeclarationBlock(string @string) {
+        // 1. Let declarations be the returned declarations from invoking parse a block’s contents with string.
+        var declarations = Parser.ParseABlocksContents(@string);
+        // 2. Let parsed declarations be a new empty list.
+        List<Declaration> parsedDeclarations = [];
+        // 3. For each item declaration in declarations, follow these substeps:   
+        foreach (var declaration in declarations) {
+            // 1. Let parsed declaration be the result of parsing declaration according to the appropriate CSS specifications, dropping parts that are said to be ignored.
+            // If the whole declaration is dropped, let parsed declaration be null.
+            Declaration? parsedDeclaration = null; // todo fixme
+            // 2. If parsed declaration is not null, append it to parsed declarations.
+            if (parsedDeclaration is not null) {
+                parsedDeclarations.Add(parsedDeclaration);
+            }
+        }
+        // 4. Return parsed declarations.
+        return parsedDeclarations;
+
+    }
+
+}
+
+// https://drafts.csswg.org/cssom-1/#the-cssstyledeclaration-interface
+public partial class CSSStyleDeclaration {
+    public CSSOMString cssText { get; set; }
+    public ulong legth { get; }
+    public partial CSSOMString item(ulong index);
+    public partial CSSOMString getPropertyValue(CSSOMString property);
+    public partial CSSOMString getPropertyPriority(CSSOMString property);
+    public partial void setProperty(CSSOMString property, CSSOMString value, CSSOMString priority = "");
+    public partial CSSOMString removeProperty(CSSOMString property);
+    public CSSRule? parentRule { get; }
+}
+
+public partial class CSSStyleProperties: CSSStyleDeclaration {
+    public CSSOMString cssFloat { get; set; }
 }
