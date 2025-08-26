@@ -57,9 +57,14 @@ public class TokenStream(List<Token> tokens) {
     public bool Empty { get => NextToken is EofToken; }
 
     public Token ConsumeAToken() {
-        var token = NextToken;
-        index++;
-        return token;
+        return ConsumeAToken<Token>();
+    }
+    public T ConsumeAToken<T>() where T : Token {
+        if (NextToken is T expectedToken) {
+            index++;
+            return expectedToken;
+        }
+        throw new InvalidOperationException($"Expected token of type {typeof(T).Name}, but got {NextToken?.GetType().Name}.");
     }
 
     public void DiscardAToken() {
@@ -216,7 +221,7 @@ public static class Parser {
         // Consume a token from input, and let rule be a new at-rule with its name set to the returned token’s value,
         //  its prelude initially set to an empty list, and no declarations or child rules.
         var rule = new AtRule() {
-            name = ((AtKeywordToken)input.ConsumeAToken()).value,
+            name = input.ConsumeAToken<AtKeywordToken>().value,
         };
 
         // Process input:
@@ -242,7 +247,7 @@ public static class Parser {
 
                     }
                     // Otherwise, consume a token and append the result to rule’s prelude.
-                    rule.prelude.Add((CurlyBracesCloseToken)input.ConsumeAToken());
+                    rule.prelude.Add(input.ConsumeAToken<CurlyBracesCloseToken>());
                     break;
                 // <{-token>
                 case CurlyBracesOpenToken:
@@ -285,7 +290,7 @@ public static class Parser {
                     // This is a parse error. If nested is true, return nothing. Otherwise, consume a token and append the result to rule’s prelude.
                     // todo parse error
                     if (nested) return null;
-                    rule.prelude.Add((CurlyBracesCloseToken)input.ConsumeAToken());
+                    rule.prelude.Add(input.ConsumeAToken<CurlyBracesCloseToken>());
                     break;
                 // <{-token>
                 case CurlyBracesOpenToken:
@@ -435,7 +440,7 @@ public static class Parser {
         var decl = new Declaration();
         // 1. If the next token is an <ident-token>, consume a token from input and set decl's name to the token’s value.
         if (input.NextToken is IdentToken) {
-            decl.name = ((IdentToken)input.ConsumeAToken()).value;
+            decl.name = input.ConsumeAToken<IdentToken>().value;
         } else {
             // Otherwise, consume the remnants of a bad declaration from input, with nested, and return nothing.
             ConsumeTheRemnantsOfABadDeclaration(input, nested);
@@ -535,7 +540,7 @@ public static class Parser {
                     }
                     // Otherwise, this is a parse error. Consume a token from input and append the result to values.
                     // todo parse error
-                    values.Add((CurlyBracesCloseToken)input.ConsumeAToken());
+                    values.Add(input.ConsumeAToken<CurlyBracesCloseToken>());
                     break;
                 // anything else
                 default:
@@ -601,7 +606,7 @@ public static class Parser {
         Debug.Assert(input.NextToken is FunctionToken);
         // Consume a token from input, and let function be a new function with its name equal the returned token’s value, and a value set to an empty list.
         var function = new Function() {
-            name = ((FunctionToken)input.ConsumeAToken()).value,
+            name = input.ConsumeAToken<FunctionToken>().value,
         };
         // Process input:
         while (true) {
