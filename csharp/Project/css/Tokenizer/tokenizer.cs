@@ -9,7 +9,7 @@ namespace FunWithHtml.css.Tokenizer;
 
 
 
-public abstract class Token {
+public abstract class Token: TokenStream.Item {
     public abstract string NAME { get; }
     public override string ToString() {
         return $"<{NAME}-token>";

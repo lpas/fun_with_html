@@ -29,7 +29,7 @@ public class Declaration {
     public bool important = false;
 }
 
-public interface ComponentValue { }
+public interface ComponentValue: TokenStream.Item { }
 
 
 public class Function: ComponentValue {
@@ -42,24 +42,37 @@ public class SimpleBlock(Token token): ComponentValue {
     public List<ComponentValue> value = [];
 }
 
-
 // https://drafts.csswg.org/css-syntax-3/#parser-definitions
-public class TokenStream(List<Token> tokens) {
-    private readonly Token EofToken = new EofToken();
+public class TokenStream {
+    public interface Item { }
 
-    private readonly List<Token> tokens = tokens;
+    private readonly Item EofToken = new EofToken();
+
+    private readonly List<Item> tokens;
     private int index = 0;
 
     private readonly Stack<int> markedIndexes = [];
 
-    public Token NextToken { get => index < tokens.Count ? tokens[index] : EofToken; }
+
+    public TokenStream(List<Item> tokens) {
+        this.tokens = tokens;
+    }
+
+    public TokenStream(List<Token> tokens) {
+        this.tokens = [.. tokens.Cast<Item>()];
+    }
+    public TokenStream(List<ComponentValue> tokens) {
+        this.tokens = [.. tokens.Cast<Item>()];
+    }
+
+    public Item NextToken { get => index < tokens.Count ? tokens[index] : EofToken; }
 
     public bool Empty { get => NextToken is EofToken; }
 
-    public Token ConsumeAToken() {
-        return ConsumeAToken<Token>();
+    public Item ConsumeAToken() {
+        return ConsumeAToken<Item>();
     }
-    public T ConsumeAToken<T>() where T : Token {
+    public T ConsumeAToken<T>() where T : Item {
         if (NextToken is T expectedToken) {
             index++;
             return expectedToken;
@@ -92,8 +105,10 @@ public static class Parser {
     #region https://drafts.csswg.org/css-syntax-3/#parser-entry-points
 
     // https://drafts.csswg.org/css-syntax-3/#normalize-into-a-token-stream
-    private static TokenStream NormalizeIntoATokenStream(TokenStream input) {
-        return input;
+    private static TokenStream NormalizeIntoATokenStream(OneOf<TokenStream, string> input) {
+        if (input.IsT0) return input.AsT0;
+        if (input.IsT1) return new TokenStream(new Tokenizer(input.AsT1).GetTokenList());
+        throw new InvalidOperationException();
     }
     // todo If input is a list of CSS tokens and/or component values, create a new token stream with input as its tokens, and return it.
 
@@ -103,6 +118,15 @@ public static class Parser {
 
 
     // https://drafts.csswg.org/css-syntax-3/#parse-grammar // todo
+    public static List<ComponentValue> Parse(string Input) {
+        // 1. Normalize input, and set input to the result.
+        var input = NormalizeIntoATokenStream(Input);
+        // 2. Parse a list of component values from input, and let result be the return value.
+        var returnValue = ParseAListOfComponentValues(input);
+        // 3. Attempt to match result against grammar. If this is successful, return the matched result; otherwise, return failure.
+        return returnValue;
+    }
+
     // https://drafts.csswg.org/css-syntax-3/#parse-comma-list // todo
     // https://drafts.csswg.org/css-syntax-3/#parse-stylesheet
     public static CSSStyleSheet ParseAStylesheet(string input) { // todo optional url
@@ -165,6 +189,12 @@ public static class Parser {
     // https://drafts.csswg.org/css-syntax-3/#parse-declaration // todo
     // https://drafts.csswg.org/css-syntax-3/#parse-component-value // todo
     // https://drafts.csswg.org/css-syntax-3/#parse-list-of-component-values // todo
+    public static List<ComponentValue> ParseAListOfComponentValues(OneOf<TokenStream, string> Input) {
+        // 1. Normalize input, and set input to the result.
+        var input = NormalizeIntoATokenStream(Input);
+        // 2. Consume a list of component values from input, and return the result.        
+        return ConsumeAListOfComponentValues(input);
+    }
     // https://drafts.csswg.org/css-syntax-3/#parse-comma-separated-list-of-component-values // todo
     #endregion
 
@@ -520,7 +550,7 @@ public static class Parser {
     }
 
     // https://drafts.csswg.org/css-syntax-3/#consume-list-of-components
-    private static List<ComponentValue> ConsumeAListOfComponentValues(TokenStream input, Type? stopToken = null, bool nested = false) {
+    internal static List<ComponentValue> ConsumeAListOfComponentValues(TokenStream input, Type? stopToken = null, bool nested = false) {
         // Let values be an empty list of component values.
         var values = new List<ComponentValue>();
         // Process input:
@@ -576,7 +606,7 @@ public static class Parser {
         // Let ending token be the mirror variant of the next token. (E.g. if it was called with <[-token>, the ending token is <]-token>.)
         var startToken = input.NextToken;
         // Let block be a new simple block with its associated token set to the next token and with its value initially set to an empty list.
-        var block = new SimpleBlock(startToken);
+        var block = new SimpleBlock(startToken as Token);
         // Discard a token from input.
         input.DiscardAToken();
         // Process input:

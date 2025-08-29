@@ -9,6 +9,7 @@ using DOMString = String;
 using CSSOMString = String;
 using FunWithHTML.misc;
 using OneOf;
+using System.Text;
 
 public class Promise<T>(T value) {
     readonly T value = value;
@@ -473,4 +474,74 @@ public partial class CSSStyleDeclaration {
 
 public partial class CSSStyleProperties: CSSStyleDeclaration {
     public CSSOMString cssFloat { get; set; }
+}
+
+
+// https://drafts.csswg.org/cssom/#common-serializing-idioms
+public static class CommonSerializingIdioms {
+    // https://drafts.csswg.org/cssom/#escape-a-character
+    public static string EscapeACharacter(char character) {
+        // To escape a character means to create a string of "\" (U+005C), followed by the character.
+        return $"\\{character}";
+    }
+    // https://drafts.csswg.org/cssom/#escape-a-character-as-code-point
+    public static string EscapeACharacterAsCodePoint(char character) {
+        throw new NotImplementedException();
+    }
+
+    // https://drafts.csswg.org/cssom/#serialize-an-identifier
+    public static string SerializeAnIdentifier(string identifier) {
+        // To serialize an identifier means to create a string represented by the concatenation of, for each character of the identifier:
+        var sb = new StringBuilder();
+        for (var index = 0; index < identifier.Length; index++) {
+            var character = identifier[index];
+            sb.Append(character switch {
+                // If the character is NULL (U+0000), then the REPLACEMENT CHARACTER (U+FFFD).
+                '\0' => '\uFFFD',
+                // If the character is in the range [\1-\1f] (U+0001 to U+001F) or is U+007F, then the character escaped as code point.
+                (>= '\u0001' and <= '\u001F') or '\u007F' => EscapeACharacterAsCodePoint(character),
+                // If the character is the first character and is in the range [0-9] (U+0030 to U+0039), then the character escaped as code point.
+                >= '0' and <= '9' when index == 0 => EscapeACharacterAsCodePoint(character),
+                // If the character is the second character and is in the range [0-9] (U+0030 to U+0039) and the first character is a "-" (U+002D), then the character escaped as code point.
+                >= '0' and <= '9' when index == 1 && identifier[0] == '-' => EscapeACharacterAsCodePoint(character),
+                // If the character is the first character and is a "-" (U+002D), and there is no second character, then the escaped character.
+                '-' when index == 1 && identifier.Length == 1 => EscapeACharacter(character),
+                // If the character is not handled by one of the above rules and is greater than or equal to U+0080, is "-" (U+002D) or "_" (U+005F), or is in one of the ranges [0-9] (U+0030 to U+0039),
+                //  [A-Z] (U+0041 to U+005A), or [a-z] (U+0061 to U+007A), then the character itself.
+                >= '\u0080' or '-' or '_' or (>= '0' and <= '9') or (>= 'A' and <= 'Z') or (>= 'a' and <= 'z') => character,
+                // Otherwise, the escaped character.
+                _ => EscapeACharacter(character),
+            });
+        }
+        return sb.ToString();
+    }
+
+    // https://drafts.csswg.org/cssom/#serialize-a-string
+    public static string SerializeAString(string @string) {
+        var sb = new StringBuilder();
+        // To serialize a string means to create a string represented by '"' (U+0022), followed by the result of applying the rules below to each character of the given string, followed by '"' (U+0022):
+        sb.Append('"');
+        for (var index = 0; index < @string.Length; index++) {
+            var character = @string[index];
+            // If the character is NULL (U+0000), then the REPLACEMENT CHARACTER (U+FFFD).
+            sb.Append(character switch {
+                // If the character is in the range [\1-\1f] (U+0001 to U+001F) or is U+007F, the character escaped as code point.
+                (>= '\u0001' and <= '\u001F') or '\u007F' => EscapeACharacterAsCodePoint(character),
+                // If the character is '"' (U+0022) or "\" (U+005C), the escaped character.
+                '"' or '\\' => EscapeACharacter(character),
+                // Otherwise, the character itself.
+                _ => character,
+            });
+        }
+        // Note: "'" (U+0027) is not escaped because strings are always serialized with '"' (U+0022).
+        sb.Append('"');
+        return sb.ToString();
+    }
+
+
+    // https://drafts.csswg.org/cssom/#serialize-a-comma-separated-list
+    public static string SerializeACommaSeparatedList(IEnumerable<string?> values) {
+        return string.Join(", ", values);
+    }
+
 }
