@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text;
 
-namespace FunWithHtml.es262.Lexer;
+namespace FunWithHtml.es262;
 
 public class Input(string input) {
 
@@ -43,7 +43,7 @@ public class Input(string input) {
 }
 
 
-class Token {
+public class Token {
 
     public virtual string Serialize() {
         return "";
@@ -53,7 +53,7 @@ class Token {
 public class Lexer {
 
     // InputElementDiv
-    public static void Consume(Input input) {
+    public static List<Token> Consume(Input input) {
         var tokens = new List<Token>();
         while (!input.IsEof) {
             if (WhiteSpace.Consume(input) is WhiteSpace whiteSpace) {
@@ -80,13 +80,7 @@ public class Lexer {
             Console.WriteLine($"FAIL: {input.CurrentChar} ({input.Index}) {input.IsEof}");
             break;
         }
-        Console.WriteLine($"INPUT: {input.Text}");
-        Console.WriteLine($"TOKENS {tokens.Count}");
-        foreach (var token in tokens) {
-            Console.Write(token.Serialize());
-        }
-        Console.Write("\n");
-
+        return tokens;
 
     }
 }
@@ -229,9 +223,7 @@ class IdentifierName(string name): CommonToken {
 
 
 class Punctuator(string value): CommonToken {
-    public string value { get; private set; } = value;
-
-
+    public string Value { get; private set; } = value;
 
     // https://tc39.es/ecma262/#prod-Punctuator
     public static new Punctuator? Consume(Input input) {
@@ -351,11 +343,11 @@ class Punctuator(string value): CommonToken {
     }
 
     public override string ToString() {
-        return $"{base.ToString()} {value}";
+        return $"{base.ToString()} {Value}";
     }
 
     public override string Serialize() {
-        return value;
+        return Value;
     }
 
 }
